@@ -1,12 +1,18 @@
 /*
  * Design: Clinical Precision — Swiss Medical Design
- * Summary report with score profiles and domain breakdowns
+ * Summary report with scoring table lookups (Table A.1, A.4, B.1, B.2)
  */
-import { useAssessment } from '@/contexts/AssessmentContext';
+import { useAssessment, calculateAgeInDays } from '@/contexts/AssessmentContext';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Download, Printer, RotateCcw } from 'lucide-react';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { DomainData } from '@/lib/assessmentData';
+import {
+  lookupScaledScore,
+  lookupStandardScore,
+  lookupAgeEquivalent,
+  lookupGrowthScaleValue,
+} from '@/lib/scoringTables';
 
 const domainColors: Record<string, string> = {
   cognitive: '#0D7377',
@@ -16,6 +22,15 @@ const domainColors: Record<string, string> = {
   grossMotor: '#7B5B3A',
 };
 
+// Map domain IDs to scoring table keys
+const domainToScoringKey: Record<string, 'CG' | 'FM' | 'GM' | null> = {
+  cognitive: 'CG',
+  receptiveCommunication: null, // Language not in Excel scoring tables
+  expressiveCommunication: null,
+  fineMotor: 'FM',
+  grossMotor: 'GM',
+};
+
 export default function SummaryReport() {
   const {
     state,
@@ -23,10 +38,95 @@ export default function SummaryReport() {
     getSelectedDomains,
     getDomainRawScore,
     getDomainAnsweredCount,
-    getDomainMaxScore,
+    isDomainDiscontinued,
   } = useAssessment();
 
   const selectedDomains = getSelectedDomains();
+
+  // Calculate age in days for scoring lookups
+  const ageInDays = useMemo(() => {
+    const premWeeks = state.childInfo.premature === 'Yes' ? parseInt(state.childInfo.prematureWeeks) || 0 : 0;
+    return calculateAgeInDays(state.childInfo.dateOfBirth, state.childInfo.examDate, premWeeks);
+  }, [state.childInfo]);
+
+  // Calculate all scoring data
+  const scoringData = useMemo(() => {
+    const results: Record<string, {
+      rawScore: number;
+      scaledScore: number | null;
+      ageEquivalent: string | null;
+      growthScaleValue: number | null;
+    }> = {};
+
+    selectedDomains.forEach((domain: DomainData) => {
+      const rawScore = getDomainRawScore(domain);
+      const key = domainToScoringKey[domain.id];
+      let scaledScore: number | null = null;
+      let ageEquivalent: string | null = null;
+      let growthScaleValue: number | null = null;
+
+      if (key && ageInDays !== null) {
+        scaledScore = lookupScaledScore(rawScore, key, ageInDays);
+        const ageEq = lookupAgeEquivalent(rawScore, key);
+        if (ageEq && ageEq.months !== null) {
+          ageEquivalent = `${ageEq.months} mo${ageEq.days !== null ? ` ${ageEq.days} d` : ''}`;
+        }
+        growthScaleValue = lookupGrowthScaleValue(rawScore, key);
+      }
+
+      results[domain.id] = { rawScore, scaledScore, ageEquivalent, growthScaleValue };
+    });
+
+    return results;
+  }, [selectedDomains, getDomainRawScore, ageInDays]);
+
+  // Composite scores
+  const compositeScores = useMemo(() => {
+    const cgScaled = scoringData['cognitive']?.scaledScore;
+    const fmScaled = scoringData['fineMotor']?.scaledScore;
+    const gmScaled = scoringData['grossMotor']?.scaledScore;
+
+    let cogComposite: { standardScore: number; percentileRank: string } | null = null;
+    let motComposite: { standardScore: number; percentileRank: string } | null = null;
+
+    if (cgScaled !== null && cgScaled !== undefined) {
+      cogComposite = lookupStandardScore(cgScaled, 'COG');
+    }
+    if (fmScaled !== null && fmScaled !== undefined && gmScaled !== null && gmScaled !== undefined) {
+      motComposite = lookupStandardScore(fmScaled + gmScaled, 'MOT');
+    }
+
+    return { cogComposite, motComposite, cgScaled, fmScaled, gmScaled };
+  }, [scoringData]);
+
+  // Percent delay calculation
+  const percentDelay = useMemo(() => {
+    if (!ageInDays || !state.childInfo.dateOfBirth) return null;
+
+    const results: Record<string, string | null> = {};
+    selectedDomains.forEach((domain: DomainData) => {
+      const key = domainToScoringKey[domain.id];
+      if (!key) { results[domain.id] = null; return; }
+
+      const rawScore = getDomainRawScore(domain);
+      const ageEq = lookupAgeEquivalent(rawScore, key);
+      if (!ageEq || ageEq.months === null) { results[domain.id] = null; return; }
+
+      // Convert age equivalent to total days for comparison
+      const aeMonths = typeof ageEq.months === 'number' ? ageEq.months : parseInt(String(ageEq.months)) || 0;
+      const aeDays = ageEq.days || 0;
+      const aeTotal = aeMonths * 30.44 + aeDays;
+      const chronTotal = ageInDays;
+
+      if (chronTotal > 0) {
+        const delay = ((chronTotal - aeTotal) / chronTotal) * 100;
+        results[domain.id] = delay > 0 ? `-${delay.toFixed(1)}%` : `+${Math.abs(delay).toFixed(1)}%`;
+      } else {
+        results[domain.id] = null;
+      }
+    });
+    return results;
+  }, [selectedDomains, getDomainRawScore, ageInDays, state.childInfo.dateOfBirth]);
 
   const handlePrint = useCallback(() => {
     window.print();
@@ -50,21 +150,31 @@ export default function SummaryReport() {
       });
     });
 
-    // Add summary rows
     rows.push([]);
-    rows.push(['--- SUMMARY ---']);
-    rows.push(['Domain', 'Raw Score', 'Max Score', 'Items Answered', 'Total Items']);
+    rows.push(['--- SCORING SUMMARY ---']);
+    rows.push(['Domain', 'Raw Score', 'Scaled Score', 'Age Equivalent', 'Growth Scale Value', 'Percent Delay']);
     selectedDomains.forEach((domain: DomainData) => {
+      const sd = scoringData[domain.id];
+      const pd = percentDelay?.[domain.id];
       rows.push([
         domain.name,
-        String(getDomainRawScore(domain)),
-        String(getDomainMaxScore(domain)),
-        String(getDomainAnsweredCount(domain)),
-        String(domain.items.length),
+        String(sd?.rawScore ?? ''),
+        sd?.scaledScore !== null ? String(sd?.scaledScore) : 'N/A',
+        sd?.ageEquivalent || 'N/A',
+        sd?.growthScaleValue !== null ? String(sd?.growthScaleValue) : 'N/A',
+        pd || 'N/A',
       ]);
     });
 
-    // Add child info
+    rows.push([]);
+    rows.push(['--- COMPOSITE SCORES ---']);
+    if (compositeScores.cogComposite) {
+      rows.push(['Cognitive (COG)', `Standard Score: ${compositeScores.cogComposite.standardScore}`, `Percentile: ${compositeScores.cogComposite.percentileRank}`]);
+    }
+    if (compositeScores.motComposite) {
+      rows.push(['Motor (MOT)', `Standard Score: ${compositeScores.motComposite.standardScore}`, `Percentile: ${compositeScores.motComposite.percentileRank}`]);
+    }
+
     rows.push([]);
     rows.push(['--- CHILD INFO ---']);
     rows.push(['Name', `${state.childInfo.firstName}`]);
@@ -72,10 +182,6 @@ export default function SummaryReport() {
     rows.push(['Exam Date', state.childInfo.examDate]);
     rows.push(['Examiner', state.childInfo.examinerName]);
     rows.push(['Start Point', state.childInfo.startPointLetter]);
-    rows.push(['Reason for Referral', state.childInfo.reasonForReferral]);
-    if (state.childInfo.notes) {
-      rows.push(['Notes', `"${state.childInfo.notes.replace(/"/g, '""')}"`]);
-    }
 
     const csv = rows.map(r => r.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -85,7 +191,7 @@ export default function SummaryReport() {
     a.download = `bayley4-${state.childInfo.firstName}-${state.childInfo.examDate}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [state, selectedDomains, getDomainRawScore, getDomainAnsweredCount, getDomainMaxScore]);
+  }, [state, selectedDomains, scoringData, compositeScores, percentDelay]);
 
   const handleReset = () => {
     if (window.confirm('Are you sure you want to start a new assessment? All current data will be lost.')) {
@@ -160,12 +266,13 @@ export default function SummaryReport() {
       {/* Domain score cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         {selectedDomains.map((domain: DomainData) => {
-          const rawScore = getDomainRawScore(domain);
+          const sd = scoringData[domain.id];
           const answered = getDomainAnsweredCount(domain);
           const total = domain.items.length;
-          const maxRaw = getDomainMaxScore(domain);
           const pct = total > 0 ? Math.round((answered / total) * 100) : 0;
           const color = domainColors[domain.id] || '#0D7377';
+          const discontinued = isDomainDiscontinued(domain);
+          const scoringKey = domainToScoringKey[domain.id];
 
           return (
             <div
@@ -181,39 +288,135 @@ export default function SummaryReport() {
                   >
                     {domain.name}
                   </h3>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-muted font-medium">
-                    {pct}% complete
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${discontinued ? 'bg-red-100 text-red-700' : 'bg-muted'}`}>
+                    {discontinued ? 'Discontinued' : `${pct}% complete`}
                   </span>
                 </div>
 
                 {/* Raw score display */}
-                <div className="flex items-end gap-1 mb-4">
+                <div className="flex items-end gap-1 mb-3">
                   <span className="text-3xl font-bold" style={{ color, fontFamily: "'DM Sans', sans-serif" }}>
-                    {rawScore}
+                    {sd?.rawScore ?? 0}
                   </span>
-                  <span className="text-sm text-muted-foreground mb-1">/ {maxRaw}</span>
+                  <span className="text-sm text-muted-foreground mb-1">raw score</span>
                 </div>
 
-                {/* Progress bar */}
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="font-medium">Items Answered</span>
-                    <span className="text-muted-foreground">
-                      {answered}/{total}
-                    </span>
+                {/* Scoring results */}
+                {scoringKey && (
+                  <div className="space-y-1.5 pt-3 border-t border-border">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Scaled Score</span>
+                      <span className="font-bold" style={{ color }}>
+                        {sd?.scaledScore !== null ? sd?.scaledScore : '—'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Age Equivalent</span>
+                      <span className="font-medium">
+                        {sd?.ageEquivalent || '—'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Growth Scale Value</span>
+                      <span className="font-medium">
+                        {sd?.growthScaleValue !== null ? sd?.growthScaleValue : '—'}
+                      </span>
+                    </div>
+                    {percentDelay?.[domain.id] && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Percent Delay</span>
+                        <span className={`font-bold ${percentDelay[domain.id]?.startsWith('-') ? 'text-red-600' : 'text-green-600'}`}>
+                          {percentDelay[domain.id]}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{ width: `${pct}%`, backgroundColor: color, opacity: 0.7 }}
-                    />
+                )}
+
+                {!scoringKey && (
+                  <div className="pt-3 border-t border-border">
+                    <p className="text-xs text-muted-foreground italic">
+                      Scoring tables not available for this domain. Refer to the Bayley-4 manual.
+                    </p>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* Composite Scores */}
+      {(compositeScores.cogComposite || compositeScores.motComposite) && (
+        <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden mb-6">
+          <div className="p-5 border-b border-border">
+            <h3 className="font-bold text-lg" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+              Composite Scores
+            </h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Sum of scaled scores converted to standard scores (Table A.4)
+            </p>
+          </div>
+          <div className="p-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Cognitive Composite */}
+              {compositeScores.cgScaled !== null && compositeScores.cgScaled !== undefined && (
+                <div className="p-4 bg-[#0D7377]/5 rounded-lg border border-[#0D7377]/20">
+                  <h4 className="text-sm font-bold text-[#0D7377] mb-3" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+                    Cognitive (COG)
+                  </h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Scaled Score (CG)</span>
+                      <span className="font-bold">{compositeScores.cgScaled}</span>
+                    </div>
+                    {compositeScores.cogComposite && (
+                      <>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Standard Score</span>
+                          <span className="font-bold text-[#0D7377]">{compositeScores.cogComposite.standardScore}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Percentile Rank</span>
+                          <span className="font-medium">{compositeScores.cogComposite.percentileRank}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Motor Composite */}
+              {compositeScores.fmScaled !== null && compositeScores.fmScaled !== undefined &&
+               compositeScores.gmScaled !== null && compositeScores.gmScaled !== undefined && (
+                <div className="p-4 bg-[#2D6A4F]/5 rounded-lg border border-[#2D6A4F]/20">
+                  <h4 className="text-sm font-bold text-[#2D6A4F] mb-3" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+                    Motor (MOT)
+                  </h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">FM Scaled + GM Scaled</span>
+                      <span className="font-bold">{compositeScores.fmScaled} + {compositeScores.gmScaled} = {compositeScores.fmScaled + compositeScores.gmScaled}</span>
+                    </div>
+                    {compositeScores.motComposite && (
+                      <>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Standard Score</span>
+                          <span className="font-bold text-[#2D6A4F]">{compositeScores.motComposite.standardScore}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Percentile Rank</span>
+                          <span className="font-medium">{compositeScores.motComposite.percentileRank}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Detailed breakdown table */}
       <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden mb-6">
@@ -222,7 +425,7 @@ export default function SummaryReport() {
             Detailed Score Breakdown
           </h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Raw scores by domain. Consult the Bayley-4 manual for scaled score conversion tables.
+            Raw scores and converted scores by domain (Tables A.1, B.1, B.2)
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -230,21 +433,18 @@ export default function SummaryReport() {
             <thead>
               <tr className="bg-muted/50">
                 <th className="text-left px-5 py-3 font-semibold text-xs uppercase tracking-wider">Domain</th>
-                <th className="text-center px-5 py-3 font-semibold text-xs uppercase tracking-wider">Items Answered</th>
-                <th className="text-center px-5 py-3 font-semibold text-xs uppercase tracking-wider">Total Items</th>
                 <th className="text-center px-5 py-3 font-semibold text-xs uppercase tracking-wider">Raw Score</th>
-                <th className="text-center px-5 py-3 font-semibold text-xs uppercase tracking-wider">Max Score</th>
-                <th className="text-center px-5 py-3 font-semibold text-xs uppercase tracking-wider">% of Max</th>
+                <th className="text-center px-5 py-3 font-semibold text-xs uppercase tracking-wider">Scaled Score</th>
+                <th className="text-center px-5 py-3 font-semibold text-xs uppercase tracking-wider">Age Equiv.</th>
+                <th className="text-center px-5 py-3 font-semibold text-xs uppercase tracking-wider">Growth Scale</th>
+                <th className="text-center px-5 py-3 font-semibold text-xs uppercase tracking-wider">% Delay</th>
               </tr>
             </thead>
             <tbody>
               {selectedDomains.map((domain: DomainData) => {
-                const rawScore = getDomainRawScore(domain);
-                const answered = getDomainAnsweredCount(domain);
-                const total = domain.items.length;
-                const maxRaw = getDomainMaxScore(domain);
-                const pctMax = maxRaw > 0 ? Math.round((rawScore / maxRaw) * 100) : 0;
+                const sd = scoringData[domain.id];
                 const color = domainColors[domain.id] || '#0D7377';
+                const pd = percentDelay?.[domain.id];
 
                 return (
                   <tr key={domain.id} className="border-t border-border hover:bg-muted/20 transition-colors">
@@ -254,16 +454,26 @@ export default function SummaryReport() {
                     >
                       {domain.name}
                     </td>
-                    <td className="px-5 py-3 text-center font-medium">{answered}</td>
-                    <td className="px-5 py-3 text-center text-muted-foreground">{total}</td>
                     <td className="px-5 py-3 text-center font-bold" style={{ color }}>
-                      {rawScore}
+                      {sd?.rawScore ?? 0}
                     </td>
-                    <td className="px-5 py-3 text-center text-muted-foreground">{maxRaw}</td>
+                    <td className="px-5 py-3 text-center font-medium">
+                      {sd?.scaledScore !== null ? sd?.scaledScore : '—'}
+                    </td>
+                    <td className="px-5 py-3 text-center text-muted-foreground">
+                      {sd?.ageEquivalent || '—'}
+                    </td>
+                    <td className="px-5 py-3 text-center text-muted-foreground">
+                      {sd?.growthScaleValue !== null ? sd?.growthScaleValue : '—'}
+                    </td>
                     <td className="px-5 py-3 text-center">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted">
-                        {pctMax}%
-                      </span>
+                      {pd ? (
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${pd.startsWith('-') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+                          {pd}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </td>
                   </tr>
                 );
@@ -290,9 +500,9 @@ export default function SummaryReport() {
         </h3>
         <p className="text-xs text-amber-700 leading-relaxed">
           This form is a digital adaptation of the Bayley Scales of Infant and Toddler Development, 4th Edition (Bayley-4) for data collection purposes.
-          Raw scores shown here require conversion to scaled scores, composite scores, and percentile ranks using the official Bayley-4 scoring tables
-          published by Pearson. This tool does not replace the official scoring software (Q-global) or the professional judgment of a qualified examiner.
-          Always refer to the Bayley-4 Administration and Scoring Manual for proper interpretation.
+          Scaled scores, standard scores, age equivalents, and growth scale values are calculated from the scoring tables in the provided template.
+          Always verify results against the official Bayley-4 scoring tables and consult the Administration and Scoring Manual for proper interpretation.
+          This tool does not replace the professional judgment of a qualified examiner.
         </p>
       </div>
 
