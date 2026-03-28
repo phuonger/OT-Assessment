@@ -1,11 +1,12 @@
 /*
  * Design: Clinical Precision — Swiss Medical Design
  * Left-anchored vertical stepper with domain-colored indicators
- * Shows discontinued status per domain
+ * Shows discontinued status, progress, and elapsed timer per domain
  */
 import { useAssessment } from '@/contexts/AssessmentContext';
 import { cn } from '@/lib/utils';
-import { Brain, Move, Hand, BarChart3, MessageSquare, OctagonX } from 'lucide-react';
+import { formatTimeCompact } from '@/lib/formatTime';
+import { Brain, Move, Hand, BarChart3, MessageSquare, OctagonX, Timer, Pause, Play } from 'lucide-react';
 
 const domainIcons: Record<string, React.ReactNode> = {
   cognitive: <Brain className="w-4 h-4" />,
@@ -24,18 +25,31 @@ const domainColors: Record<string, string> = {
 };
 
 export default function DomainSidebar() {
-  const { state, dispatch, getSelectedDomains, getDomainAnsweredCount, isDomainDiscontinued } = useAssessment();
+  const {
+    state,
+    dispatch,
+    getSelectedDomains,
+    getDomainAnsweredCount,
+    isDomainDiscontinued,
+    getDomainElapsedSeconds,
+  } = useAssessment();
   const selectedDomains = getSelectedDomains();
 
   const handleDomainClick = (index: number) => {
     dispatch({ type: 'SET_DOMAIN', payload: index });
-    dispatch({ type: 'SET_STEP', payload: 'assessment' });
+    if (state.currentStep === 'summary') {
+      dispatch({ type: 'SET_STEP', payload: 'assessment' });
+    }
   };
 
+  // Total elapsed time across all domains
+  const totalSeconds = selectedDomains.reduce((sum, d) => sum + getDomainElapsedSeconds(d), 0);
+  const timerRunning = state.activeDomainTimerStart !== null;
+
   return (
-    <div className="w-full">
+    <div className="w-full space-y-3">
       {/* Child info summary */}
-      <div className="px-4 py-3 mb-3 bg-white rounded-lg border border-border shadow-sm">
+      <div className="px-4 py-3 bg-white rounded-lg border border-border shadow-sm">
         <p className="text-sm font-semibold" style={{ fontFamily: "'DM Sans', sans-serif" }}>
           {state.childInfo.firstName} {state.childInfo.lastName}
         </p>
@@ -50,6 +64,31 @@ export default function DomainSidebar() {
         )}
       </div>
 
+      {/* Total timer */}
+      {state.isStarted && (
+        <div className="flex items-center gap-2.5 px-4 py-2.5 bg-white rounded-lg border border-border shadow-sm">
+          <Timer className="w-4 h-4 text-[#0D7377] flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[9px] uppercase tracking-wider font-bold text-muted-foreground">Session Time</p>
+            <p className="text-sm font-bold tabular-nums text-foreground" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+              {formatTimeCompact(totalSeconds)}
+            </p>
+          </div>
+          <button
+            onClick={() => dispatch({ type: timerRunning ? 'PAUSE_TIMER' : 'RESUME_TIMER' })}
+            className={cn(
+              'p-1.5 rounded-md transition-colors',
+              timerRunning
+                ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                : 'bg-green-100 text-green-700 hover:bg-green-200'
+            )}
+            title={timerRunning ? 'Pause timer' : 'Resume timer'}
+          >
+            {timerRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+          </button>
+        </div>
+      )}
+
       {/* Domain navigation */}
       <nav className="space-y-1">
         {selectedDomains.map((domain, dIdx) => {
@@ -59,6 +98,7 @@ export default function DomainSidebar() {
           const isActive = state.currentDomainIndex === dIdx && state.currentStep === 'assessment';
           const color = domainColors[domain.id] || '#0D7377';
           const discontinued = isDomainDiscontinued(domain);
+          const elapsed = getDomainElapsedSeconds(domain);
 
           return (
             <button
@@ -103,6 +143,15 @@ export default function DomainSidebar() {
                     {answered}/{total}
                   </span>
                 </div>
+                {/* Per-domain timer */}
+                {elapsed > 0 && (
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <Timer className="w-2.5 h-2.5 text-muted-foreground/50" />
+                    <span className="text-[9px] text-muted-foreground/60 tabular-nums">
+                      {formatTimeCompact(elapsed)}
+                    </span>
+                  </div>
+                )}
               </div>
             </button>
           );

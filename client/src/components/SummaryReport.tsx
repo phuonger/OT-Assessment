@@ -4,7 +4,7 @@
  */
 import { useAssessment, calculateAgeInDays } from '@/contexts/AssessmentContext';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Download, FileText, Printer, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Download, FileText, Printer, RotateCcw, Timer, StickyNote } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { type DomainData, getStartItem } from '@/lib/assessmentData';
 import {
@@ -40,6 +40,7 @@ export default function SummaryReport() {
     getDomainRawScore,
     getDomainAnsweredCount,
     isDomainDiscontinued,
+    getDomainElapsedSeconds,
   } = useAssessment();
 
   const selectedDomains = getSelectedDomains();
@@ -225,6 +226,7 @@ export default function SummaryReport() {
       domain.items.forEach((item, idx) => {
         const key = `${domain.id}-${item.number}`;
         const score = state.scores[key];
+        const noteKey = `${domain.id}-${item.number}`;
         itemScores.push({
           domain: domain.name,
           itemNumber: item.number,
@@ -232,6 +234,7 @@ export default function SummaryReport() {
           score: score ?? null,
           isPreScored: item.number < startItem,
           isDiscontinued: idx >= discontinueIdx,
+          note: state.itemNotes[noteKey] || undefined,
         });
       });
     });
@@ -285,10 +288,14 @@ export default function SummaryReport() {
       }),
       compositeScores: composites,
       itemScores,
+      domainTimers: selectedDomains.map((domain: DomainData) => ({
+        name: domain.name,
+        elapsedSeconds: getDomainElapsedSeconds(domain),
+      })),
     };
 
     generatePDFReport(reportData);
-  }, [state, selectedDomains, scoringData, compositeScores, percentDelay, getDomainAnsweredCount, isDomainDiscontinued]);
+  }, [state, selectedDomains, scoringData, compositeScores, percentDelay, getDomainAnsweredCount, isDomainDiscontinued, getDomainElapsedSeconds]);
 
   const handleReset = () => {
     if (window.confirm('Are you sure you want to start a new assessment? All current data will be lost.')) {
@@ -584,15 +591,100 @@ export default function SummaryReport() {
         </div>
       </div>
 
-      {/* Notes */}
-      {state.childInfo.notes && (
-        <div className="bg-white rounded-xl border border-border shadow-sm p-5 mb-6">
-          <h3 className="font-bold text-sm mb-2" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-            Examiner Notes
+      {/* Administration Time */}
+      <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden mb-6">
+        <div className="p-5 border-b border-border">
+          <h3 className="font-bold text-lg flex items-center gap-2" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+            <Timer className="w-5 h-5 text-muted-foreground" />
+            Administration Time
           </h3>
-          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{state.childInfo.notes}</p>
         </div>
-      )}
+        <div className="p-5">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {selectedDomains.map((domain: DomainData) => {
+              const elapsed = getDomainElapsedSeconds(domain);
+              const color = domainColors[domain.id] || '#0D7377';
+              const mins = Math.floor(elapsed / 60);
+              const secs = elapsed % 60;
+              return (
+                <div key={domain.id} className="text-center p-3 rounded-lg" style={{ backgroundColor: `${color}08` }}>
+                  <p className="text-[10px] uppercase tracking-wider font-bold mb-1" style={{ color }}>
+                    {domain.name}
+                  </p>
+                  <p className="text-lg font-bold tabular-nums" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+                    {mins}:{String(secs).padStart(2, '0')}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-4 pt-3 border-t border-border flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">Total Session Time</span>
+            <span className="text-lg font-bold" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+              {(() => {
+                const total = selectedDomains.reduce((sum, d) => sum + getDomainElapsedSeconds(d), 0);
+                const h = Math.floor(total / 3600);
+                const m = Math.floor((total % 3600) / 60);
+                const s = total % 60;
+                return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
+              })()}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Item-Level Examiner Notes */}
+      {(() => {
+        const notesItems: { domain: string; domainColor: string; itemNumber: number; description: string; note: string }[] = [];
+        selectedDomains.forEach((domain: DomainData) => {
+          const color = domainColors[domain.id] || '#0D7377';
+          domain.items.forEach(item => {
+            const key = `${domain.id}-${item.number}`;
+            const note = state.itemNotes[key];
+            if (note && note.trim()) {
+              notesItems.push({ domain: domain.name, domainColor: color, itemNumber: item.number, description: item.description, note });
+            }
+          });
+        });
+
+        if (notesItems.length === 0 && !state.childInfo.notes) return null;
+
+        return (
+          <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden mb-6">
+            <div className="p-5 border-b border-border">
+              <h3 className="font-bold text-lg flex items-center gap-2" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+                <StickyNote className="w-5 h-5 text-amber-600" />
+                Examiner Notes
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {notesItems.length} item-level note{notesItems.length !== 1 ? 's' : ''} recorded
+              </p>
+            </div>
+            <div className="p-5 space-y-3">
+              {state.childInfo.notes && (
+                <div className="p-3 bg-muted/30 rounded-lg mb-4">
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">General Notes</p>
+                  <p className="text-sm text-foreground whitespace-pre-wrap">{state.childInfo.notes}</p>
+                </div>
+              )}
+              {notesItems.map((ni, idx) => (
+                <div key={idx} className="flex gap-3 p-3 rounded-lg border border-border">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-md flex items-center justify-center text-xs font-bold text-white" style={{ backgroundColor: ni.domainColor }}>
+                    {ni.itemNumber}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-[10px] uppercase tracking-wider font-bold" style={{ color: ni.domainColor }}>{ni.domain}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-1 truncate">{ni.description}</p>
+                    <p className="text-sm text-foreground whitespace-pre-wrap">{ni.note}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Disclaimer */}
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-6">

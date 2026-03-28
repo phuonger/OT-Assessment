@@ -45,6 +45,12 @@ interface ItemScore {
   score: number | null;
   isPreScored: boolean;
   isDiscontinued: boolean;
+  note?: string;
+}
+
+interface DomainTimer {
+  name: string;
+  elapsedSeconds: number;
 }
 
 export interface PDFReportData {
@@ -52,6 +58,7 @@ export interface PDFReportData {
   domainScores: DomainScore[];
   compositeScores: CompositeScore[];
   itemScores: ItemScore[];
+  domainTimers?: DomainTimer[];
 }
 
 export function generatePDFReport(data: PDFReportData): void {
@@ -346,9 +353,76 @@ export function generatePDFReport(data: PDFReportData): void {
     y = (doc as any).lastAutoTable.finalY + 6;
   }
 
+  // ── ADMINISTRATION TIME ──
+  if (data.domainTimers && data.domainTimers.length > 0) {
+    if (y > 230) {
+      doc.addPage();
+      y = margin;
+    }
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...teal);
+    doc.text('Administration Time', margin, y);
+    y += 2;
+    doc.setDrawColor(220, 220, 215);
+    doc.line(margin, y, margin + contentWidth, y);
+    y += 3;
+
+    const timerData = data.domainTimers.map(t => {
+      const m = Math.floor(t.elapsedSeconds / 60);
+      const s = t.elapsedSeconds % 60;
+      return [t.name, `${m}:${String(s).padStart(2, '0')}`];
+    });
+    const totalSecs = data.domainTimers.reduce((sum, t) => sum + t.elapsedSeconds, 0);
+    const totalM = Math.floor(totalSecs / 60);
+    const totalS = totalSecs % 60;
+    timerData.push(['Total Session Time', `${totalM}:${String(totalS).padStart(2, '0')}`]);
+
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      head: [['Domain', 'Time']],
+      body: timerData,
+      headStyles: {
+        fillColor: teal,
+        textColor: [255, 255, 255],
+        fontSize: 7.5,
+        fontStyle: 'bold',
+        halign: 'center',
+        cellPadding: 2.5,
+      },
+      bodyStyles: {
+        fontSize: 7.5,
+        textColor: darkGray,
+        cellPadding: 2.5,
+        halign: 'center',
+      },
+      columnStyles: {
+        0: { halign: 'left', fontStyle: 'bold' },
+      },
+      alternateRowStyles: { fillColor: [252, 251, 248] },
+      theme: 'grid',
+      styles: {
+        lineColor: [220, 220, 215],
+        lineWidth: 0.2,
+      },
+      didParseCell: (hookData: any) => {
+        // Bold the total row
+        if (hookData.section === 'body' && hookData.row.index === timerData.length - 1) {
+          hookData.cell.styles.fontStyle = 'bold';
+          hookData.cell.styles.fillColor = [240, 239, 236];
+        }
+      },
+    });
+
+    y = (doc as any).lastAutoTable.finalY + 8;
+  }
+
   // ── EXAMINER NOTES ──
-  if (data.childInfo.notes) {
-    if (y > 240) {
+  const itemNotes = data.itemScores.filter(item => item.note && item.note.trim());
+  if (data.childInfo.notes || itemNotes.length > 0) {
+    if (y > 220) {
       doc.addPage();
       y = margin;
     }
@@ -362,12 +436,69 @@ export function generatePDFReport(data: PDFReportData): void {
     doc.line(margin, y, margin + contentWidth, y);
     y += 5;
 
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...darkGray);
-    const noteLines = doc.splitTextToSize(data.childInfo.notes, contentWidth);
-    doc.text(noteLines, margin, y);
-    y += noteLines.length * 4 + 5;
+    // General notes
+    if (data.childInfo.notes) {
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...medGray);
+      doc.text('General Notes:', margin, y);
+      y += 4;
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...darkGray);
+      const noteLines = doc.splitTextToSize(data.childInfo.notes, contentWidth);
+      doc.text(noteLines, margin, y);
+      y += noteLines.length * 3.5 + 4;
+    }
+
+    // Item-level notes
+    if (itemNotes.length > 0) {
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...medGray);
+      doc.text(`Item-Level Notes (${itemNotes.length}):`, margin, y);
+      y += 3;
+
+      const notesTableData = itemNotes.map(item => [
+        item.domain,
+        `#${item.itemNumber}`,
+        item.description.length > 50 ? item.description.substring(0, 47) + '...' : item.description,
+        item.note || '',
+      ]);
+
+      autoTable(doc, {
+        startY: y,
+        margin: { left: margin, right: margin },
+        head: [['Domain', '#', 'Item', 'Note']],
+        body: notesTableData,
+        headStyles: {
+          fillColor: [255, 243, 205],
+          textColor: [146, 64, 14],
+          fontSize: 7,
+          fontStyle: 'bold',
+          cellPadding: 2,
+        },
+        bodyStyles: {
+          fontSize: 6.5,
+          textColor: darkGray,
+          cellPadding: 2,
+        },
+        columnStyles: {
+          0: { cellWidth: 30, fontStyle: 'bold' },
+          1: { cellWidth: 10, halign: 'center' },
+          2: { cellWidth: 45 },
+          3: { cellWidth: 'auto' },
+        },
+        alternateRowStyles: { fillColor: [255, 252, 245] },
+        theme: 'grid',
+        styles: {
+          lineColor: [235, 235, 230],
+          lineWidth: 0.15,
+          overflow: 'linebreak',
+        },
+      });
+
+      y = (doc as any).lastAutoTable.finalY + 6;
+    }
   }
 
   // ── DISCLAIMER ──

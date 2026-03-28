@@ -1,12 +1,14 @@
 /*
  * Design: Clinical Precision — Swiss Medical Design
  * Individual assessment item with hover-card scoring criteria tooltips
- * Supports: pre-scored items (before start point), discontinued items, and active scoring
+ * and collapsible examiner notes per item.
+ * Supports: pre-scored items, discontinued items, active scoring
  */
 import { useAssessment } from '@/contexts/AssessmentContext';
 import type { AssessmentItem } from '@/lib/assessmentData';
 import { cn } from '@/lib/utils';
-import { Info, MessageCircle, Lock, Ban } from 'lucide-react';
+import { Info, MessageCircle, Lock, Ban, StickyNote, ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 import {
   HoverCard,
   HoverCardTrigger,
@@ -33,8 +35,18 @@ export default function ScoringItem({
   const { state, dispatch } = useAssessment();
   const itemKey = `${domainId}-${item.number}`;
   const currentScore = state.scores[itemKey];
+  const currentNote = state.itemNotes[itemKey] || '';
+  const [notesOpen, setNotesOpen] = useState(currentNote.length > 0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const isLocked = isPreScored || isDiscontinued;
+
+  // Auto-focus textarea when opened
+  useEffect(() => {
+    if (notesOpen && textareaRef.current && !currentNote) {
+      textareaRef.current.focus();
+    }
+  }, [notesOpen]);
 
   const handleScore = (value: number) => {
     if (isLocked) return;
@@ -42,8 +54,13 @@ export default function ScoringItem({
     dispatch({ type: 'SET_SCORE', payload: { itemId: itemKey, score: newValue, domainId } });
   };
 
+  const handleNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    dispatch({ type: 'SET_ITEM_NOTE', payload: { itemId: itemKey, note: e.target.value } });
+  };
+
   const hasCriteria = item.criteria.length > 0;
   const hasNotes = item.notes && item.notes.length > 0;
+  const hasExaminerNote = currentNote.length > 0;
 
   return (
     <div
@@ -110,83 +127,98 @@ export default function ScoringItem({
               )}
             </div>
 
-            {/* Scoring criteria hover card */}
-            {(hasCriteria || hasNotes) && !isDiscontinued && (
-              <HoverCard openDelay={150} closeDelay={100}>
-                <HoverCardTrigger asChild>
-                  <button
-                    className="flex-shrink-0 mt-0.5 p-1 rounded-md hover:bg-muted/50 transition-colors"
-                    aria-label="View scoring criteria"
-                  >
-                    <Info className="w-4 h-4 text-muted-foreground hover:text-foreground transition-colors" />
-                  </button>
-                </HoverCardTrigger>
-                <HoverCardContent
-                  side="left"
-                  align="start"
-                  sideOffset={8}
-                  className="w-80 p-0 overflow-hidden"
+            {/* Action buttons: scoring criteria + notes toggle */}
+            <div className="flex items-center gap-0.5 flex-shrink-0">
+              {/* Examiner notes toggle */}
+              {!isPreScored && !isDiscontinued && (
+                <button
+                  className={cn(
+                    'p-1 rounded-md transition-colors',
+                    hasExaminerNote
+                      ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                      : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
+                  )}
+                  onClick={() => setNotesOpen(!notesOpen)}
+                  aria-label={notesOpen ? 'Hide examiner notes' : 'Add examiner notes'}
+                  title={notesOpen ? 'Hide notes' : 'Add notes'}
                 >
-                  {/* Header */}
-                  <div
-                    className="px-3 py-2 border-b"
-                    style={{ backgroundColor: `${domainColor}08`, borderColor: `${domainColor}20` }}
+                  <StickyNote className="w-4 h-4" />
+                </button>
+              )}
+
+              {/* Scoring criteria hover card */}
+              {(hasCriteria || hasNotes) && !isDiscontinued && (
+                <HoverCard openDelay={150} closeDelay={100}>
+                  <HoverCardTrigger asChild>
+                    <button
+                      className="p-1 rounded-md hover:bg-muted/50 transition-colors"
+                      aria-label="View scoring criteria"
+                    >
+                      <Info className="w-4 h-4 text-muted-foreground hover:text-foreground transition-colors" />
+                    </button>
+                  </HoverCardTrigger>
+                  <HoverCardContent
+                    side="left"
+                    align="start"
+                    sideOffset={8}
+                    className="w-80 p-0 overflow-hidden"
                   >
-                    <p className="text-[10px] uppercase tracking-wider font-bold" style={{ color: domainColor }}>
-                      Item {item.number} — Scoring Criteria
-                    </p>
-                  </div>
-
-                  {/* Criteria list */}
-                  {hasCriteria && (
-                    <div className="p-3 space-y-2">
-                      {item.criteria.map((c, idx) => {
-                        const isActive = currentScore === c.score;
-                        const bgMap: Record<number, string> = { 2: '#22c55e', 1: '#f59e0b', 0: '#ef4444' };
-                        const labelMap: Record<number, string> = { 2: 'Mastery', 1: 'Emerging', 0: 'Not Present' };
-                        return (
-                          <div
-                            key={idx}
-                            className={cn(
-                              'flex items-start gap-2.5 p-2 rounded-md transition-colors',
-                              isActive && 'bg-muted/50 ring-1 ring-border'
-                            )}
-                          >
-                            <span
-                              className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 text-[10px] font-bold text-white mt-0.5"
-                              style={{ backgroundColor: bgMap[c.score] || '#94a3b8' }}
+                    <div
+                      className="px-3 py-2 border-b"
+                      style={{ backgroundColor: `${domainColor}08`, borderColor: `${domainColor}20` }}
+                    >
+                      <p className="text-[10px] uppercase tracking-wider font-bold" style={{ color: domainColor }}>
+                        Item {item.number} — Scoring Criteria
+                      </p>
+                    </div>
+                    {hasCriteria && (
+                      <div className="p-3 space-y-2">
+                        {item.criteria.map((c, idx) => {
+                          const isActive = currentScore === c.score;
+                          const bgMap: Record<number, string> = { 2: '#22c55e', 1: '#f59e0b', 0: '#ef4444' };
+                          const labelMap: Record<number, string> = { 2: 'Mastery', 1: 'Emerging', 0: 'Not Present' };
+                          return (
+                            <div
+                              key={idx}
+                              className={cn(
+                                'flex items-start gap-2.5 p-2 rounded-md transition-colors',
+                                isActive && 'bg-muted/50 ring-1 ring-border'
+                              )}
                             >
-                              {c.score}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">
-                                {labelMap[c.score] || `Score ${c.score}`}
-                                {isActive && (
-                                  <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-foreground/10 text-foreground normal-case tracking-normal">
-                                    Selected
-                                  </span>
-                                )}
-                              </p>
-                              <p className="text-xs text-foreground leading-relaxed">{c.description}</p>
+                              <span
+                                className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 text-[10px] font-bold text-white mt-0.5"
+                                style={{ backgroundColor: bgMap[c.score] || '#94a3b8' }}
+                              >
+                                {c.score}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">
+                                  {labelMap[c.score] || `Score ${c.score}`}
+                                  {isActive && (
+                                    <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-foreground/10 text-foreground normal-case tracking-normal">
+                                      Selected
+                                    </span>
+                                  )}
+                                </p>
+                                <p className="text-xs text-foreground leading-relaxed">{c.description}</p>
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Notes section */}
-                  {hasNotes && (
-                    <div className="px-3 pb-3 pt-1 border-t border-border">
-                      <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Notes</p>
-                      {item.notes!.map((note, idx) => (
-                        <p key={idx} className="text-[11px] text-muted-foreground italic leading-relaxed">{note}</p>
-                      ))}
-                    </div>
-                  )}
-                </HoverCardContent>
-              </HoverCard>
-            )}
+                          );
+                        })}
+                      </div>
+                    )}
+                    {hasNotes && (
+                      <div className="px-3 pb-3 pt-1 border-t border-border">
+                        <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Notes</p>
+                        {item.notes!.map((note, idx) => (
+                          <p key={idx} className="text-[11px] text-muted-foreground italic leading-relaxed">{note}</p>
+                        ))}
+                      </div>
+                    )}
+                  </HoverCardContent>
+                </HoverCard>
+              )}
+            </div>
           </div>
 
           {/* Caregiver question */}
@@ -231,6 +263,43 @@ export default function ScoringItem({
               );
             })}
           </div>
+
+          {/* Examiner notes — collapsible */}
+          {notesOpen && !isPreScored && !isDiscontinued && (
+            <div className="mt-3 border border-amber-200 rounded-lg overflow-hidden">
+              <button
+                className="w-full flex items-center justify-between px-3 py-1.5 bg-amber-50 text-xs font-medium text-amber-800 hover:bg-amber-100 transition-colors"
+                onClick={() => setNotesOpen(false)}
+              >
+                <span className="flex items-center gap-1.5">
+                  <StickyNote className="w-3 h-3" />
+                  Examiner Notes
+                  {hasExaminerNote && <span className="text-[9px] bg-amber-200 px-1.5 py-0.5 rounded-full">saved</span>}
+                </span>
+                <ChevronUp className="w-3 h-3" />
+              </button>
+              <textarea
+                ref={textareaRef}
+                value={currentNote}
+                onChange={handleNoteChange}
+                placeholder="Add clinical observations, behavioral notes, or comments for this item..."
+                className="w-full px-3 py-2 text-xs leading-relaxed bg-white border-0 outline-none resize-none placeholder:text-muted-foreground/60"
+                rows={2}
+              />
+            </div>
+          )}
+
+          {/* Collapsed note indicator */}
+          {!notesOpen && hasExaminerNote && !isPreScored && !isDiscontinued && (
+            <button
+              className="mt-2 flex items-center gap-1.5 text-[10px] text-amber-700 hover:text-amber-800 transition-colors"
+              onClick={() => setNotesOpen(true)}
+            >
+              <StickyNote className="w-3 h-3" />
+              <span className="italic truncate max-w-xs">{currentNote}</span>
+              <ChevronDown className="w-3 h-3 flex-shrink-0" />
+            </button>
+          )}
         </div>
       </div>
     </div>

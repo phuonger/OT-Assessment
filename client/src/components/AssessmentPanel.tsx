@@ -7,7 +7,8 @@ import { useAssessment } from '@/contexts/AssessmentContext';
 import { getStartItem, type DomainData } from '@/lib/assessmentData';
 import ScoringItem from './ScoringItem';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, ArrowRight, CheckCircle2, AlertCircle, OctagonX } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, AlertCircle, OctagonX, Timer } from 'lucide-react';
+import { formatTime } from '@/lib/formatTime';
 import { useMemo, useRef, useEffect } from 'react';
 
 const domainColors: Record<string, string> = {
@@ -28,6 +29,7 @@ export default function AssessmentPanel() {
     getDomainMaxScore,
     getDomainDiscontinuePoint,
     isDomainDiscontinued,
+    getDomainElapsedSeconds,
   } = useAssessment();
 
   const selectedDomains = getSelectedDomains();
@@ -174,7 +176,11 @@ export default function AssessmentPanel() {
               {answered} of {total} answered ({pct}%)
             </span>
           </div>
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex items-center gap-4 text-xs">
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <Timer className="w-3.5 h-3.5" />
+              <span className="tabular-nums font-medium">{formatTime(domain ? getDomainElapsedSeconds(domain) : 0)}</span>
+            </span>
             <span className="font-medium" style={{ color }}>
               Raw Score: {rawScore}
             </span>

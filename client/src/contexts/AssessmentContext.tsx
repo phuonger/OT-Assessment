@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef } from 'react';
 import { ALL_DOMAINS, AGE_RANGES, type DomainData, type AssessmentItem, getStartItem } from '@/lib/assessmentData';
 
 const STORAGE_KEY = 'bayley4-assessment-state';
@@ -24,6 +24,9 @@ export interface AssessmentState {
   selectedDomainIds: string[];
   currentDomainIndex: number;
   scores: Record<string, number | null>;
+  itemNotes: Record<string, string>;
+  domainTimers: Record<string, number>; // accumulated seconds per domain
+  activeDomainTimerStart: number | null; // timestamp when current domain timer started
   isStarted: boolean;
 }
 
@@ -33,6 +36,10 @@ type Action =
   | { type: 'SET_SELECTED_DOMAINS'; payload: string[] }
   | { type: 'SET_DOMAIN'; payload: number }
   | { type: 'SET_SCORE'; payload: { itemId: string; score: number | null; domainId: string } }
+  | { type: 'SET_ITEM_NOTE'; payload: { itemId: string; note: string } }
+  | { type: 'TICK_TIMER' }
+  | { type: 'PAUSE_TIMER' }
+  | { type: 'RESUME_TIMER' }
   | { type: 'START_ASSESSMENT' }
   | { type: 'ADJUST_START_POINT'; payload: { startPointLetter: string } }
   | { type: 'LOAD_STATE'; payload: AssessmentState }
@@ -59,6 +66,9 @@ const initialState: AssessmentState = {
   selectedDomainIds: ALL_DOMAINS.map(d => d.id),
   currentDomainIndex: 0,
   scores: {},
+  itemNotes: {},
+  domainTimers: {},
+  activeDomainTimerStart: null,
   isStarted: false,
 };
 
@@ -106,9 +116,6 @@ function applyDiscontinueRule(
 
 /**
  * Recalculate pre-scores for all domains based on a new start point letter.
- * Items before the new start point get score 2.
- * Items at/after the new start point that were previously auto-scored (before old start) get cleared.
- * Items that were manually scored by the examiner are always preserved.
  */
 function recalculatePreScores(
   state: AssessmentState,
@@ -127,22 +134,16 @@ function recalculatePreScores(
       const existingScore = state.scores[key];
 
       if (item.number < newStartItem) {
-        // Before new start point: always auto-score as 2
         newScores[key] = 2;
       } else if (item.number < oldStartItem) {
-        // Between new start and old start (start moved backward):
-        // These were auto-scored as 2 before — clear them for manual scoring
         newScores[key] = null;
       } else if (existingScore !== undefined && existingScore !== null) {
-        // At or after old start point with an existing score: keep it
-        // (these were manually scored or discontinued)
         newScores[key] = existingScore;
       } else {
         newScores[key] = null;
       }
     }
 
-    // Re-check discontinue rule with new start point
     const discontinueAt = getDiscontinuePoint(domain, newScores, newStartItem);
     if (discontinueAt !== null) {
       for (const item of domain.items) {
@@ -156,16 +157,47 @@ function recalculatePreScores(
   return newScores;
 }
 
+/**
+ * Helper: flush the active timer into domainTimers accumulator.
+ */
+function flushTimer(state: AssessmentState): AssessmentState {
+  if (state.activeDomainTimerStart === null) return state;
+  const selectedDomains = ALL_DOMAINS.filter(d => state.selectedDomainIds.includes(d.id));
+  const currentDomain = selectedDomains[state.currentDomainIndex];
+  if (!currentDomain) return state;
+  const elapsed = Math.floor((Date.now() - state.activeDomainTimerStart) / 1000);
+  const prev = state.domainTimers[currentDomain.id] || 0;
+  return {
+    ...state,
+    domainTimers: { ...state.domainTimers, [currentDomain.id]: prev + elapsed },
+    activeDomainTimerStart: Date.now(),
+  };
+}
+
 function reducer(state: AssessmentState, action: Action): AssessmentState {
   switch (action.type) {
     case 'SET_CHILD_INFO':
       return { ...state, childInfo: action.payload };
-    case 'SET_STEP':
-      return { ...state, currentStep: action.payload };
+    case 'SET_STEP': {
+      // Flush timer when leaving assessment
+      const flushed = flushTimer(state);
+      return {
+        ...flushed,
+        currentStep: action.payload,
+        activeDomainTimerStart: action.payload === 'assessment' ? Date.now() : null,
+      };
+    }
     case 'SET_SELECTED_DOMAINS':
       return { ...state, selectedDomainIds: action.payload };
-    case 'SET_DOMAIN':
-      return { ...state, currentDomainIndex: action.payload };
+    case 'SET_DOMAIN': {
+      // Flush timer for old domain, start timer for new domain
+      const flushed = flushTimer(state);
+      return {
+        ...flushed,
+        currentDomainIndex: action.payload,
+        activeDomainTimerStart: Date.now(),
+      };
+    }
     case 'SET_SCORE': {
       let newScores = { ...state.scores, [action.payload.itemId]: action.payload.score };
       const domain = ALL_DOMAINS.find(d => d.id === action.payload.domainId);
@@ -178,6 +210,21 @@ function reducer(state: AssessmentState, action: Action): AssessmentState {
       }
       return { ...state, scores: newScores };
     }
+    case 'SET_ITEM_NOTE':
+      return {
+        ...state,
+        itemNotes: { ...state.itemNotes, [action.payload.itemId]: action.payload.note },
+      };
+    case 'TICK_TIMER': {
+      // No-op for re-render trigger; actual time is computed from activeDomainTimerStart
+      return { ...state };
+    }
+    case 'PAUSE_TIMER': {
+      const flushed = flushTimer(state);
+      return { ...flushed, activeDomainTimerStart: null };
+    }
+    case 'RESUME_TIMER':
+      return { ...state, activeDomainTimerStart: Date.now() };
     case 'START_ASSESSMENT': {
       const preScores: Record<string, number | null> = { ...state.scores };
       const selectedDomains = ALL_DOMAINS.filter(d => state.selectedDomainIds.includes(d.id));
@@ -189,7 +236,13 @@ function reducer(state: AssessmentState, action: Action): AssessmentState {
           }
         }
       }
-      return { ...state, isStarted: true, currentStep: 'assessment', scores: preScores };
+      return {
+        ...state,
+        isStarted: true,
+        currentStep: 'assessment',
+        scores: preScores,
+        activeDomainTimerStart: Date.now(),
+      };
     }
     case 'ADJUST_START_POINT': {
       const newLetter = action.payload.startPointLetter;
@@ -199,15 +252,12 @@ function reducer(state: AssessmentState, action: Action): AssessmentState {
         startPointLetter: newLetter,
         ageRange: ageRange ? ageRange.label : state.childInfo.ageRange,
       };
-      // Pass the ORIGINAL state (with old start letter) so recalculatePreScores
-      // can compare old vs new start points correctly
       const newScores = recalculatePreScores(state, newLetter);
       return { ...state, childInfo: newChildInfo, scores: newScores };
     }
     case 'LOAD_STATE':
       return action.payload;
     case 'RESET':
-      // Clear local storage on reset
       try { localStorage.removeItem(STORAGE_KEY); } catch {}
       return initialState;
     default:
@@ -243,18 +293,23 @@ interface AssessmentContextType {
   getDomainMaxScore: (domain: DomainData) => number;
   getDomainDiscontinuePoint: (domain: DomainData) => number | null;
   isDomainDiscontinued: (domain: DomainData) => boolean;
+  getDomainElapsedSeconds: (domain: DomainData) => number;
 }
 
 const AssessmentContext = createContext<AssessmentContextType | null>(null);
 
 export function AssessmentProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState, (init) => {
-    // Lazy initializer: load saved state from localStorage synchronously
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved) as AssessmentState;
         if (parsed && parsed.childInfo && typeof parsed.isStarted === 'boolean') {
+          // Ensure new fields exist for backward compat
+          if (!parsed.itemNotes) parsed.itemNotes = {};
+          if (!parsed.domainTimers) parsed.domainTimers = {};
+          // Don't restore active timer start — it's stale from a previous session
+          parsed.activeDomainTimerStart = parsed.currentStep === 'assessment' ? Date.now() : null;
           return parsed;
         }
       }
@@ -263,6 +318,22 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
     }
     return init;
   });
+
+  // Timer tick: re-render every second when timer is active
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (state.activeDomainTimerStart !== null) {
+      timerRef.current = setInterval(() => {
+        dispatch({ type: 'TICK_TIMER' });
+      }, 1000);
+    } else if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [state.activeDomainTimerStart]);
 
   // Auto-save state to localStorage on every change (debounced)
   useEffect(() => {
@@ -328,6 +399,25 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
     [getDomainDiscontinuePoint]
   );
 
+  const getDomainElapsedSeconds = useCallback(
+    (domain: DomainData) => {
+      const accumulated = state.domainTimers[domain.id] || 0;
+      // If this is the currently active domain, add live elapsed
+      const selectedDomains = ALL_DOMAINS.filter(d => state.selectedDomainIds.includes(d.id));
+      const currentDomain = selectedDomains[state.currentDomainIndex];
+      if (
+        currentDomain &&
+        currentDomain.id === domain.id &&
+        state.activeDomainTimerStart !== null
+      ) {
+        const live = Math.floor((Date.now() - state.activeDomainTimerStart) / 1000);
+        return accumulated + live;
+      }
+      return accumulated;
+    },
+    [state.domainTimers, state.activeDomainTimerStart, state.currentDomainIndex, state.selectedDomainIds]
+  );
+
   return (
     <AssessmentContext.Provider
       value={{
@@ -341,6 +431,7 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
         getDomainMaxScore,
         getDomainDiscontinuePoint,
         isDomainDiscontinued,
+        getDomainElapsedSeconds,
       }}
     >
       {children}
