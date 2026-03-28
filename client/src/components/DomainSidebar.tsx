@@ -1,10 +1,11 @@
 /*
  * Design: Clinical Precision — Swiss Medical Design
  * Left-anchored vertical stepper with domain-colored indicators
+ * Shows discontinued status per domain
  */
 import { useAssessment } from '@/contexts/AssessmentContext';
 import { cn } from '@/lib/utils';
-import { Brain, Move, Hand, BarChart3, MessageSquare } from 'lucide-react';
+import { Brain, Move, Hand, BarChart3, MessageSquare, OctagonX } from 'lucide-react';
 
 const domainIcons: Record<string, React.ReactNode> = {
   cognitive: <Brain className="w-4 h-4" />,
@@ -23,7 +24,7 @@ const domainColors: Record<string, string> = {
 };
 
 export default function DomainSidebar() {
-  const { state, dispatch, getSelectedDomains, getDomainAnsweredCount } = useAssessment();
+  const { state, dispatch, getSelectedDomains, getDomainAnsweredCount, isDomainDiscontinued } = useAssessment();
   const selectedDomains = getSelectedDomains();
 
   const handleDomainClick = (index: number) => {
@@ -57,6 +58,7 @@ export default function DomainSidebar() {
           const pct = total > 0 ? Math.round((answered / total) * 100) : 0;
           const isActive = state.currentDomainIndex === dIdx && state.currentStep === 'assessment';
           const color = domainColors[domain.id] || '#0D7377';
+          const discontinued = isDomainDiscontinued(domain);
 
           return (
             <button
@@ -71,20 +73,30 @@ export default function DomainSidebar() {
               style={{ borderLeftWidth: isActive ? '3px' : '0', borderLeftColor: isActive ? color : 'transparent' }}
             >
               <div
-                className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0"
-                style={{ backgroundColor: `${color}15`, color }}
+                className={cn(
+                  'w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0',
+                  discontinued && 'bg-red-100 text-red-600'
+                )}
+                style={!discontinued ? { backgroundColor: `${color}15`, color } : undefined}
               >
-                {domainIcons[domain.id]}
+                {discontinued ? <OctagonX className="w-4 h-4" /> : domainIcons[domain.id]}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-medium truncate text-sm" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-                  {domain.name}
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-medium truncate text-sm" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+                    {domain.name}
+                  </p>
+                  {discontinued && (
+                    <span className="text-[9px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded flex-shrink-0">
+                      DISC.
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-500"
-                      style={{ width: `${pct}%`, backgroundColor: color }}
+                      style={{ width: `${pct}%`, backgroundColor: discontinued ? '#ef4444' : color }}
                     />
                   </div>
                   <span className="text-[10px] text-muted-foreground font-medium whitespace-nowrap">

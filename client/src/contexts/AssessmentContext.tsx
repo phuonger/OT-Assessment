@@ -30,7 +30,7 @@ type Action =
   | { type: 'SET_STEP'; payload: 'info' | 'assessment' | 'summary' }
   | { type: 'SET_SELECTED_DOMAINS'; payload: string[] }
   | { type: 'SET_DOMAIN'; payload: number }
-  | { type: 'SET_SCORE'; payload: { itemId: string; score: number | null } }
+  | { type: 'SET_SCORE'; payload: { itemId: string; score: number | null; domainId: string } }
   | { type: 'START_ASSESSMENT' }
   | { type: 'RESET' };
 
@@ -56,6 +56,55 @@ const initialState: AssessmentState = {
   isStarted: false,
 };
 
+/**
+ * Check if the discontinue rule has been triggered for a domain.
+ * Returns the item number after which discontinue was triggered, or null if not triggered.
+ * Rule: 5 consecutive items scored 0 (starting from the start item onward).
+ */
+export function getDiscontinuePoint(
+  domain: DomainData,
+  scores: Record<string, number | null>,
+  startItemNumber: number
+): number | null {
+  let consecutiveZeros = 0;
+  // Only check items from start point onward
+  for (const item of domain.items) {
+    if (item.number < startItemNumber) continue;
+    const key = `${domain.id}-${item.number}`;
+    const score = scores[key];
+    if (score === 0) {
+      consecutiveZeros++;
+      if (consecutiveZeros >= 5) {
+        return item.number; // Discontinue triggered at this item
+      }
+    } else if (score !== null && score !== undefined) {
+      consecutiveZeros = 0;
+    } else {
+      // Item not yet scored — can't determine discontinue yet
+      break;
+    }
+  }
+  return null;
+}
+
+/**
+ * Apply discontinue rule: auto-score all items after the discontinue point as 0.
+ */
+function applyDiscontinueRule(
+  domain: DomainData,
+  scores: Record<string, number | null>,
+  discontinueAt: number
+): Record<string, number | null> {
+  const updated = { ...scores };
+  for (const item of domain.items) {
+    if (item.number > discontinueAt) {
+      const key = `${domain.id}-${item.number}`;
+      updated[key] = 0;
+    }
+  }
+  return updated;
+}
+
 function reducer(state: AssessmentState, action: Action): AssessmentState {
   switch (action.type) {
     case 'SET_CHILD_INFO':
@@ -66,13 +115,36 @@ function reducer(state: AssessmentState, action: Action): AssessmentState {
       return { ...state, selectedDomainIds: action.payload };
     case 'SET_DOMAIN':
       return { ...state, currentDomainIndex: action.payload };
-    case 'SET_SCORE':
-      return {
-        ...state,
-        scores: { ...state.scores, [action.payload.itemId]: action.payload.score },
-      };
-    case 'START_ASSESSMENT':
-      return { ...state, isStarted: true, currentStep: 'assessment' };
+    case 'SET_SCORE': {
+      let newScores = { ...state.scores, [action.payload.itemId]: action.payload.score };
+
+      // Check discontinue rule for the domain this item belongs to
+      const domain = ALL_DOMAINS.find(d => d.id === action.payload.domainId);
+      if (domain) {
+        const startItemNumber = getStartItem(domain, state.childInfo.startPointLetter);
+        const discontinueAt = getDiscontinuePoint(domain, newScores, startItemNumber);
+        if (discontinueAt !== null) {
+          newScores = applyDiscontinueRule(domain, newScores, discontinueAt);
+        }
+      }
+
+      return { ...state, scores: newScores };
+    }
+    case 'START_ASSESSMENT': {
+      // Pre-score all items before the start point as 2 (Mastery) for each selected domain
+      const preScores: Record<string, number | null> = { ...state.scores };
+      const selectedDomains = ALL_DOMAINS.filter(d => state.selectedDomainIds.includes(d.id));
+      for (const domain of selectedDomains) {
+        const startItemNumber = getStartItem(domain, state.childInfo.startPointLetter);
+        for (const item of domain.items) {
+          if (item.number < startItemNumber) {
+            const key = `${domain.id}-${item.number}`;
+            preScores[key] = 2;
+          }
+        }
+      }
+      return { ...state, isStarted: true, currentStep: 'assessment', scores: preScores };
+    }
     case 'RESET':
       return initialState;
     default:
@@ -89,6 +161,8 @@ interface AssessmentContextType {
   getDomainRawScore: (domain: DomainData) => number;
   getDomainAnsweredCount: (domain: DomainData) => number;
   getDomainMaxScore: (domain: DomainData) => number;
+  getDomainDiscontinuePoint: (domain: DomainData) => number | null;
+  isDomainDiscontinued: (domain: DomainData) => boolean;
 }
 
 const AssessmentContext = createContext<AssessmentContextType | null>(null);
@@ -133,6 +207,21 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
     return domain.items.length * 2;
   }, []);
 
+  const getDomainDiscontinuePoint = useCallback(
+    (domain: DomainData) => {
+      const startItemNumber = getStartItem(domain, state.childInfo.startPointLetter);
+      return getDiscontinuePoint(domain, state.scores, startItemNumber);
+    },
+    [state.scores, state.childInfo.startPointLetter]
+  );
+
+  const isDomainDiscontinued = useCallback(
+    (domain: DomainData) => {
+      return getDomainDiscontinuePoint(domain) !== null;
+    },
+    [getDomainDiscontinuePoint]
+  );
+
   return (
     <AssessmentContext.Provider
       value={{
@@ -144,6 +233,8 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
         getDomainRawScore,
         getDomainAnsweredCount,
         getDomainMaxScore,
+        getDomainDiscontinuePoint,
+        isDomainDiscontinued,
       }}
     >
       {children}

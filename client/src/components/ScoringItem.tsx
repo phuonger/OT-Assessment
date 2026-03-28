@@ -1,12 +1,12 @@
 /*
  * Design: Clinical Precision — Swiss Medical Design
  * Individual assessment item with criteria-based scoring
+ * Supports: pre-scored items (before start point), discontinued items, and active scoring
  */
 import { useAssessment } from '@/contexts/AssessmentContext';
 import type { AssessmentItem } from '@/lib/assessmentData';
 import { cn } from '@/lib/utils';
-import { Info, MessageCircle } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Info, MessageCircle, Lock, Ban } from 'lucide-react';
 import { useState } from 'react';
 
 interface ScoringItemProps {
@@ -14,25 +14,40 @@ interface ScoringItemProps {
   domainId: string;
   domainColor: string;
   isStartItem?: boolean;
+  isPreScored?: boolean;
+  isDiscontinued?: boolean;
 }
 
-export default function ScoringItem({ item, domainId, domainColor, isStartItem }: ScoringItemProps) {
+export default function ScoringItem({
+  item,
+  domainId,
+  domainColor,
+  isStartItem,
+  isPreScored,
+  isDiscontinued,
+}: ScoringItemProps) {
   const { state, dispatch } = useAssessment();
   const itemKey = `${domainId}-${item.number}`;
   const currentScore = state.scores[itemKey];
   const [showCriteria, setShowCriteria] = useState(false);
 
+  const isLocked = isPreScored || isDiscontinued;
+
   const handleScore = (value: number) => {
+    if (isLocked) return;
     const newValue = currentScore === value ? null : value;
-    dispatch({ type: 'SET_SCORE', payload: { itemId: itemKey, score: newValue } });
+    dispatch({ type: 'SET_SCORE', payload: { itemId: itemKey, score: newValue, domainId } });
   };
 
   return (
     <div
       className={cn(
-        'group bg-white rounded-lg border border-border p-4 transition-all hover:shadow-sm',
+        'group bg-white rounded-lg border border-border p-4 transition-all',
+        !isLocked && 'hover:shadow-sm',
         currentScore !== undefined && currentScore !== null && 'border-l-[3px]',
-        isStartItem && 'ring-2 ring-offset-2'
+        isStartItem && 'ring-2 ring-offset-2',
+        isPreScored && 'opacity-60 bg-green-50/50',
+        isDiscontinued && 'opacity-50 bg-gray-50'
       )}
       style={{
         borderLeftColor: currentScore !== undefined && currentScore !== null ? domainColor : undefined,
@@ -43,8 +58,11 @@ export default function ScoringItem({ item, domainId, domainColor, isStartItem }
       <div className="flex items-start gap-3">
         {/* Item number */}
         <div
-          className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 text-xs font-bold"
-          style={{ backgroundColor: `${domainColor}15`, color: domainColor }}
+          className={cn(
+            'w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 text-xs font-bold',
+            isDiscontinued && 'bg-gray-200 text-gray-400'
+          )}
+          style={!isDiscontinued ? { backgroundColor: `${domainColor}15`, color: domainColor } : undefined}
         >
           {item.number}
         </div>
@@ -53,19 +71,39 @@ export default function ScoringItem({ item, domainId, domainColor, isStartItem }
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-2">
             <div className="flex-1">
-              <p className="text-sm font-medium leading-relaxed text-foreground">{item.description}</p>
-              {item.material && (
+              <p className={cn(
+                'text-sm font-medium leading-relaxed',
+                isDiscontinued ? 'text-muted-foreground' : 'text-foreground'
+              )}>
+                {item.description}
+              </p>
+              {item.material && !isDiscontinued && (
                 <p className="text-xs text-muted-foreground mt-1">
                   <span className="font-medium">Materials:</span> {item.material}
                 </p>
               )}
               {isStartItem && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold text-white mt-1.5" style={{ backgroundColor: domainColor }}>
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold text-white mt-1.5"
+                  style={{ backgroundColor: domainColor }}
+                >
                   START POINT
                 </span>
               )}
+              {isPreScored && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700 mt-1.5">
+                  <Lock className="w-3 h-3" />
+                  AUTO-SCORED (Before Start Point)
+                </span>
+              )}
+              {isDiscontinued && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-200 text-gray-600 mt-1.5">
+                  <Ban className="w-3 h-3" />
+                  DISCONTINUED
+                </span>
+              )}
             </div>
-            {item.criteria.length > 0 && (
+            {item.criteria.length > 0 && !isDiscontinued && (
               <button
                 onClick={() => setShowCriteria(!showCriteria)}
                 className="flex-shrink-0 mt-0.5"
@@ -79,7 +117,7 @@ export default function ScoringItem({ item, domainId, domainColor, isStartItem }
           </div>
 
           {/* Caregiver question */}
-          {item.caregiverQuestion && (
+          {item.caregiverQuestion && !isDiscontinued && (
             <div className="mt-2 p-2.5 bg-amber-50 border border-amber-200 rounded-md">
               <div className="flex items-start gap-2">
                 <MessageCircle className="w-3.5 h-3.5 text-amber-600 mt-0.5 flex-shrink-0" />
@@ -89,7 +127,7 @@ export default function ScoringItem({ item, domainId, domainColor, isStartItem }
           )}
 
           {/* Scoring criteria (expandable) */}
-          {showCriteria && item.criteria.length > 0 && (
+          {showCriteria && item.criteria.length > 0 && !isDiscontinued && (
             <div className="mt-3 p-3 bg-muted/30 rounded-md space-y-1.5">
               <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-2">Scoring Criteria</p>
               {item.criteria.map((c, idx) => (
@@ -129,11 +167,15 @@ export default function ScoringItem({ item, domainId, domainColor, isStartItem }
                 <button
                   key={score}
                   onClick={() => handleScore(score)}
+                  disabled={isLocked}
                   className={cn(
                     'px-3 py-1.5 rounded-md text-xs font-medium transition-all border',
                     isSelected
                       ? 'text-white shadow-sm'
-                      : 'bg-white text-muted-foreground border-border hover:border-foreground/20 hover:text-foreground'
+                      : 'bg-white text-muted-foreground border-border',
+                    isLocked
+                      ? 'cursor-not-allowed opacity-70'
+                      : 'hover:border-foreground/20 hover:text-foreground'
                   )}
                   style={
                     isSelected
