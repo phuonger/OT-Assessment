@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useCallback } from 'react';
-import { domains, type Domain, type Subdomain } from '@/lib/assessmentData';
+import { ALL_DOMAINS, type DomainData, type AssessmentItem, getStartItem } from '@/lib/assessmentData';
 
 export interface ChildInfo {
   firstName: string;
@@ -9,14 +9,18 @@ export interface ChildInfo {
   examinerName: string;
   examDate: string;
   ageRange: string;
+  startPointLetter: string;
   notes: string;
+  reasonForReferral: string;
+  premature: string;
+  prematureWeeks: string;
 }
 
 export interface AssessmentState {
   childInfo: ChildInfo;
   currentStep: 'info' | 'assessment' | 'summary';
+  selectedDomainIds: string[];
   currentDomainIndex: number;
-  currentSubdomainIndex: number;
   scores: Record<string, number | null>;
   isStarted: boolean;
 }
@@ -24,8 +28,8 @@ export interface AssessmentState {
 type Action =
   | { type: 'SET_CHILD_INFO'; payload: ChildInfo }
   | { type: 'SET_STEP'; payload: 'info' | 'assessment' | 'summary' }
+  | { type: 'SET_SELECTED_DOMAINS'; payload: string[] }
   | { type: 'SET_DOMAIN'; payload: number }
-  | { type: 'SET_SUBDOMAIN'; payload: number }
   | { type: 'SET_SCORE'; payload: { itemId: string; score: number | null } }
   | { type: 'START_ASSESSMENT' }
   | { type: 'RESET' };
@@ -39,11 +43,15 @@ const initialState: AssessmentState = {
     examinerName: '',
     examDate: new Date().toISOString().split('T')[0],
     ageRange: '',
+    startPointLetter: 'A',
     notes: '',
+    reasonForReferral: '',
+    premature: 'No',
+    prematureWeeks: '',
   },
   currentStep: 'info',
+  selectedDomainIds: ALL_DOMAINS.map(d => d.id),
   currentDomainIndex: 0,
-  currentSubdomainIndex: 0,
   scores: {},
   isStarted: false,
 };
@@ -54,10 +62,10 @@ function reducer(state: AssessmentState, action: Action): AssessmentState {
       return { ...state, childInfo: action.payload };
     case 'SET_STEP':
       return { ...state, currentStep: action.payload };
+    case 'SET_SELECTED_DOMAINS':
+      return { ...state, selectedDomainIds: action.payload };
     case 'SET_DOMAIN':
-      return { ...state, currentDomainIndex: action.payload, currentSubdomainIndex: 0 };
-    case 'SET_SUBDOMAIN':
-      return { ...state, currentSubdomainIndex: action.payload };
+      return { ...state, currentDomainIndex: action.payload };
     case 'SET_SCORE':
       return {
         ...state,
@@ -75,12 +83,12 @@ function reducer(state: AssessmentState, action: Action): AssessmentState {
 interface AssessmentContextType {
   state: AssessmentState;
   dispatch: React.Dispatch<Action>;
-  getSubdomainRawScore: (subdomain: Subdomain) => number;
-  getSubdomainAnsweredCount: (subdomain: Subdomain) => number;
-  getDomainRawScore: (domain: Domain) => number;
-  getDomainAnsweredCount: (domain: Domain) => number;
-  getDomainTotalItems: (domain: Domain) => number;
-  getAllItems: (subdomain: Subdomain) => { id: string; text: string; number: number }[];
+  getSelectedDomains: () => DomainData[];
+  getDomainItems: (domain: DomainData) => AssessmentItem[];
+  getDomainStartItem: (domain: DomainData) => number;
+  getDomainRawScore: (domain: DomainData) => number;
+  getDomainAnsweredCount: (domain: DomainData) => number;
+  getDomainMaxScore: (domain: DomainData) => number;
 }
 
 const AssessmentContext = createContext<AssessmentContextType | null>(null);
@@ -88,53 +96,41 @@ const AssessmentContext = createContext<AssessmentContextType | null>(null);
 export function AssessmentProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  const getAllItems = useCallback((subdomain: Subdomain) => {
-    if (subdomain.items) return subdomain.items;
-    if (subdomain.stages) {
-      return subdomain.stages.flatMap(s => s.items);
-    }
-    return [];
+  const getSelectedDomains = useCallback(() => {
+    return ALL_DOMAINS.filter(d => state.selectedDomainIds.includes(d.id));
+  }, [state.selectedDomainIds]);
+
+  const getDomainItems = useCallback((domain: DomainData) => {
+    return domain.items;
   }, []);
 
-  const getSubdomainRawScore = useCallback(
-    (subdomain: Subdomain) => {
-      const items = getAllItems(subdomain);
-      return items.reduce((sum, item) => {
-        const score = state.scores[item.id];
+  const getDomainStartItem = useCallback((domain: DomainData) => {
+    return getStartItem(domain, state.childInfo.startPointLetter);
+  }, [state.childInfo.startPointLetter]);
+
+  const getDomainRawScore = useCallback(
+    (domain: DomainData) => {
+      return domain.items.reduce((sum, item) => {
+        const key = `${domain.id}-${item.number}`;
+        const score = state.scores[key];
         return sum + (score ?? 0);
       }, 0);
     },
-    [state.scores, getAllItems]
-  );
-
-  const getSubdomainAnsweredCount = useCallback(
-    (subdomain: Subdomain) => {
-      const items = getAllItems(subdomain);
-      return items.filter(item => state.scores[item.id] !== undefined && state.scores[item.id] !== null).length;
-    },
-    [state.scores, getAllItems]
-  );
-
-  const getDomainRawScore = useCallback(
-    (domain: Domain) => {
-      return domain.subdomains.reduce((sum, sub) => sum + getSubdomainRawScore(sub), 0);
-    },
-    [getSubdomainRawScore]
+    [state.scores]
   );
 
   const getDomainAnsweredCount = useCallback(
-    (domain: Domain) => {
-      return domain.subdomains.reduce((sum, sub) => sum + getSubdomainAnsweredCount(sub), 0);
+    (domain: DomainData) => {
+      return domain.items.filter(item => {
+        const key = `${domain.id}-${item.number}`;
+        return state.scores[key] !== undefined && state.scores[key] !== null;
+      }).length;
     },
-    [getSubdomainAnsweredCount]
+    [state.scores]
   );
 
-  const getDomainTotalItems = useCallback((domain: Domain) => {
-    return domain.subdomains.reduce((sum, sub) => {
-      if (sub.items) return sum + sub.items.length;
-      if (sub.stages) return sum + sub.stages.reduce((s, st) => s + st.items.length, 0);
-      return sum;
-    }, 0);
+  const getDomainMaxScore = useCallback((domain: DomainData) => {
+    return domain.items.length * 2;
   }, []);
 
   return (
@@ -142,12 +138,12 @@ export function AssessmentProvider({ children }: { children: React.ReactNode }) 
       value={{
         state,
         dispatch,
-        getSubdomainRawScore,
-        getSubdomainAnsweredCount,
+        getSelectedDomains,
+        getDomainItems,
+        getDomainStartItem,
         getDomainRawScore,
         getDomainAnsweredCount,
-        getDomainTotalItems,
-        getAllItems,
+        getDomainMaxScore,
       }}
     >
       {children}

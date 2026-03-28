@@ -3,22 +3,30 @@
  * Summary report with score profiles and domain breakdowns
  */
 import { useAssessment } from '@/contexts/AssessmentContext';
-import { domains, getDescriptiveClassification } from '@/lib/assessmentData';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Download, Printer, RotateCcw } from 'lucide-react';
 import { useCallback } from 'react';
+import type { DomainData } from '@/lib/assessmentData';
+
+const domainColors: Record<string, string> = {
+  cognitive: '#0D7377',
+  receptiveCommunication: '#B8860B',
+  expressiveCommunication: '#9B6B2F',
+  fineMotor: '#2D6A4F',
+  grossMotor: '#7B5B3A',
+};
 
 export default function SummaryReport() {
   const {
     state,
     dispatch,
+    getSelectedDomains,
     getDomainRawScore,
     getDomainAnsweredCount,
-    getDomainTotalItems,
-    getSubdomainRawScore,
-    getSubdomainAnsweredCount,
-    getAllItems,
+    getDomainMaxScore,
   } = useAssessment();
+
+  const selectedDomains = getSelectedDomains();
 
   const handlePrint = useCallback(() => {
     window.print();
@@ -26,52 +34,58 @@ export default function SummaryReport() {
 
   const handleExportCSV = useCallback(() => {
     const rows: string[][] = [
-      ['Domain', 'Subdomain', 'Item #', 'Item Text', 'Score'],
+      ['Domain', 'Item #', 'Item Description', 'Score'],
     ];
 
-    domains.forEach(domain => {
-      domain.subdomains.forEach(sub => {
-        const items = sub.items ?? sub.stages?.flatMap(s => s.items) ?? [];
-        items.forEach(item => {
-          const score = state.scores[item.id];
-          rows.push([
-            domain.name,
-            sub.name,
-            String(item.number),
-            `"${item.text.replace(/"/g, '""')}"`,
-            score !== undefined && score !== null ? String(score) : '',
-          ]);
-        });
+    selectedDomains.forEach((domain: DomainData) => {
+      domain.items.forEach(item => {
+        const key = `${domain.id}-${item.number}`;
+        const score = state.scores[key];
+        rows.push([
+          domain.name,
+          String(item.number),
+          `"${item.description.replace(/"/g, '""')}"`,
+          score !== undefined && score !== null ? String(score) : '',
+        ]);
       });
     });
 
     // Add summary rows
     rows.push([]);
     rows.push(['--- SUMMARY ---']);
-    rows.push(['Domain', 'Subdomain', 'Raw Score', 'Max Score', 'Items Answered', 'Total Items']);
-    domains.forEach(domain => {
-      domain.subdomains.forEach(sub => {
-        const items = getAllItems(sub);
-        rows.push([
-          domain.name,
-          sub.name,
-          String(getSubdomainRawScore(sub)),
-          String(sub.maxRawScore),
-          String(getSubdomainAnsweredCount(sub)),
-          String(items.length),
-        ]);
-      });
+    rows.push(['Domain', 'Raw Score', 'Max Score', 'Items Answered', 'Total Items']);
+    selectedDomains.forEach((domain: DomainData) => {
+      rows.push([
+        domain.name,
+        String(getDomainRawScore(domain)),
+        String(getDomainMaxScore(domain)),
+        String(getDomainAnsweredCount(domain)),
+        String(domain.items.length),
+      ]);
     });
+
+    // Add child info
+    rows.push([]);
+    rows.push(['--- CHILD INFO ---']);
+    rows.push(['Name', `${state.childInfo.firstName}`]);
+    rows.push(['DOB', state.childInfo.dateOfBirth]);
+    rows.push(['Exam Date', state.childInfo.examDate]);
+    rows.push(['Examiner', state.childInfo.examinerName]);
+    rows.push(['Start Point', state.childInfo.startPointLetter]);
+    rows.push(['Reason for Referral', state.childInfo.reasonForReferral]);
+    if (state.childInfo.notes) {
+      rows.push(['Notes', `"${state.childInfo.notes.replace(/"/g, '""')}"`]);
+    }
 
     const csv = rows.map(r => r.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `bayley4-${state.childInfo.firstName}-${state.childInfo.lastName}-${state.childInfo.examDate}.csv`;
+    a.download = `bayley4-${state.childInfo.firstName}-${state.childInfo.examDate}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [state, getSubdomainRawScore, getSubdomainAnsweredCount, getAllItems]);
+  }, [state, selectedDomains, getDomainRawScore, getDomainAnsweredCount, getDomainMaxScore]);
 
   const handleReset = () => {
     if (window.confirm('Are you sure you want to start a new assessment? All current data will be lost.')) {
@@ -112,11 +126,11 @@ export default function SummaryReport() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted/30 rounded-lg">
           <div>
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Child Name</p>
-            <p className="text-sm font-semibold mt-0.5">{state.childInfo.firstName} {state.childInfo.lastName}</p>
+            <p className="text-sm font-semibold mt-0.5">{state.childInfo.firstName}</p>
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Date of Birth</p>
-            <p className="text-sm font-semibold mt-0.5">{state.childInfo.dateOfBirth}</p>
+            <p className="text-sm font-semibold mt-0.5">{state.childInfo.dateOfBirth || 'Not specified'}</p>
           </div>
           <div>
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Examiner</p>
@@ -126,29 +140,44 @@ export default function SummaryReport() {
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Exam Date</p>
             <p className="text-sm font-semibold mt-0.5">{state.childInfo.examDate}</p>
           </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Start Point</p>
+            <p className="text-sm font-semibold mt-0.5">{state.childInfo.startPointLetter}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Age Range</p>
+            <p className="text-sm font-semibold mt-0.5">{state.childInfo.ageRange || 'Not specified'}</p>
+          </div>
+          {state.childInfo.reasonForReferral && (
+            <div className="col-span-2">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Reason for Referral</p>
+              <p className="text-sm font-semibold mt-0.5">{state.childInfo.reasonForReferral}</p>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Domain score cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        {domains.map(domain => {
+        {selectedDomains.map((domain: DomainData) => {
           const rawScore = getDomainRawScore(domain);
           const answered = getDomainAnsweredCount(domain);
-          const total = getDomainTotalItems(domain);
-          const maxRaw = domain.subdomains.reduce((s, sub) => s + sub.maxRawScore, 0);
+          const total = domain.items.length;
+          const maxRaw = getDomainMaxScore(domain);
           const pct = total > 0 ? Math.round((answered / total) * 100) : 0;
+          const color = domainColors[domain.id] || '#0D7377';
 
           return (
             <div
               key={domain.id}
               className="bg-white rounded-xl border border-border shadow-sm overflow-hidden"
             >
-              <div className="h-1.5" style={{ backgroundColor: domain.color }} />
+              <div className="h-1.5" style={{ backgroundColor: color }} />
               <div className="p-5">
                 <div className="flex items-center justify-between mb-3">
                   <h3
                     className="font-bold text-sm"
-                    style={{ color: domain.color, fontFamily: "'DM Sans', sans-serif" }}
+                    style={{ color, fontFamily: "'DM Sans', sans-serif" }}
                   >
                     {domain.name}
                   </h3>
@@ -159,36 +188,26 @@ export default function SummaryReport() {
 
                 {/* Raw score display */}
                 <div className="flex items-end gap-1 mb-4">
-                  <span className="text-3xl font-bold" style={{ color: domain.color, fontFamily: "'DM Sans', sans-serif" }}>
+                  <span className="text-3xl font-bold" style={{ color, fontFamily: "'DM Sans', sans-serif" }}>
                     {rawScore}
                   </span>
                   <span className="text-sm text-muted-foreground mb-1">/ {maxRaw}</span>
                 </div>
 
-                {/* Subdomain breakdown */}
-                <div className="space-y-2">
-                  {domain.subdomains.map(sub => {
-                    const subRaw = getSubdomainRawScore(sub);
-                    const subItems = getAllItems(sub);
-                    const subAnswered = getSubdomainAnsweredCount(sub);
-                    const subPct = sub.maxRawScore > 0 ? Math.round((subRaw / sub.maxRawScore) * 100) : 0;
-                    return (
-                      <div key={sub.id}>
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="font-medium">{sub.name}</span>
-                          <span className="text-muted-foreground">
-                            {subRaw}/{sub.maxRawScore} ({subAnswered}/{subItems.length} items)
-                          </span>
-                        </div>
-                        <div className="h-2 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all duration-500"
-                            style={{ width: `${subPct}%`, backgroundColor: domain.color, opacity: 0.7 }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
+                {/* Progress bar */}
+                <div>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="font-medium">Items Answered</span>
+                    <span className="text-muted-foreground">
+                      {answered}/{total}
+                    </span>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${pct}%`, backgroundColor: color, opacity: 0.7 }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -203,7 +222,7 @@ export default function SummaryReport() {
             Detailed Score Breakdown
           </h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Raw scores by domain and subdomain. Consult the Bayley-4 manual for scaled score conversion tables.
+            Raw scores by domain. Consult the Bayley-4 manual for scaled score conversion tables.
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -211,7 +230,6 @@ export default function SummaryReport() {
             <thead>
               <tr className="bg-muted/50">
                 <th className="text-left px-5 py-3 font-semibold text-xs uppercase tracking-wider">Domain</th>
-                <th className="text-left px-5 py-3 font-semibold text-xs uppercase tracking-wider">Subdomain</th>
                 <th className="text-center px-5 py-3 font-semibold text-xs uppercase tracking-wider">Items Answered</th>
                 <th className="text-center px-5 py-3 font-semibold text-xs uppercase tracking-wider">Total Items</th>
                 <th className="text-center px-5 py-3 font-semibold text-xs uppercase tracking-wider">Raw Score</th>
@@ -220,39 +238,36 @@ export default function SummaryReport() {
               </tr>
             </thead>
             <tbody>
-              {domains.map(domain =>
-                domain.subdomains.map((sub, idx) => {
-                  const subRaw = getSubdomainRawScore(sub);
-                  const subItems = getAllItems(sub);
-                  const subAnswered = getSubdomainAnsweredCount(sub);
-                  const pctMax = sub.maxRawScore > 0 ? Math.round((subRaw / sub.maxRawScore) * 100) : 0;
-                  return (
-                    <tr key={sub.id} className="border-t border-border hover:bg-muted/20 transition-colors">
-                      {idx === 0 && (
-                        <td
-                          className="px-5 py-3 font-semibold"
-                          rowSpan={domain.subdomains.length}
-                          style={{ color: domain.color, borderLeft: `3px solid ${domain.color}` }}
-                        >
-                          {domain.name}
-                        </td>
-                      )}
-                      <td className="px-5 py-3">{sub.name}</td>
-                      <td className="px-5 py-3 text-center font-medium">{subAnswered}</td>
-                      <td className="px-5 py-3 text-center text-muted-foreground">{subItems.length}</td>
-                      <td className="px-5 py-3 text-center font-bold" style={{ color: domain.color }}>
-                        {subRaw}
-                      </td>
-                      <td className="px-5 py-3 text-center text-muted-foreground">{sub.maxRawScore}</td>
-                      <td className="px-5 py-3 text-center">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted">
-                          {pctMax}%
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
+              {selectedDomains.map((domain: DomainData) => {
+                const rawScore = getDomainRawScore(domain);
+                const answered = getDomainAnsweredCount(domain);
+                const total = domain.items.length;
+                const maxRaw = getDomainMaxScore(domain);
+                const pctMax = maxRaw > 0 ? Math.round((rawScore / maxRaw) * 100) : 0;
+                const color = domainColors[domain.id] || '#0D7377';
+
+                return (
+                  <tr key={domain.id} className="border-t border-border hover:bg-muted/20 transition-colors">
+                    <td
+                      className="px-5 py-3 font-semibold"
+                      style={{ color, borderLeft: `3px solid ${color}` }}
+                    >
+                      {domain.name}
+                    </td>
+                    <td className="px-5 py-3 text-center font-medium">{answered}</td>
+                    <td className="px-5 py-3 text-center text-muted-foreground">{total}</td>
+                    <td className="px-5 py-3 text-center font-bold" style={{ color }}>
+                      {rawScore}
+                    </td>
+                    <td className="px-5 py-3 text-center text-muted-foreground">{maxRaw}</td>
+                    <td className="px-5 py-3 text-center">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted">
+                        {pctMax}%
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
