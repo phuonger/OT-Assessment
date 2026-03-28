@@ -2422,3 +2422,89 @@ export function getStartPointForAge(ageLabel: string): string {
   const range = AGE_RANGES.find(r => r.label === ageLabel);
   return range ? range.startPoint : "A";
 }
+
+/**
+ * Calculate the child's age in months and days from birthDate to testDate,
+ * then return the matching AGE_RANGE label (or null if out of range).
+ * Supports premature adjustment: subtract prematureWeeks from the age.
+ */
+export function calculateAgeRange(
+  birthDate: string,
+  testDate: string,
+  prematureWeeks?: number
+): { label: string; startPoint: string; ageDescription: string } | null {
+  if (!birthDate || !testDate) return null;
+
+  const birth = new Date(birthDate + 'T00:00:00');
+  const test = new Date(testDate + 'T00:00:00');
+  if (isNaN(birth.getTime()) || isNaN(test.getTime())) return null;
+  if (test < birth) return null;
+
+  // Calculate total days between dates
+  let totalDays = Math.floor((test.getTime() - birth.getTime()) / (1000 * 60 * 60 * 24));
+
+  // Adjust for prematurity (subtract premature weeks)
+  if (prematureWeeks && prematureWeeks > 0) {
+    totalDays -= prematureWeeks * 7;
+    if (totalDays < 0) totalDays = 0;
+  }
+
+  // Convert to months and remaining days
+  // Use a more precise month calculation
+  let adjustedDate = new Date(birth.getTime());
+  if (prematureWeeks && prematureWeeks > 0) {
+    adjustedDate = new Date(adjustedDate.getTime() + prematureWeeks * 7 * 24 * 60 * 60 * 1000);
+  }
+
+  let months = (test.getFullYear() - adjustedDate.getFullYear()) * 12 + (test.getMonth() - adjustedDate.getMonth());
+  // Check if we've overshot
+  const tempDate = new Date(adjustedDate);
+  tempDate.setMonth(tempDate.getMonth() + months);
+  if (tempDate > test) {
+    months--;
+  }
+  const monthStart = new Date(adjustedDate);
+  monthStart.setMonth(monthStart.getMonth() + months);
+  const days = Math.floor((test.getTime() - monthStart.getTime()) / (1000 * 60 * 60 * 24));
+
+  const ageDescription = `${months} months ${days} days`;
+
+  // Define age ranges in days for matching
+  // Each range: [minMonths, minDays, maxMonths, maxDays]
+  const ranges: { minM: number; minD: number; maxM: number; maxD: number; idx: number }[] = [
+    { minM: 0, minD: 16, maxM: 1, maxD: 30, idx: 0 },   // A
+    { minM: 2, minD: 0, maxM: 2, maxD: 30, idx: 1 },     // B
+    { minM: 3, minD: 0, maxM: 3, maxD: 30, idx: 2 },     // C
+    { minM: 4, minD: 0, maxM: 4, maxD: 30, idx: 3 },     // D
+    { minM: 5, minD: 0, maxM: 5, maxD: 30, idx: 4 },     // E
+    { minM: 6, minD: 0, maxM: 6, maxD: 30, idx: 5 },     // F
+    { minM: 7, minD: 0, maxM: 7, maxD: 30, idx: 6 },     // G
+    { minM: 8, minD: 0, maxM: 10, maxD: 30, idx: 7 },    // H
+    { minM: 11, minD: 0, maxM: 13, maxD: 30, idx: 8 },   // I
+    { minM: 14, minD: 0, maxM: 16, maxD: 30, idx: 9 },   // J
+    { minM: 17, minD: 0, maxM: 19, maxD: 30, idx: 10 },  // K
+    { minM: 20, minD: 0, maxM: 22, maxD: 30, idx: 11 },  // L
+    { minM: 23, minD: 0, maxM: 25, maxD: 30, idx: 12 },  // M
+    { minM: 26, minD: 0, maxM: 28, maxD: 30, idx: 13 },  // N
+    { minM: 29, minD: 0, maxM: 32, maxD: 30, idx: 14 },  // O
+    { minM: 33, minD: 0, maxM: 38, maxD: 30, idx: 15 },  // P
+    { minM: 39, minD: 0, maxM: 42, maxD: 30, idx: 16 },  // Q
+  ];
+
+  // Convert months+days to a comparable number (months * 31 + days)
+  const ageVal = months * 31 + days;
+
+  for (const r of ranges) {
+    const minVal = r.minM * 31 + r.minD;
+    const maxVal = r.maxM * 31 + r.maxD;
+    if (ageVal >= minVal && ageVal <= maxVal) {
+      return {
+        label: AGE_RANGES[r.idx].label,
+        startPoint: AGE_RANGES[r.idx].startPoint,
+        ageDescription,
+      };
+    }
+  }
+
+  return null; // Out of range
+}

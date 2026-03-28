@@ -4,14 +4,14 @@
  * Domain-colored accents, card-based layout with domain selection
  */
 import { useAssessment } from '@/contexts/AssessmentContext';
-import { AGE_RANGES, ALL_DOMAINS, getStartPointForAge } from '@/lib/assessmentData';
+import { AGE_RANGES, ALL_DOMAINS, getStartPointForAge, calculateAgeRange } from '@/lib/assessmentData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowRight, Baby, ClipboardList, User, Brain, Move, Hand, MessageSquare } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 
 const DOMAIN_META: Record<string, { color: string; icon: React.ReactNode; desc: string }> = {
@@ -46,6 +46,37 @@ export default function ChildInfoForm() {
   const { state, dispatch } = useAssessment();
   const [info, setInfo] = useState(state.childInfo);
   const [selectedDomains, setSelectedDomains] = useState<string[]>(state.selectedDomainIds);
+
+  const [autoCalculated, setAutoCalculated] = useState(false);
+  const [calculatedAge, setCalculatedAge] = useState<string | null>(null);
+
+  // Auto-calculate age range when birth date, test date, or premature weeks change
+  const recalculateAge = useCallback((dob: string, examDate: string, premature: string, premWeeks: string) => {
+    if (!dob || !examDate) {
+      setAutoCalculated(false);
+      setCalculatedAge(null);
+      return;
+    }
+    const weeks = premature === 'Yes' && premWeeks ? parseInt(premWeeks, 10) : undefined;
+    const result = calculateAgeRange(dob, examDate, weeks);
+    if (result) {
+      setInfo(prev => ({
+        ...prev,
+        ageRange: result.label,
+        startPointLetter: result.startPoint,
+      }));
+      setAutoCalculated(true);
+      setCalculatedAge(result.ageDescription);
+    } else {
+      setAutoCalculated(false);
+      setCalculatedAge(null);
+    }
+  }, []);
+
+  // Recalculate when relevant fields change
+  useEffect(() => {
+    recalculateAge(info.dateOfBirth, info.examDate, info.premature, info.prematureWeeks);
+  }, [info.dateOfBirth, info.examDate, info.premature, info.prematureWeeks, recalculateAge]);
 
   const toggleDomain = (domainId: string) => {
     setSelectedDomains(prev =>
@@ -171,7 +202,10 @@ export default function ChildInfoForm() {
                     id="dob"
                     type="date"
                     value={info.dateOfBirth}
-                    onChange={e => setInfo({ ...info, dateOfBirth: e.target.value })}
+                    onChange={e => {
+                      const newDob = e.target.value;
+                      setInfo(prev => ({ ...prev, dateOfBirth: newDob }));
+                    }}
                   />
                 </div>
                 <div className="space-y-2">
@@ -182,7 +216,10 @@ export default function ChildInfoForm() {
                     id="examDate"
                     type="date"
                     value={info.examDate}
-                    onChange={e => setInfo({ ...info, examDate: e.target.value })}
+                    onChange={e => {
+                      const newDate = e.target.value;
+                      setInfo(prev => ({ ...prev, examDate: newDate }));
+                    }}
                     required
                   />
                 </div>
@@ -237,11 +274,35 @@ export default function ChildInfoForm() {
               </h3>
             </div>
             <div className="bg-white rounded-xl border border-border p-6 shadow-sm space-y-5">
+              {/* Auto-calculated age display */}
+              {autoCalculated && calculatedAge && (
+                <div className="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg mb-4">
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-emerald-800">
+                      Calculated Age: <span className="font-bold">{calculatedAge}</span>
+                      {info.premature === 'Yes' && info.prematureWeeks && (
+                        <span className="text-emerald-600 ml-1">(adjusted for {info.prematureWeeks} weeks prematurity)</span>
+                      )}
+                    </p>
+                    <p className="text-xs text-emerald-600">Auto-selected based on birth date and test date</p>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label className="text-sm font-medium">
                   Test Age / Adjusted Test Age <span className="text-destructive">*</span>
                 </Label>
-                <Select value={info.ageRange} onValueChange={handleAgeChange}>
+                <Select value={info.ageRange} onValueChange={v => {
+                  handleAgeChange(v);
+                  setAutoCalculated(false);
+                  setCalculatedAge(null);
+                }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select the child's age range" />
                   </SelectTrigger>
@@ -254,7 +315,10 @@ export default function ChildInfoForm() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  This determines the start point for each domain. Items before the start point will still be accessible for reverse rule administration.
+                  {autoCalculated
+                    ? 'Automatically selected based on birth date and test date. You can manually override if needed.'
+                    : 'This determines the start point for each domain. Items before the start point will still be accessible for reverse rule administration.'
+                  }
                 </p>
               </div>
               {info.startPointLetter && info.ageRange && (
