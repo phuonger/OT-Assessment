@@ -4,15 +4,16 @@
  */
 import { useAssessment, calculateAgeInDays } from '@/contexts/AssessmentContext';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Download, Printer, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Download, FileText, Printer, RotateCcw } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
-import type { DomainData } from '@/lib/assessmentData';
+import { type DomainData, getStartItem } from '@/lib/assessmentData';
 import {
   lookupScaledScore,
   lookupStandardScore,
   lookupAgeEquivalent,
   lookupGrowthScaleValue,
 } from '@/lib/scoringTables';
+import { generatePDFReport, type PDFReportData } from '@/lib/generatePDF';
 
 const domainColors: Record<string, string> = {
   cognitive: '#0D7377',
@@ -193,6 +194,102 @@ export default function SummaryReport() {
     URL.revokeObjectURL(url);
   }, [state, selectedDomains, scoringData, compositeScores, percentDelay]);
 
+  const handleExportPDF = useCallback(() => {
+    // Build item scores
+    const itemScores: PDFReportData['itemScores'] = [];
+    selectedDomains.forEach((domain: DomainData) => {
+      const startItem = getStartItem(domain, state.childInfo.startPointLetter);
+      const discontinued = isDomainDiscontinued(domain);
+      let discontinueIdx = domain.items.length;
+
+      if (discontinued) {
+        // Find where discontinue happened
+        for (let i = 0; i < domain.items.length; i++) {
+          const key = `${domain.id}-${domain.items[i].number}`;
+          const score = state.scores[key];
+          if (score === 0) {
+            let consecutive = 1;
+            for (let j = i + 1; j < domain.items.length && consecutive < 5; j++) {
+              const k2 = `${domain.id}-${domain.items[j].number}`;
+              if (state.scores[k2] === 0) consecutive++;
+              else break;
+            }
+            if (consecutive >= 5) {
+              discontinueIdx = i + 5;
+              break;
+            }
+          }
+        }
+      }
+
+      domain.items.forEach((item, idx) => {
+        const key = `${domain.id}-${item.number}`;
+        const score = state.scores[key];
+        itemScores.push({
+          domain: domain.name,
+          itemNumber: item.number,
+          description: item.description,
+          score: score ?? null,
+          isPreScored: item.number < startItem,
+          isDiscontinued: idx >= discontinueIdx,
+        });
+      });
+    });
+
+    // Build composite scores
+    const composites: PDFReportData['compositeScores'] = [];
+    if (compositeScores.cogComposite && compositeScores.cgScaled !== null && compositeScores.cgScaled !== undefined) {
+      composites.push({
+        name: 'Cognitive (COG)',
+        scaledScoreSum: String(compositeScores.cgScaled),
+        standardScore: compositeScores.cogComposite.standardScore,
+        percentileRank: compositeScores.cogComposite.percentileRank,
+      });
+    }
+    if (compositeScores.motComposite && compositeScores.fmScaled !== null && compositeScores.fmScaled !== undefined && compositeScores.gmScaled !== null && compositeScores.gmScaled !== undefined) {
+      composites.push({
+        name: 'Motor (MOT)',
+        scaledScoreSum: `${compositeScores.fmScaled} + ${compositeScores.gmScaled} = ${compositeScores.fmScaled + compositeScores.gmScaled}`,
+        standardScore: compositeScores.motComposite.standardScore,
+        percentileRank: compositeScores.motComposite.percentileRank,
+      });
+    }
+
+    const reportData: PDFReportData = {
+      childInfo: {
+        name: state.childInfo.firstName,
+        dateOfBirth: state.childInfo.dateOfBirth,
+        sex: state.childInfo.gender,
+        examDate: state.childInfo.examDate,
+        examiner: state.childInfo.examinerName,
+        startPoint: state.childInfo.startPointLetter,
+        ageRange: state.childInfo.ageRange,
+        reasonForReferral: state.childInfo.reasonForReferral,
+        premature: state.childInfo.premature,
+        prematureWeeks: state.childInfo.prematureWeeks,
+        notes: state.childInfo.notes,
+      },
+      domainScores: selectedDomains.map((domain: DomainData) => {
+        const sd = scoringData[domain.id];
+        return {
+          name: domain.name,
+          rawScore: sd?.rawScore ?? 0,
+          scaledScore: sd?.scaledScore ?? null,
+          ageEquivalent: sd?.ageEquivalent ?? null,
+          growthScaleValue: sd?.growthScaleValue ?? null,
+          percentDelay: percentDelay?.[domain.id] ?? null,
+          itemsAnswered: getDomainAnsweredCount(domain),
+          totalItems: domain.items.length,
+          discontinued: isDomainDiscontinued(domain),
+        };
+      }),
+      compositeScores: composites,
+      itemScores,
+    };
+
+    generatePDFReport(reportData);
+  }, [state, selectedDomains, scoringData, compositeScores, percentDelay, getDomainAnsweredCount, isDomainDiscontinued]);
+
   const handleReset = () => {
     if (window.confirm('Are you sure you want to start a new assessment? All current data will be lost.')) {
       dispatch({ type: 'RESET' });
@@ -216,6 +313,10 @@ export default function SummaryReport() {
             <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5">
               <Printer className="w-3.5 h-3.5" />
               Print
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleExportPDF} className="gap-1.5">
+              <FileText className="w-3.5 h-3.5" />
+              Export PDF
             </Button>
             <Button variant="outline" size="sm" onClick={handleExportCSV} className="gap-1.5">
               <Download className="w-3.5 h-3.5" />

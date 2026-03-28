@@ -1,13 +1,17 @@
 /*
  * Design: Clinical Precision — Swiss Medical Design
- * Individual assessment item with criteria-based scoring
+ * Individual assessment item with hover-card scoring criteria tooltips
  * Supports: pre-scored items (before start point), discontinued items, and active scoring
  */
 import { useAssessment } from '@/contexts/AssessmentContext';
 import type { AssessmentItem } from '@/lib/assessmentData';
 import { cn } from '@/lib/utils';
 import { Info, MessageCircle, Lock, Ban } from 'lucide-react';
-import { useState } from 'react';
+import {
+  HoverCard,
+  HoverCardTrigger,
+  HoverCardContent,
+} from '@/components/ui/hover-card';
 
 interface ScoringItemProps {
   item: AssessmentItem;
@@ -29,7 +33,6 @@ export default function ScoringItem({
   const { state, dispatch } = useAssessment();
   const itemKey = `${domainId}-${item.number}`;
   const currentScore = state.scores[itemKey];
-  const [showCriteria, setShowCriteria] = useState(false);
 
   const isLocked = isPreScored || isDiscontinued;
 
@@ -38,6 +41,9 @@ export default function ScoringItem({
     const newValue = currentScore === value ? null : value;
     dispatch({ type: 'SET_SCORE', payload: { itemId: itemKey, score: newValue, domainId } });
   };
+
+  const hasCriteria = item.criteria.length > 0;
+  const hasNotes = item.notes && item.notes.length > 0;
 
   return (
     <div
@@ -103,16 +109,83 @@ export default function ScoringItem({
                 </span>
               )}
             </div>
-            {item.criteria.length > 0 && !isDiscontinued && (
-              <button
-                onClick={() => setShowCriteria(!showCriteria)}
-                className="flex-shrink-0 mt-0.5"
-              >
-                <Info className={cn(
-                  'w-4 h-4 transition-colors',
-                  showCriteria ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
-                )} />
-              </button>
+
+            {/* Scoring criteria hover card */}
+            {(hasCriteria || hasNotes) && !isDiscontinued && (
+              <HoverCard openDelay={150} closeDelay={100}>
+                <HoverCardTrigger asChild>
+                  <button
+                    className="flex-shrink-0 mt-0.5 p-1 rounded-md hover:bg-muted/50 transition-colors"
+                    aria-label="View scoring criteria"
+                  >
+                    <Info className="w-4 h-4 text-muted-foreground hover:text-foreground transition-colors" />
+                  </button>
+                </HoverCardTrigger>
+                <HoverCardContent
+                  side="left"
+                  align="start"
+                  sideOffset={8}
+                  className="w-80 p-0 overflow-hidden"
+                >
+                  {/* Header */}
+                  <div
+                    className="px-3 py-2 border-b"
+                    style={{ backgroundColor: `${domainColor}08`, borderColor: `${domainColor}20` }}
+                  >
+                    <p className="text-[10px] uppercase tracking-wider font-bold" style={{ color: domainColor }}>
+                      Item {item.number} — Scoring Criteria
+                    </p>
+                  </div>
+
+                  {/* Criteria list */}
+                  {hasCriteria && (
+                    <div className="p-3 space-y-2">
+                      {item.criteria.map((c, idx) => {
+                        const isActive = currentScore === c.score;
+                        const bgMap: Record<number, string> = { 2: '#22c55e', 1: '#f59e0b', 0: '#ef4444' };
+                        const labelMap: Record<number, string> = { 2: 'Mastery', 1: 'Emerging', 0: 'Not Present' };
+                        return (
+                          <div
+                            key={idx}
+                            className={cn(
+                              'flex items-start gap-2.5 p-2 rounded-md transition-colors',
+                              isActive && 'bg-muted/50 ring-1 ring-border'
+                            )}
+                          >
+                            <span
+                              className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 text-[10px] font-bold text-white mt-0.5"
+                              style={{ backgroundColor: bgMap[c.score] || '#94a3b8' }}
+                            >
+                              {c.score}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5">
+                                {labelMap[c.score] || `Score ${c.score}`}
+                                {isActive && (
+                                  <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-foreground/10 text-foreground normal-case tracking-normal">
+                                    Selected
+                                  </span>
+                                )}
+                              </p>
+                              <p className="text-xs text-foreground leading-relaxed">{c.description}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Notes section */}
+                  {hasNotes && (
+                    <div className="px-3 pb-3 pt-1 border-t border-border">
+                      <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Notes</p>
+                      {item.notes!.map((note, idx) => (
+                        <p key={idx} className="text-[11px] text-muted-foreground italic leading-relaxed">{note}</p>
+                      ))}
+                    </div>
+                  )}
+                </HoverCardContent>
+              </HoverCard>
             )}
           </div>
 
@@ -123,37 +196,6 @@ export default function ScoringItem({
                 <MessageCircle className="w-3.5 h-3.5 text-amber-600 mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-amber-800 leading-relaxed">{item.caregiverQuestion}</p>
               </div>
-            </div>
-          )}
-
-          {/* Scoring criteria (expandable) */}
-          {showCriteria && item.criteria.length > 0 && !isDiscontinued && (
-            <div className="mt-3 p-3 bg-muted/30 rounded-md space-y-1.5">
-              <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-2">Scoring Criteria</p>
-              {item.criteria.map((c, idx) => (
-                <div
-                  key={idx}
-                  className={cn(
-                    'flex items-start gap-2 text-xs p-1.5 rounded',
-                    currentScore === c.score && 'bg-white shadow-sm'
-                  )}
-                >
-                  <span
-                    className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 text-[10px] font-bold text-white"
-                    style={{ backgroundColor: c.score === 2 ? '#22c55e' : c.score === 1 ? '#f59e0b' : '#ef4444' }}
-                  >
-                    {c.score}
-                  </span>
-                  <span className="text-muted-foreground leading-relaxed">{c.description}</span>
-                </div>
-              ))}
-              {item.notes && item.notes.length > 0 && (
-                <div className="pt-2 border-t border-border mt-2">
-                  {item.notes.map((note, idx) => (
-                    <p key={idx} className="text-[10px] text-muted-foreground italic">{note}</p>
-                  ))}
-                </div>
-              )}
             </div>
           )}
 
