@@ -139,3 +139,74 @@
     }
   }
 }
+
+/* Print styles for Clinical Report */
+@media print {
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  /* Hide non-print elements */
+  .print\:hidden,
+  [data-sonner-toaster],
+  nav,
+  header {
+    display: none !important;
+  }
+  
+  /* Reset page margins */
+  @page {
+    margin: 0.75in;
+    size: letter;
+  }
+  
+  /* Report container */
+  .print\:shadow-none {
+    box-shadow: none !important;
+  }
+  .print\:border-none {
+    border: none !important;
+  }
+  .print\:px-0 {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  .print\:py-0 {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+  .print\:max-w-none {
+    max-width: none !important;
+  }
+  .print\:p-12 {
+    padding: 0 !important;
+  }
+  
+  /* Ensure text is readable */
+  * {
+    color: black !important;
+  }
+  
+  /* Table styling for print */
+  table {
+    border-collapse: collapse !important;
+  }
+  th, td {
+    border: 1px solid #999 !important;
+    padding: 4px 8px !important;
+  }
+  th {
+    background-color: #f0f0f0 !important;
+  }
+  
+  /* Prevent page breaks inside sections */
+  .border-l-2 {
+    page-break-inside: avoid;
+  }
+  
+  /* Section headers */
+  h2, h3, h4 {
+    page-break-after: avoid;
+  }
+}

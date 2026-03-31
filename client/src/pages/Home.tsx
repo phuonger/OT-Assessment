@@ -9,6 +9,7 @@ import { MultiAssessmentProvider, useMultiAssessment } from '@/contexts/MultiAss
 import MultiStepSetup from '@/components/MultiStepSetup';
 import UnifiedAssessmentLayout from '@/components/UnifiedAssessmentLayout';
 import UnifiedSummaryReport from '@/components/UnifiedSummaryReport';
+import ClinicalReportEditor from '@/components/ClinicalReportEditor';
 
 function AssessmentFlow() {
   const { state } = useMultiAssessment();
@@ -22,6 +23,8 @@ function AssessmentFlow() {
       return <UnifiedAssessmentLayout />;
     case 'summary':
       return <UnifiedSummaryReport />;
+    case 'report':
+      return <ClinicalReportEditor />;
     default:
       return <MultiStepSetup />;
   }

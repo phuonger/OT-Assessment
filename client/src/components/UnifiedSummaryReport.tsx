@@ -123,6 +123,14 @@ export default function UnifiedSummaryReport() {
             <h1 className="text-lg font-semibold text-[#2C2C2C]">Summary Report</h1>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => dispatch({ type: 'GO_TO_REPORT' })}
+              className="gap-1.5 bg-teal-700 hover:bg-teal-800 text-white"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              Generate Report
+            </Button>
             <Button variant="outline" size="sm" onClick={handleExportCSV} className="gap-1.5">
               <Download className="w-3.5 h-3.5" />
               CSV

@@ -50,7 +50,7 @@ export interface FormState {
   ageRangeLabel: string;
 }
 
-export type AppPhase = 'childInfo' | 'examinerInfo' | 'formSelection' | 'assessment' | 'summary';
+export type AppPhase = 'childInfo' | 'examinerInfo' | 'formSelection' | 'assessment' | 'summary' | 'report';
 
 export interface MultiAssessmentState {
   phase: AppPhase;
@@ -84,7 +84,8 @@ type Action =
   | { type: 'TOGGLE_TIMER' }
   | { type: 'RESET_ALL' }
   | { type: 'LOAD_STATE'; payload: MultiAssessmentState }
-  | { type: 'GO_TO_PHASE'; phase: AppPhase };
+  | { type: 'GO_TO_PHASE'; phase: AppPhase }
+  | { type: 'GO_TO_REPORT' };
 
 // ============================================================
 // Initial State
@@ -429,6 +430,9 @@ function reducer(state: MultiAssessmentState, action: Action): MultiAssessmentSt
 
     case 'TOGGLE_TIMER':
       return { ...state, timerRunning: !state.timerRunning };
+
+    case 'GO_TO_REPORT':
+      return { ...state, phase: 'report' };
 
     case 'RESET_ALL':
       localStorage.removeItem('bayley4-multi-assessment');
