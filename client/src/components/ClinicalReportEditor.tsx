@@ -5,6 +5,11 @@
  * Auto-populates scoring tables, domain narratives (demonstrated/not demonstrated),
  * and provides editable sections for clinical observations, medical history, etc.
  * Based on OT Developmental Intake report templates.
+ *
+ * Features:
+ * - Save Report: persists all editable fields to localStorage with debounced save
+ * - Cognitive Composite: displays COG composite alongside Motor composite
+ * - Not Demonstrated: toggleable per-domain section listing items not demonstrated
  */
 
 import { useMultiAssessment, type ChildInfo, type ExaminerInfo } from '@/contexts/MultiAssessmentContext';
@@ -12,9 +17,15 @@ import { getFormById, type FormDefinition, type UnifiedDomain } from '@/lib/form
 import { lookupScaledScore, lookupAgeEquivalent, lookupGrowthScaleValue, lookupStandardScore } from '@/lib/scoringTables';
 import { REEL3_AGE_EQUIVALENT } from '@/lib/reel3Data';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Download, Printer, FileText, ChevronDown, ChevronUp, Pencil, Check, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Download, Printer, FileText, ChevronDown, ChevronUp, Pencil, Check, RotateCcw, Save, Eye, EyeOff } from 'lucide-react';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
+
+// ============================================================
+// Constants
+// ============================================================
+
+const REPORT_STORAGE_KEY = 'bayley4-clinical-report';
 
 // ============================================================
 // Helpers
@@ -78,6 +89,31 @@ const bayleyDomainKey: Record<string, 'CG' | 'FM' | 'GM' | null> = {
   fineMotor: 'FM',
   grossMotor: 'GM',
 };
+
+// ============================================================
+// Saved Report State Interface
+// ============================================================
+
+interface SavedReportState {
+  referralInfo: string;
+  medicalHistory: string;
+  parentConcerns: string;
+  clinicalObservation: string;
+  feedingOralMotor: string;
+  sensoryNarrative: string;
+  recommendations: string;
+  closingNote: string;
+  practiceName: string;
+  reportTitle: string;
+  domainOverrides: Record<string, string>;
+  // Track which child/test this report belongs to
+  childKey: string;
+  savedAt: string;
+}
+
+function getChildKey(childInfo: ChildInfo): string {
+  return `${childInfo.firstName}_${childInfo.lastName}_${childInfo.dob}_${childInfo.testDate}`;
+}
 
 // ============================================================
 // Editable Text Section
@@ -170,6 +206,8 @@ interface DomainNarrative {
   demonstratedItems: string[];
   notDemonstratedItems: string[];
   emergingItems: string[];
+  /** All items not demonstrated (not truncated) for the "Not Demonstrated" section */
+  allNotDemonstrated: string[];
 }
 
 function generateBayleyNarrative(
@@ -193,7 +231,6 @@ function generateBayleyNarrative(
   const notDemonstrated: string[] = [];
   const emerging: string[] = [];
 
-  // Get items in order, skip auto-scored items at the beginning
   const sortedItems = [...domain.items].sort((a, b) => a.number - b.number);
   
   for (const item of sortedItems) {
@@ -207,8 +244,6 @@ function generateBayleyNarrative(
     }
   }
 
-  // Per the tester's video: pick 3-5 consecutive high-scoring items for "demonstrated"
-  // and list zeros for "not demonstrated"
   const recentDemonstrated = demonstrated.slice(-5);
   const recentNotDemonstrated = notDemonstrated.slice(0, 5);
 
@@ -220,6 +255,7 @@ function generateBayleyNarrative(
     demonstratedItems: recentDemonstrated,
     notDemonstratedItems: recentNotDemonstrated,
     emergingItems: emerging.slice(-3),
+    allNotDemonstrated: notDemonstrated,
   };
 }
 
@@ -250,6 +286,7 @@ function generateBinaryNarrative(
     demonstratedItems: demonstrated.slice(-5),
     notDemonstratedItems: notDemonstrated.slice(0, 5),
     emergingItems: [],
+    allNotDemonstrated: notDemonstrated,
   };
 }
 
@@ -279,30 +316,109 @@ export default function ClinicalReportEditor() {
   }, [childInfo]);
 
   // ============================================================
-  // Editable report sections state
+  // Load saved report from localStorage
+  // ============================================================
+  const childKey = useMemo(() => getChildKey(childInfo), [childInfo]);
+
+  const loadSavedReport = useCallback((): SavedReportState | null => {
+    try {
+      const raw = localStorage.getItem(REPORT_STORAGE_KEY);
+      if (!raw) return null;
+      const saved: SavedReportState = JSON.parse(raw);
+      // Only restore if it belongs to the same child/test
+      if (saved.childKey === childKey) return saved;
+      return null;
+    } catch {
+      return null;
+    }
+  }, [childKey]);
+
+  const savedReport = useMemo(() => loadSavedReport(), [loadSavedReport]);
+
+  // ============================================================
+  // Editable report sections state — initialized from saved or defaults
   // ============================================================
   const [referralInfo, setReferralInfo] = useState(() => 
+    savedReport?.referralInfo ?? 
     `${childName} was referred to the regional center due to concerns regarding ${pronoun(gender, 'possessive')} overall development. A developmental assessment is being completed to obtain present levels of performance and to determine eligibility for early intervention services.`
   );
-  const [medicalHistory, setMedicalHistory] = useState('');
-  const [parentConcerns, setParentConcerns] = useState('');
-  const [clinicalObservation, setClinicalObservation] = useState('');
-  const [feedingOralMotor, setFeedingOralMotor] = useState('');
+  const [medicalHistory, setMedicalHistory] = useState(() => savedReport?.medicalHistory ?? '');
+  const [parentConcerns, setParentConcerns] = useState(() => savedReport?.parentConcerns ?? '');
+  const [clinicalObservation, setClinicalObservation] = useState(() => savedReport?.clinicalObservation ?? '');
+  const [feedingOralMotor, setFeedingOralMotor] = useState(() => savedReport?.feedingOralMotor ?? '');
   const [sensoryNarrative, setSensoryNarrative] = useState(() => {
-    const sub = Pronoun(gender, 'subject');
+    if (savedReport?.sensoryNarrative) return savedReport.sensoryNarrative;
     return `Auditory System: Appears to be within functional limits. ${childName} responded to auditory stimulus by turning ${pronoun(gender, 'possessive')} head toward sound.\n\nVisual System: Appears to be within functional limits. ${childName} demonstrated fair eye contact with the evaluator.\n\nTactile System: Appears to be within functional limits. ${childName} is able to tolerate a wide variety of textures at this time.\n\nProprioceptive System: Appears to be within functional limits. ${childName} demonstrates good motor planning skills.\n\nVestibular System: Appears to be within functional limits. ${childName} demonstrated good righting reactions during play.`;
   });
-  const [recommendations, setRecommendations] = useState('');
+  const [recommendations, setRecommendations] = useState(() => savedReport?.recommendations ?? '');
   const [closingNote, setClosingNote] = useState(() =>
+    savedReport?.closingNote ??
     `Thank you for this referral. It was a pleasure to work with ${childName} and ${pronoun(gender, 'possessive')} family. Please feel free to contact me with any additional questions and/or concerns.`
   );
 
-  // Practice/agency header
-  const [practiceName, setPracticeName] = useState(examinerInfo.agency || 'Practice Name');
-  const [reportTitle, setReportTitle] = useState('Occupational Therapy Developmental Intake Assessment');
+  const [practiceName, setPracticeName] = useState(() => savedReport?.practiceName ?? (examinerInfo.agency || 'Practice Name'));
+  const [reportTitle, setReportTitle] = useState(() => savedReport?.reportTitle ?? 'Occupational Therapy Developmental Intake Assessment');
 
-  // Domain-level editable narratives (overrides for auto-generated text)
-  const [domainOverrides, setDomainOverrides] = useState<Record<string, string>>({});
+  const [domainOverrides, setDomainOverrides] = useState<Record<string, string>>(() => savedReport?.domainOverrides ?? {});
+
+  // Track if report has been modified since last save
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(savedReport?.savedAt ?? null);
+  const [isDirty, setIsDirty] = useState(false);
+
+  // ============================================================
+  // Debounced auto-save to localStorage
+  // ============================================================
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const saveReport = useCallback(() => {
+    const reportState: SavedReportState = {
+      referralInfo,
+      medicalHistory,
+      parentConcerns,
+      clinicalObservation,
+      feedingOralMotor,
+      sensoryNarrative,
+      recommendations,
+      closingNote,
+      practiceName,
+      reportTitle,
+      domainOverrides,
+      childKey,
+      savedAt: new Date().toISOString(),
+    };
+    try {
+      localStorage.setItem(REPORT_STORAGE_KEY, JSON.stringify(reportState));
+      setLastSavedAt(reportState.savedAt);
+      setIsDirty(false);
+    } catch {
+      // localStorage full — ignore silently
+    }
+  }, [referralInfo, medicalHistory, parentConcerns, clinicalObservation, feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName, reportTitle, domainOverrides, childKey]);
+
+  // Mark dirty on any editable field change
+  useEffect(() => {
+    setIsDirty(true);
+  }, [referralInfo, medicalHistory, parentConcerns, clinicalObservation, feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName, reportTitle, domainOverrides]);
+
+  // Auto-save with 2-second debounce
+  useEffect(() => {
+    if (!isDirty) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      saveReport();
+    }, 2000);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [isDirty, saveReport]);
+
+  // ============================================================
+  // "Not Demonstrated" toggle state per domain
+  // ============================================================
+  const [showNotDemonstrated, setShowNotDemonstrated] = useState<Record<string, boolean>>({});
+  const toggleNotDemonstrated = (key: string) => {
+    setShowNotDemonstrated(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   // ============================================================
   // Compute scoring data for all forms
@@ -343,7 +459,6 @@ export default function ClinicalReportEditor() {
     if (!form) return [];
 
     const ageMonths = ageInMonths(childInfo.dob, childInfo.testDate, premWeeks);
-    const quarterDelay = Math.floor(ageMonths * 0.75);
 
     return fs.selectedDomainIds.map(domainLocalId => {
       const domain = form.domains.find(d => d.localId === domainLocalId);
@@ -387,8 +502,8 @@ export default function ClinicalReportEditor() {
     }).filter(Boolean) as BayleyScoreRow[];
   }, [formSelections, formStates, ageInDays, childInfo, premWeeks]);
 
-  // Bayley composite
-  const bayleyComposite = useMemo(() => {
+  // Motor Composite
+  const bayleyMotorComposite = useMemo(() => {
     const fmRow = bayleyScores.find(r => r.domainLocalId === 'fineMotor');
     const gmRow = bayleyScores.find(r => r.domainLocalId === 'grossMotor');
     if (!fmRow || !gmRow || fmRow.scaledScore === null || gmRow.scaledScore === null) return null;
@@ -398,12 +513,13 @@ export default function ClinicalReportEditor() {
     return { sumScaled, standardScore: result.standardScore, percentile: result.percentileRank };
   }, [bayleyScores]);
 
-  const cogComposite = useMemo(() => {
+  // Cognitive Composite
+  const bayleyCogComposite = useMemo(() => {
     const cgRow = bayleyScores.find(r => r.domainLocalId === 'cognitive');
     if (!cgRow || cgRow.scaledScore === null) return null;
     const result = lookupStandardScore(cgRow.scaledScore, 'COG');
     if (!result) return null;
-    return { standardScore: result.standardScore, percentile: result.percentileRank };
+    return { scaledScore: cgRow.scaledScore, standardScore: result.standardScore, percentile: result.percentileRank };
   }, [bayleyScores]);
 
   // REEL-3 scores
@@ -423,7 +539,6 @@ export default function ClinicalReportEditor() {
       if (!ds) return null;
       const rawScore = Object.values(ds.scores).reduce((sum: number, s) => sum + (s || 0), 0);
 
-      // REEL-3 age equivalent lookup
       const aeEntry = REEL3_AGE_EQUIVALENT.find(e => {
         const key = domainLocalId === 'receptive' ? 'receptive' : 'expressive';
         return (e as any)[key] === rawScore;
@@ -455,7 +570,6 @@ export default function ClinicalReportEditor() {
     if (!formState) return [];
     const form = getFormById(fs.formId);
     if (!form) return [];
-    const ageMonthsVal = ageInMonths(childInfo.dob, childInfo.testDate, premWeeks);
 
     return fs.selectedDomainIds.map(domainLocalId => {
       const domain = form.domains.find(d => d.localId === domainLocalId);
@@ -533,7 +647,7 @@ export default function ClinicalReportEditor() {
   // ============================================================
 
   useEffect(() => {
-    if (recommendations) return; // Don't overwrite if already edited
+    if (recommendations) return; // Don't overwrite if already edited or restored from save
     const ageMonthsVal = ageInMonths(childInfo.dob, childInfo.testDate, premWeeks);
     const quarterDelay = Math.floor(ageMonthsVal * 0.75);
     
@@ -541,7 +655,7 @@ export default function ClinicalReportEditor() {
     const borderlineQuarter: string[] = [];
 
     for (const row of bayleyScores) {
-      if (row.ageEquivalent === 'N/A') continue; // skip domains without age equivalents
+      if (row.ageEquivalent === 'N/A') continue;
       const aeMonths = parseInt(row.ageEquivalent) || 0;
       if (aeMonths < quarterDelay) {
         belowQuarter.push(row.domain.toLowerCase());
@@ -557,7 +671,6 @@ export default function ClinicalReportEditor() {
     }
 
     let rec = `${childName} is a ${chronAge} old ${gender === 'male' || gender === 'm' ? 'boy' : gender === 'female' || gender === 'f' ? 'girl' : 'child'} who was referred due to concerns about ${pronoun(gender, 'possessive')} developmental milestones.`;
-    
     if (quarterDelay > 0) {
       rec += ` A ¼ delay would be considered ${quarterDelay} months.`;
     }
@@ -582,7 +695,7 @@ export default function ClinicalReportEditor() {
   };
 
   // ============================================================
-  // PDF Export
+  // PDF Export / Print
   // ============================================================
   const reportRef = useRef<HTMLDivElement>(null);
 
@@ -590,13 +703,17 @@ export default function ClinicalReportEditor() {
     // Expand all sections before printing
     const prev = { ...collapsedSections };
     setCollapsedSections({});
-    // Use a small timeout to let React re-render with all sections expanded
     setTimeout(() => {
       window.print();
-      // Restore collapsed state after printing
       setCollapsedSections(prev);
     }, 100);
   }, [collapsedSections]);
+
+  // Manual save
+  const handleManualSave = useCallback(() => {
+    saveReport();
+    toast.success('Report saved successfully');
+  }, [saveReport]);
 
   // ============================================================
   // Assessment tools list
@@ -636,6 +753,14 @@ export default function ClinicalReportEditor() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Save status indicator */}
+            <span className="text-xs text-slate-400 mr-2">
+              {isDirty ? 'Unsaved changes...' : lastSavedAt ? `Saved ${new Date(lastSavedAt).toLocaleTimeString()}` : ''}
+            </span>
+            <Button variant="outline" size="sm" onClick={handleManualSave}>
+              <Save className="w-4 h-4 mr-1" />
+              Save
+            </Button>
             <Button variant="outline" size="sm" onClick={handlePrint}>
               <Printer className="w-4 h-4 mr-1" />
               Print / PDF
@@ -792,13 +917,24 @@ export default function ClinicalReportEditor() {
                               <td className="border border-slate-400 px-3 py-2 text-center">{row.percentDelay || '—'}</td>
                             </tr>
                           ))}
-                          {bayleyComposite && (
-                            <tr className="bg-slate-50 font-semibold">
+                          {/* Cognitive Composite Row */}
+                          {bayleyCogComposite && (
+                            <tr className="bg-blue-50 font-semibold">
+                              <td className="border border-slate-400 px-3 py-2">Cognitive Composite</td>
+                              <td className="border border-slate-400 px-3 py-2 text-center">—</td>
+                              <td className="border border-slate-400 px-3 py-2 text-center">{bayleyCogComposite.scaledScore}</td>
+                              <td className="border border-slate-400 px-3 py-2 text-center">SS: {bayleyCogComposite.standardScore}</td>
+                              <td className="border border-slate-400 px-3 py-2 text-center">PR: {bayleyCogComposite.percentile}</td>
+                            </tr>
+                          )}
+                          {/* Motor Composite Row */}
+                          {bayleyMotorComposite && (
+                            <tr className="bg-green-50 font-semibold">
                               <td className="border border-slate-400 px-3 py-2">Motor Composite</td>
                               <td className="border border-slate-400 px-3 py-2 text-center">—</td>
-                              <td className="border border-slate-400 px-3 py-2 text-center">{bayleyComposite.sumScaled}</td>
-                              <td className="border border-slate-400 px-3 py-2 text-center">SS: {bayleyComposite.standardScore}</td>
-                              <td className="border border-slate-400 px-3 py-2 text-center">{bayleyComposite.percentile}</td>
+                              <td className="border border-slate-400 px-3 py-2 text-center">{bayleyMotorComposite.sumScaled}</td>
+                              <td className="border border-slate-400 px-3 py-2 text-center">SS: {bayleyMotorComposite.standardScore}</td>
+                              <td className="border border-slate-400 px-3 py-2 text-center">PR: {bayleyMotorComposite.percentile}</td>
                             </tr>
                           )}
                         </tbody>
@@ -883,9 +1019,8 @@ export default function ClinicalReportEditor() {
                   const key = `${formId}_${domainLocalId}`;
                   const overrideText = domainOverrides[key];
                   const isOverridden = overrideText !== undefined;
-
-                  // Auto-generate the narrative text
                   const autoText = generateNarrativeText(narrative, firstName, gender, formId);
+                  const isNotDemoVisible = showNotDemonstrated[key] ?? false;
 
                   return (
                     <div key={key} className="border-l-2 border-teal-600 pl-4">
@@ -914,6 +1049,34 @@ export default function ClinicalReportEditor() {
                         placeholder="Domain narrative..."
                         rows={6}
                       />
+
+                      {/* ===== NOT DEMONSTRATED SECTION ===== */}
+                      {narrative.allNotDemonstrated.length > 0 && (
+                        <div className="mt-2">
+                          <button
+                            onClick={() => toggleNotDemonstrated(key)}
+                            className="flex items-center gap-1.5 text-xs text-rose-600 hover:text-rose-800 transition-colors print:hidden"
+                          >
+                            {isNotDemoVisible ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                            {isNotDemoVisible ? 'Hide' : 'Show'} Items Not Demonstrated ({narrative.allNotDemonstrated.length})
+                          </button>
+                          {isNotDemoVisible && (
+                            <div className="mt-2 bg-rose-50 border border-rose-200 rounded-md p-3 print:bg-white print:border-rose-300">
+                              <h5 className="text-xs font-bold uppercase tracking-wider text-rose-700 mb-2">
+                                Items Not Demonstrated
+                              </h5>
+                              <ul className="text-xs font-serif text-slate-700 space-y-1">
+                                {narrative.allNotDemonstrated.map((item, idx) => (
+                                  <li key={idx} className="flex items-start gap-2">
+                                    <span className="text-rose-400 mt-0.5 shrink-0">•</span>
+                                    <span>{item}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1042,16 +1205,11 @@ function generateNarrativeText(
   formId: string,
 ): string {
   const sub = Pronoun(gender, 'subject');
-  const subLower = pronoun(gender, 'subject');
 
   let text = '';
 
   if (narrative.demonstratedItems.length > 0) {
-    if (formId === 'bayley4') {
-      text += `${firstName} demonstrated the following skills: ${narrative.demonstratedItems.join('; ')}.`;
-    } else {
-      text += `${firstName} demonstrated the following skills: ${narrative.demonstratedItems.join('; ')}.`;
-    }
+    text += `${firstName} demonstrated the following skills: ${narrative.demonstratedItems.join('; ')}.`;
   }
 
   if (narrative.emergingItems.length > 0) {
