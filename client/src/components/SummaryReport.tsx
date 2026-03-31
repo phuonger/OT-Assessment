@@ -4,8 +4,9 @@
  */
 import { useAssessment, calculateAgeInDays } from '@/contexts/AssessmentContext';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Download, FileText, Printer, RotateCcw, Timer, StickyNote } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
+import { ArrowLeft, Download, FileText, Printer, RotateCcw, Timer, StickyNote, Save, FolderOpen } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
+import { saveSession } from '@/lib/sessionStorage';
 import { type DomainData, getStartItem } from '@/lib/assessmentData';
 import {
   lookupScaledScore,
@@ -14,6 +15,7 @@ import {
   lookupGrowthScaleValue,
 } from '@/lib/scoringTables';
 import { generatePDFReport, type PDFReportData } from '@/lib/generatePDF';
+import { toast } from 'sonner';
 
 const domainColors: Record<string, string> = {
   cognitive: '#0D7377',
@@ -32,7 +34,11 @@ const domainToScoringKey: Record<string, 'CG' | 'FM' | 'GM' | null> = {
   grossMotor: 'GM',
 };
 
-export default function SummaryReport() {
+interface SummaryReportProps {
+  onViewSessions?: () => void;
+}
+
+export default function SummaryReport({ onViewSessions }: SummaryReportProps) {
   const {
     state,
     dispatch,
@@ -297,6 +303,39 @@ export default function SummaryReport() {
     generatePDFReport(reportData);
   }, [state, selectedDomains, scoringData, compositeScores, percentDelay, getDomainAnsweredCount, isDomainDiscontinued, getDomainElapsedSeconds]);
 
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSaveSession = useCallback(() => {
+    setIsSaving(true);
+    try {
+      const domainScoresMap: Record<string, number> = {};
+      selectedDomains.forEach((domain: DomainData) => {
+        domainScoresMap[domain.id] = getDomainRawScore(domain);
+      });
+
+      // Determine status
+      const allAnswered = selectedDomains.every((domain: DomainData) => {
+        const answered = getDomainAnsweredCount(domain);
+        const total = domain.items.length;
+        return answered === total || isDomainDiscontinued(domain);
+      });
+
+      const session = saveSession(
+        state,
+        domainScoresMap,
+        allAnswered ? 'completed' : 'in-progress'
+      );
+
+      toast.success('Session saved successfully', {
+        description: `Saved as ${session.childName} — ${new Date(session.savedAt).toLocaleDateString()}`,
+      });
+    } catch (err) {
+      toast.error('Failed to save session');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [state, selectedDomains, getDomainRawScore, getDomainAnsweredCount, isDomainDiscontinued]);
+
   const handleReset = () => {
     if (window.confirm('Are you sure you want to start a new assessment? All current data will be lost.')) {
       dispatch({ type: 'RESET' });
@@ -329,6 +368,16 @@ export default function SummaryReport() {
               <Download className="w-3.5 h-3.5" />
               Export CSV
             </Button>
+            <Button variant="outline" size="sm" onClick={handleSaveSession} disabled={isSaving} className="gap-1.5 bg-[#2D7D6F]/10 text-[#2D7D6F] border-[#2D7D6F]/20 hover:bg-[#2D7D6F]/20">
+              <Save className="w-3.5 h-3.5" />
+              {isSaving ? 'Saving...' : 'Save Session'}
+            </Button>
+            {onViewSessions && (
+              <Button variant="outline" size="sm" onClick={onViewSessions} className="gap-1.5">
+                <FolderOpen className="w-3.5 h-3.5" />
+                Sessions
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={handleReset} className="gap-1.5 text-destructive hover:text-destructive">
               <RotateCcw className="w-3.5 h-3.5" />
               New

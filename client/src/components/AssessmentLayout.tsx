@@ -12,7 +12,11 @@ import { ClipboardList, Menu, X, Settings2 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 
-export default function AssessmentLayout() {
+interface AssessmentLayoutProps {
+  onViewSessions?: () => void;
+}
+
+export default function AssessmentLayout({ onViewSessions }: AssessmentLayoutProps) {
   const { state, dispatch } = useAssessment();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showStartAdjust, setShowStartAdjust] = useState(false);
@@ -145,7 +149,7 @@ export default function AssessmentLayout() {
         {/* Main content */}
         <main className="flex-1 min-w-0 overflow-y-auto p-4 lg:p-6">
           {state.currentStep === 'summary' ? (
-            <SummaryReport />
+            <SummaryReport onViewSessions={onViewSessions} />
           ) : (
             <AssessmentPanel />
           )}

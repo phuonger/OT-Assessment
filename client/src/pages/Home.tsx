@@ -1,21 +1,36 @@
-import { AssessmentProvider, useAssessment } from '@/contexts/AssessmentContext';
-import ChildInfoForm from '@/components/ChildInfoForm';
-import AssessmentLayout from '@/components/AssessmentLayout';
+/**
+ * Home Page — Multi-Assessment Flow
+ * 
+ * Design: Clinical Precision — Swiss Medical Design
+ * Routes between setup, assessment, and summary phases.
+ */
+
+import { MultiAssessmentProvider, useMultiAssessment } from '@/contexts/MultiAssessmentContext';
+import MultiStepSetup from '@/components/MultiStepSetup';
+import UnifiedAssessmentLayout from '@/components/UnifiedAssessmentLayout';
+import UnifiedSummaryReport from '@/components/UnifiedSummaryReport';
 
 function AssessmentFlow() {
-  const { state } = useAssessment();
+  const { state } = useMultiAssessment();
 
-  if (!state.isStarted) {
-    return <ChildInfoForm />;
+  switch (state.phase) {
+    case 'childInfo':
+    case 'examinerInfo':
+    case 'formSelection':
+      return <MultiStepSetup />;
+    case 'assessment':
+      return <UnifiedAssessmentLayout />;
+    case 'summary':
+      return <UnifiedSummaryReport />;
+    default:
+      return <MultiStepSetup />;
   }
-
-  return <AssessmentLayout />;
 }
 
 export default function Home() {
   return (
-    <AssessmentProvider>
+    <MultiAssessmentProvider>
       <AssessmentFlow />
-    </AssessmentProvider>
+    </MultiAssessmentProvider>
   );
 }
