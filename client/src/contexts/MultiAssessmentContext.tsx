@@ -50,7 +50,7 @@ export interface FormState {
   ageRangeLabel: string;
 }
 
-export type AppPhase = 'childInfo' | 'examinerInfo' | 'formSelection' | 'assessment' | 'summary' | 'report' | 'history' | 'backup' | 'settings';
+export type AppPhase = 'welcome' | 'childInfo' | 'examinerInfo' | 'formSelection' | 'assessment' | 'summary' | 'report' | 'history' | 'backup' | 'settings';
 
 export interface MultiAssessmentState {
   phase: AppPhase;
@@ -109,7 +109,7 @@ const initialExaminerInfo: ExaminerInfo = {
 };
 
 const initialState: MultiAssessmentState = {
-  phase: 'childInfo',
+  phase: 'welcome',
   childInfo: initialChildInfo,
   examinerInfo: initialExaminerInfo,
   formSelections: [],
@@ -150,17 +150,25 @@ function preScoreItems(
   return scores;
 }
 
+/**
+ * Check if a domain should be discontinued.
+ * @param scores - current item scores
+ * @param items - ordered list of items
+ * @param consecutiveCount - how many consecutive low scores trigger discontinue
+ * @param threshold - scores <= threshold count as "low" (default 0 = only zeros)
+ */
 function checkDiscontinue(
   scores: Record<number, number | null>,
   items: { number: number }[],
-  consecutiveZeros: number,
+  consecutiveCount: number,
+  threshold: number = 0,
 ): { discontinued: boolean; discontinuedAtItem: number | null } {
   let consecutive = 0;
   for (const item of items) {
     const score = scores[item.number];
-    if (score === 0) {
+    if (score !== null && score !== undefined && score <= threshold) {
       consecutive++;
-      if (consecutive >= consecutiveZeros) {
+      if (consecutive >= consecutiveCount) {
         return { discontinued: true, discontinuedAtItem: item.number };
       }
     } else if (score !== null && score !== undefined) {
@@ -189,6 +197,35 @@ function applyDiscontinue(
     scores: newScores,
     discontinued: true,
     discontinuedAtItem,
+  };
+}
+
+/**
+ * Remove the discontinued state: clear auto-scored trailing 0s after the old discontinue point.
+ * Only clears items that were auto-filled (after the discontinue point), preserving any
+ * manually entered scores.
+ */
+function undoDiscontinue(
+  domainState: DomainState,
+  domain: UnifiedDomain,
+  oldDiscontinuedAtItem: number,
+): DomainState {
+  const newScores = { ...domainState.scores };
+  // Clear auto-scored 0s after the old discontinue point
+  for (const item of domain.items) {
+    if (item.number > oldDiscontinuedAtItem) {
+      // Only clear if it was auto-scored as 0 (we can't distinguish perfectly,
+      // but items after discontinue point with score 0 were auto-filled)
+      if (newScores[item.number] === 0) {
+        delete newScores[item.number];
+      }
+    }
+  }
+  return {
+    ...domainState,
+    scores: newScores,
+    discontinued: false,
+    discontinuedAtItem: null,
   };
 }
 
@@ -255,24 +292,37 @@ function reducer(state: MultiAssessmentState, action: Action): MultiAssessmentSt
       if (!formState) return state;
       const domainState = formState.domains[domainLocalId];
       if (!domainState) return state;
-      if (domainState.discontinued && itemNumber > (domainState.discontinuedAtItem || 0)) return state;
 
-      const newScores = { ...domainState.scores, [itemNumber]: score };
-      let newDomainState: DomainState = { ...domainState, scores: newScores };
+      // Allow editing items at or before the discontinue point (for undo),
+      // but block editing auto-scored items after the discontinue point
+      if (domainState.discontinued && domainState.discontinuedAtItem !== null) {
+        if (itemNumber > domainState.discontinuedAtItem) return state;
+      }
 
-      // Check discontinue rule
       const form = getFormById(formId);
-      if (form?.discontinueRule) {
-        const domain = form.domains.find(d => d.localId === domainLocalId);
-        if (domain) {
-          const { discontinued, discontinuedAtItem } = checkDiscontinue(
-            newScores,
-            domain.items,
-            form.discontinueRule.consecutiveZeros,
-          );
-          if (discontinued && discontinuedAtItem) {
-            newDomainState = applyDiscontinue(newDomainState, domain, discontinuedAtItem);
-          }
+      const domain = form?.domains.find(d => d.localId === domainLocalId);
+
+      // If currently discontinued and user is editing an item at/before the discontinue point,
+      // first undo the discontinue so we can re-evaluate
+      let workingState = domainState;
+      if (domainState.discontinued && domainState.discontinuedAtItem !== null && domain) {
+        workingState = undoDiscontinue(domainState, domain, domainState.discontinuedAtItem);
+      }
+
+      const newScores = { ...workingState.scores, [itemNumber]: score };
+      let newDomainState: DomainState = { ...workingState, scores: newScores };
+
+      // Re-check discontinue rule
+      if (form?.discontinueRule && domain) {
+        const threshold = form.discontinueRule.threshold ?? 0;
+        const { discontinued, discontinuedAtItem } = checkDiscontinue(
+          newScores,
+          domain.items,
+          form.discontinueRule.consecutiveZeros,
+          threshold,
+        );
+        if (discontinued && discontinuedAtItem) {
+          newDomainState = applyDiscontinue(newDomainState, domain, discontinuedAtItem);
         }
       }
 

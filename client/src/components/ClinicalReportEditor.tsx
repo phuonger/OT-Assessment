@@ -98,8 +98,8 @@ function Pronoun(gender: string, type: 'subject' | 'object' | 'possessive'): str
   return p.charAt(0).toUpperCase() + p.slice(1);
 }
 
-const bayleyDomainKey: Record<string, 'CG' | 'FM' | 'GM' | null> = {
-  cognitive: 'CG', receptiveCommunication: null, expressiveCommunication: null, fineMotor: 'FM', grossMotor: 'GM',
+const bayleyDomainKey: Record<string, 'CG' | 'FM' | 'GM' | 'RC' | 'EC' | null> = {
+  cognitive: 'CG', receptiveCommunication: 'RC', expressiveCommunication: 'EC', fineMotor: 'FM', grossMotor: 'GM',
 };
 
 // ============================================================

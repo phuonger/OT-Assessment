@@ -6,6 +6,7 @@
  */
 
 import { MultiAssessmentProvider, useMultiAssessment } from '@/contexts/MultiAssessmentContext';
+import WelcomePage from '@/components/WelcomePage';
 import MultiStepSetup from '@/components/MultiStepSetup';
 import UnifiedAssessmentLayout from '@/components/UnifiedAssessmentLayout';
 import UnifiedSummaryReport from '@/components/UnifiedSummaryReport';
@@ -18,6 +19,8 @@ function AssessmentFlow() {
   const { state, dispatch } = useMultiAssessment();
 
   switch (state.phase) {
+    case 'welcome':
+      return <WelcomePage />;
     case 'childInfo':
     case 'examinerInfo':
     case 'formSelection':
@@ -51,7 +54,7 @@ function AssessmentFlow() {
         />
       );
     default:
-      return <MultiStepSetup />;
+      return <WelcomePage />;
   }
 }
 

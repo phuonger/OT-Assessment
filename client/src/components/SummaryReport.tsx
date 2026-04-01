@@ -26,10 +26,10 @@ const domainColors: Record<string, string> = {
 };
 
 // Map domain IDs to scoring table keys
-const domainToScoringKey: Record<string, 'CG' | 'FM' | 'GM' | null> = {
+const domainToScoringKey: Record<string, 'CG' | 'FM' | 'GM' | 'RC' | 'EC' | null> = {
   cognitive: 'CG',
-  receptiveCommunication: null, // Language not in Excel scoring tables
-  expressiveCommunication: null,
+  receptiveCommunication: 'RC',
+  expressiveCommunication: 'EC',
   fineMotor: 'FM',
   grossMotor: 'GM',
 };

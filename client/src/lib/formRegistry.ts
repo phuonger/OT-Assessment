@@ -51,7 +51,10 @@ export interface FormDefinition {
   domains: UnifiedDomain[];
   getStartItem: (domainLocalId: string, ageLabel: string) => number;
   hasStartPoints: boolean;
-  discontinueRule?: { consecutiveZeros: number };
+  discontinueRule?: {
+    consecutiveZeros: number;  // number of consecutive low scores to trigger discontinue
+    threshold?: number;        // scores <= threshold count as "low" (default: 0 = only zeros)
+  };
   basalRule?: { consecutiveMax: number };
 }
 
@@ -126,7 +129,7 @@ const dayc2Form: FormDefinition = {
   domains: buildDayc2Domains(),
   getStartItem: getDayc2StartItem,
   hasStartPoints: true,
-  discontinueRule: { consecutiveZeros: 5 },
+  discontinueRule: { consecutiveZeros: 3, threshold: 1 },
   basalRule: { consecutiveMax: 5 },
 };
 
@@ -159,7 +162,7 @@ const dayc2SpForm: FormDefinition = {
   domains: buildDayc2SpDomains(),
   getStartItem: getDayc2SpStartItem,
   hasStartPoints: true,
-  discontinueRule: { consecutiveZeros: 5 },
+  discontinueRule: { consecutiveZeros: 3, threshold: 1 },
   basalRule: { consecutiveMax: 5 },
 };
 

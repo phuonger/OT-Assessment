@@ -9,6 +9,8 @@ export interface ScaledScoreEntry {
   CG: number | null;
   FM: number | null;
   GM: number | null;
+  RC?: number | null;
+  EC?: number | null;
 }
 
 export interface AgeRangeTable {
@@ -1441,6 +1443,8 @@ export interface GrowthScaleEntry {
   CG: number | null;
   FM: number | null;
   GM: number | null;
+  RC?: number | null;
+  EC?: number | null;
 }
 
 export const GROWTH_SCALE_TABLE: GrowthScaleEntry[] = [
@@ -1616,9 +1620,12 @@ export const GROWTH_SCALE_TABLE: GrowthScaleEntry[] = [
  */
 export function lookupScaledScore(
   rawScore: number,
-  domain: 'CG' | 'FM' | 'GM',
+  domain: 'CG' | 'FM' | 'GM' | 'RC' | 'EC',
   ageInDays: number
 ): number | null {
+  // RC and EC require Table A.2 data (not yet available)
+  if (domain === 'RC' || domain === 'EC') return null;
+
   // Find the age range table
   const table = SCALED_SCORE_TABLES.find(t => ageInDays >= t.minDays && ageInDays <= t.maxDays);
   if (!table) return null;
@@ -1627,7 +1634,7 @@ export function lookupScaledScore(
   let result: number | null = null;
   for (const entry of table.data) {
     const threshold = entry[domain];
-    if (threshold !== null && rawScore >= threshold) {
+    if (threshold !== null && threshold !== undefined && rawScore >= threshold) {
       result = entry.scaled;
     }
   }
@@ -1656,18 +1663,31 @@ export function lookupStandardScore(
 
 /**
  * Look up the age equivalent for a given raw score and domain.
- * Returns months and days as a string like "12 months 10 days" or null.
+ * 
+ * Table B.1 is structured as: rawScore=ageMonths, days=ageDays, CG/FM/GM=rawScoreThreshold.
+ * So to find the age equivalent for a child's raw score on a domain, we find the
+ * highest entry where the domain's threshold value is <= the child's raw score.
+ * The age equivalent is then the rawScore (months) + days from that entry.
  */
 export function lookupAgeEquivalent(
   rawScore: number,
-  domain: 'CG' | 'FM' | 'GM'
+  domain: 'CG' | 'FM' | 'GM' | 'RC' | 'EC'
 ): { months: number | string | null; days: number | null } | null {
-  // Find the entry matching the raw score
-  const entry = AGE_EQUIVALENT_TABLE.find(e => e.rawScore === rawScore);
-  if (!entry) return null;
-  const months = entry[domain];
-  if (months === null) return null;
-  return { months, days: entry.days };
+  // RC and EC don't have age equivalent data yet
+  if (domain === 'RC' || domain === 'EC') return null;
+
+  let bestEntry: AgeEquivalentEntry | null = null;
+
+  for (const entry of AGE_EQUIVALENT_TABLE) {
+    const threshold = entry[domain as 'CG' | 'FM' | 'GM'];
+    if (threshold === null || typeof threshold === 'string') continue;
+    if (rawScore >= threshold) {
+      bestEntry = entry;
+    }
+  }
+
+  if (!bestEntry) return null;
+  return { months: bestEntry.rawScore, days: bestEntry.days };
 }
 
 /**
@@ -1675,9 +1695,12 @@ export function lookupAgeEquivalent(
  */
 export function lookupGrowthScaleValue(
   rawScore: number,
-  domain: 'CG' | 'FM' | 'GM'
+  domain: 'CG' | 'FM' | 'GM' | 'RC' | 'EC'
 ): number | null {
+  // RC and EC don't have GSV data yet
+  if (domain === 'RC' || domain === 'EC') return null;
+
   const entry = GROWTH_SCALE_TABLE.find(e => e.rawScore === rawScore);
   if (!entry) return null;
-  return entry[domain];
+  return entry[domain] ?? null;
 }

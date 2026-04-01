@@ -46,8 +46,18 @@ export default function UnifiedScoringItem({
   const [notesOpen, setNotesOpen] = useState(currentNote.length > 0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Items after the discontinue point are fully locked (auto-scored as 0).
+  // Items AT or BEFORE the discontinue point remain editable so the user can undo.
+  // The isDiscontinued prop only applies to items AFTER the discontinue point.
   const isLocked = isPreScored || isDiscontinued;
   const scoringLabels = getScoringLabels(scoringType);
+
+  // Check if this item is at the discontinue boundary (at or near the trigger point)
+  // These items should show a visual hint that they can be edited to undo
+  const isAtDiscontinueBoundary = !isDiscontinued && !isPreScored &&
+    domainState?.discontinued && domainState.discontinuedAtItem !== null &&
+    item.number <= domainState.discontinuedAtItem &&
+    item.number > domainState.discontinuedAtItem - (5); // show hint on last 5 items before/at boundary
 
   useEffect(() => {
     if (notesOpen && textareaRef.current && !currentNote) {
@@ -72,6 +82,7 @@ export default function UnifiedScoringItem({
 
   return (
     <div
+      data-item-number={item.number}
       className={cn(
         'group bg-white rounded-lg border border-border p-4 transition-all',
         !isLocked && 'hover:shadow-sm',
@@ -131,6 +142,11 @@ export default function UnifiedScoringItem({
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-200 text-gray-600 mt-1.5">
                   <Ban className="w-3 h-3" />
                   DISCONTINUED
+                </span>
+              )}
+              {isAtDiscontinueBoundary && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700 mt-1.5">
+                  Change score to undo discontinue
                 </span>
               )}
             </div>

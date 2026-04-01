@@ -45,3 +45,12 @@
 
 ## Future: Report Generation
 - [ ] Template-based report writer (waiting for user's template and reference reports)
+
+## Phase 7: DAYC-2 Discontinue Rule + Undo Discontinue
+- [ ] 1. Update FormDefinition interface to support `discontinueThreshold` (scores <= threshold count toward consecutive)
+- [ ] 2. Update DAYC-2 forms in formRegistry.ts: 3 consecutive scores of 0 or 1 (threshold=1, count=3)
+- [ ] 3. Update `checkDiscontinue` in MultiAssessmentContext to support threshold-based checking
+- [ ] 4. Update SET_SCORE reducer to allow editing items at/before discontinuedAtItem even when discontinued
+- [ ] 5. Add undo logic: when a score change breaks the consecutive chain, clear discontinued state and remove auto-scored trailing 0s
+- [ ] 6. Update UnifiedScoringItem to allow editing items at/before the discontinue point (not locked)
+- [ ] 7. Update UnifiedAssessmentPanel discontinued banner to show appropriate message and undo button

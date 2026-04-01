@@ -38,10 +38,11 @@ function calculateAgeInDays(dob: string, testDate: string, premWeeks: number): n
 }
 
 // Bayley-4 domain mapping to scoring table keys
-const bayleyDomainKey: Record<string, 'CG' | 'FM' | 'GM' | null> = {
+// RC and EC are included but return null from lookup functions until Table A.2 data is added
+const bayleyDomainKey: Record<string, 'CG' | 'FM' | 'GM' | 'RC' | 'EC' | null> = {
   cognitive: 'CG',
-  receptiveCommunication: null,
-  expressiveCommunication: null,
+  receptiveCommunication: 'RC',
+  expressiveCommunication: 'EC',
   fineMotor: 'FM',
   grossMotor: 'GM',
 };
@@ -444,7 +445,19 @@ function Bayley4Report({ form, formState, selectedDomainIds, ageInDays, getRawSc
               <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Raw Score</th>
               <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Scaled Score</th>
               <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Age Equiv.</th>
-              <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">GSV</th>
+              <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">
+                <span className="inline-flex items-center gap-1">
+                  GSV
+                  <span className="relative group cursor-help">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 text-gray-400">
+                      <path fillRule="evenodd" d="M15 8A7 7 0 1 1 1 8a7 7 0 0 1 14 0Zm-6 3.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM7.293 5.293a1 1 0 0 1 1.414 0L8 5.586l.293-.293a1 1 0 1 1 0 2H8a1 1 0 0 1-1-1V5.586a1 1 0 0 1 .293-.293ZM8 7a1 1 0 0 0-1 1v1.5a1 1 0 1 0 2 0V8a1 1 0 0 0-1-1Z" clipRule="evenodd" />
+                    </svg>
+                    <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 px-3 py-2 bg-gray-900 text-white text-xs font-normal rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 leading-relaxed">
+                      Growth Scale Value — tracks developmental growth over time. Higher values indicate more advanced development. Useful for measuring progress across assessments.
+                    </span>
+                  </span>
+                </span>
+              </th>
               <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">% Delay</th>
               <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Status</th>
               <th className="text-center py-2 pl-2 font-semibold text-[#2C2C2C]">Time</th>
@@ -475,6 +488,13 @@ function Bayley4Report({ form, formState, selectedDomainIds, ageInDays, getRawSc
             ))}
           </tbody>
         </table>
+
+        {/* RC/EC note */}
+        {selectedDomainIds.some(id => id === 'receptiveCommunication' || id === 'expressiveCommunication') && (
+          <div className="mt-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+            <strong>Note:</strong> Receptive Communication (RC) and Expressive Communication (EC) scaled scores, age equivalents, and GSV require Table A.2 data from the Bayley-4 manual. Only raw scores are displayed until this data is entered.
+          </div>
+        )}
 
         {/* Composite Scores */}
         {compositeScores.length > 0 && (

@@ -9,10 +9,10 @@ import { getFormById, getScoringLabels } from '@/lib/formRegistry';
 import { lookupScaledScore, lookupAgeEquivalent, lookupGrowthScaleValue, lookupStandardScore } from '@/lib/scoringTables';
 import { REEL3_AGE_EQUIVALENT, REEL3_LANGUAGE_ABILITY, REEL3_ABILITY_TO_PERCENTILE, REEL3_DESCRIPTIVE_TERMS } from '@/lib/reel3Data';
 
-const bayleyDomainKey: Record<string, 'CG' | 'FM' | 'GM' | null> = {
+const bayleyDomainKey: Record<string, 'CG' | 'FM' | 'GM' | 'RC' | 'EC' | null> = {
   cognitive: 'CG',
-  receptiveCommunication: null,
-  expressiveCommunication: null,
+  receptiveCommunication: 'RC',
+  expressiveCommunication: 'EC',
   fineMotor: 'FM',
   grossMotor: 'GM',
 };
