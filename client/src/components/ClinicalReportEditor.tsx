@@ -19,8 +19,9 @@ import { lookupScaledScore, lookupAgeEquivalent, lookupGrowthScaleValue, lookupS
 import { REEL3_AGE_EQUIVALENT } from '@/lib/reel3Data';
 import { SP2_ENGLISH_CUTOFFS, SP2_BIRTH6MO_CUTOFFS, SP2_QUADRANT_MAP, getSP2Description } from '@/lib/sensoryProfileData';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Download, Printer, FileText, ChevronDown, ChevronUp, Pencil, Check, RotateCcw, Save, Eye, EyeOff, LayoutTemplate, FileDown, BookmarkPlus } from 'lucide-react';
+import { ArrowLeft, Download, Printer, FileText, ChevronDown, ChevronUp, Pencil, Check, RotateCcw, Save, Eye, EyeOff, LayoutTemplate, FileDown, BookmarkPlus, FileOutput } from 'lucide-react';
 import { generateDocxReport, type DocxReportData, type DomainNarrativeData as DocxDomainNarrative } from '@/lib/generateDocx';
+import { generatePdfReport } from '@/lib/generateReportPdf';
 import { loadAppSettings, type RecommendationTemplate } from '@/components/SettingsPreferences';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -754,12 +755,37 @@ export default function ClinicalReportEditor() {
     return tools;
   }, [formSelections]);
 
+  // Ref for PDF capture
+  const reportContentRef = useRef<HTMLDivElement>(null);
+
   // Print handler
   const handlePrint = useCallback(() => {
     const prev = { ...collapsedSections };
     setCollapsedSections({});
     setTimeout(() => { window.print(); setCollapsedSections(prev); }, 100);
   }, [collapsedSections]);
+
+  // PDF Export handler
+  const handlePdfExport = useCallback(async () => {
+    if (!reportContentRef.current) {
+      toast.error('Report content not found');
+      return;
+    }
+    try {
+      toast.info('Generating PDF...');
+      const prevCollapsed = { ...collapsedSections };
+      await generatePdfReport({
+        filename: `${childName.replace(/\s+/g, '_')}_${TEMPLATE_INFO[template].label.replace(/\s+/g, '_')}_Report.pdf`,
+        element: reportContentRef.current,
+        onBeforeCapture: () => setCollapsedSections({}),
+        onAfterCapture: () => setCollapsedSections(prevCollapsed),
+      });
+      toast.success('PDF downloaded successfully');
+    } catch (err) {
+      console.error('PDF export error:', err);
+      toast.error('Failed to generate PDF');
+    }
+  }, [collapsedSections, childName, template]);
 
   const handleManualSave = useCallback(() => {
     saveReport();
@@ -923,8 +949,11 @@ export default function ClinicalReportEditor() {
             <Button variant="outline" size="sm" onClick={handleDocxExport} className="text-blue-700 border-blue-300 hover:bg-blue-50">
               <FileDown className="w-4 h-4 mr-1" /> Word
             </Button>
+            <Button variant="outline" size="sm" onClick={handlePdfExport} className="text-red-700 border-red-300 hover:bg-red-50">
+              <FileOutput className="w-4 h-4 mr-1" /> PDF
+            </Button>
             <Button variant="outline" size="sm" onClick={handlePrint}>
-              <Printer className="w-4 h-4 mr-1" /> Print / PDF
+              <Printer className="w-4 h-4 mr-1" /> Print
             </Button>
           </div>
         </div>
@@ -932,7 +961,7 @@ export default function ClinicalReportEditor() {
 
       {/* Report Content */}
       <div className="max-w-4xl mx-auto px-6 py-8 print:px-0 print:py-0 print:max-w-none">
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 print:shadow-none print:border-none">
+        <div ref={reportContentRef} className="bg-white rounded-lg shadow-sm border border-slate-200 print:shadow-none print:border-none">
           <div className="p-8 print:p-12 space-y-6">
 
             {/* ===== HEADER ===== */}
