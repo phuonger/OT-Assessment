@@ -19,7 +19,8 @@ import { lookupScaledScore, lookupAgeEquivalent, lookupGrowthScaleValue, lookupS
 import { REEL3_AGE_EQUIVALENT } from '@/lib/reel3Data';
 import { SP2_ENGLISH_CUTOFFS, SP2_BIRTH6MO_CUTOFFS, SP2_QUADRANT_MAP, getSP2Description } from '@/lib/sensoryProfileData';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Download, Printer, FileText, ChevronDown, ChevronUp, Pencil, Check, RotateCcw, Save, Eye, EyeOff, LayoutTemplate } from 'lucide-react';
+import { ArrowLeft, Download, Printer, FileText, ChevronDown, ChevronUp, Pencil, Check, RotateCcw, Save, Eye, EyeOff, LayoutTemplate, FileDown } from 'lucide-react';
+import { generateDocxReport, type DocxReportData, type DomainNarrativeData as DocxDomainNarrative } from '@/lib/generateDocx';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 
@@ -743,6 +744,99 @@ export default function ClinicalReportEditor() {
     toast.success('Report saved successfully');
   }, [saveReport]);
 
+  // DOCX Export handler
+  const handleDocxExport = useCallback(async () => {
+    try {
+      toast.info('Generating Word document...');
+
+      // Build domain narratives for DOCX
+      const docxNarratives: DocxDomainNarrative[] = domainNarratives
+        .filter(d => d.formId !== 'sp2')
+        .map(({ formName, formId, domainLocalId, narrative }) => {
+          const key = `${formId}_${domainLocalId}`;
+          const overrideText = domainOverrides[key];
+          const autoText = generateNarrativeText(narrative, firstName, gender, formId);
+          return {
+            domainName: narrative.domainName,
+            formName,
+            scaledScore: narrative.scaledScore,
+            rawScore: narrative.rawScore,
+            narrativeText: overrideText !== undefined ? overrideText : autoText,
+            notDemonstratedItems: narrative.allNotDemonstrated,
+          };
+        });
+
+      const data: DocxReportData = {
+        template,
+        practiceName,
+        reportTitle,
+        examinerName: examinerInfo.name,
+        examinerTitle: examinerInfo.title,
+        examinerAgency: examinerInfo.agency,
+        childName,
+        firstName,
+        testDate: formatDate(childInfo.testDate),
+        dob: formatDate(childInfo.dob),
+        chronAge,
+        adjAge,
+
+        referralInfo,
+        medicalHistory,
+        parentConcerns,
+        assessmentTools,
+        closingNote,
+        recommendations,
+
+        clinicalObservation,
+        bayleyScores: bayleyScores.map(r => ({
+          domain: r.domain,
+          rawScore: r.rawScore,
+          scaledScore: r.scaledScore,
+          ageEquivalent: r.ageEquivalent,
+          percentDelay: r.percentDelay,
+        })),
+        cogComposite: bayleyCogComposite ? {
+          label: 'Cognitive Composite',
+          scaledScore: bayleyCogComposite.scaledScore,
+          standardScore: bayleyCogComposite.standardScore,
+          percentile: bayleyCogComposite.percentile,
+        } : null,
+        motorComposite: bayleyMotorComposite ? {
+          label: 'Motor Composite',
+          scaledScore: bayleyMotorComposite.sumScaled,
+          standardScore: bayleyMotorComposite.standardScore,
+          percentile: bayleyMotorComposite.percentile,
+        } : null,
+        dayc2Scores,
+        reel3Scores,
+        domainNarratives: docxNarratives,
+        feedingOralMotor,
+        sensoryNarrative,
+        summaryOfDevelopment,
+
+        testingConditions,
+        validityStatement,
+        sp2Quadrants: sp2Scores.quadrants,
+        sp2Sections: sp2Scores.sections,
+        quadrantNarratives,
+        sectionNarratives,
+      };
+
+      await generateDocxReport(data);
+      toast.success('Word document downloaded successfully');
+    } catch (err) {
+      console.error('DOCX export error:', err);
+      toast.error('Failed to generate Word document');
+    }
+  }, [
+    template, practiceName, reportTitle, examinerInfo, childName, firstName, childInfo,
+    chronAge, adjAge, referralInfo, medicalHistory, parentConcerns, assessmentTools,
+    closingNote, recommendations, clinicalObservation, bayleyScores, bayleyCogComposite,
+    bayleyMotorComposite, dayc2Scores, reel3Scores, domainNarratives, domainOverrides,
+    gender, feedingOralMotor, sensoryNarrative, summaryOfDevelopment, testingConditions,
+    validityStatement, sp2Scores, quadrantNarratives, sectionNarratives,
+  ]);
+
   // Switch template
   const handleTemplateSwitch = (t: ReportTemplate) => {
     setTemplate(t);
@@ -800,6 +894,9 @@ export default function ClinicalReportEditor() {
             </div>
             <Button variant="outline" size="sm" onClick={handleManualSave}>
               <Save className="w-4 h-4 mr-1" /> Save
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleDocxExport} className="text-blue-700 border-blue-300 hover:bg-blue-50">
+              <FileDown className="w-4 h-4 mr-1" /> Word
             </Button>
             <Button variant="outline" size="sm" onClick={handlePrint}>
               <Printer className="w-4 h-4 mr-1" /> Print / PDF
