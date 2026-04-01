@@ -53,8 +53,8 @@ export default function UnifiedSummaryReport() {
     return calculateAgeInDays(state.childInfo.dob, state.childInfo.testDate, premWeeks);
   }, [state.childInfo]);
 
-  // Calculate age display
-  const ageDisplay = useMemo(() => {
+  // Calculate chronological age display
+  const chronAgeDisplay = useMemo(() => {
     if (!state.childInfo.dob || !state.childInfo.testDate) return 'N/A';
     const birth = new Date(state.childInfo.dob);
     const test = new Date(state.childInfo.testDate);
@@ -65,8 +65,21 @@ export default function UnifiedSummaryReport() {
       const prevMonth = new Date(test.getFullYear(), test.getMonth(), 0);
       days += prevMonth.getDate();
     }
-    if (state.childInfo.premature && state.childInfo.weeksPremature > 0) {
-      return `${months} months, ${days} days (adjusted for ${state.childInfo.weeksPremature} weeks prematurity)`;
+    return `${months} months, ${days} days`;
+  }, [state.childInfo]);
+
+  // Calculate adjusted age display (for premature children)
+  const adjAgeDisplay = useMemo(() => {
+    if (!state.childInfo.premature || !state.childInfo.weeksPremature || !state.childInfo.dob || !state.childInfo.testDate) return null;
+    const birth = new Date(state.childInfo.dob);
+    const adjusted = new Date(birth.getTime() + state.childInfo.weeksPremature * 7 * 86400000);
+    const test = new Date(state.childInfo.testDate);
+    let months = (test.getFullYear() - adjusted.getFullYear()) * 12 + (test.getMonth() - adjusted.getMonth());
+    let days = test.getDate() - adjusted.getDate();
+    if (days < 0) {
+      months--;
+      const prevMonth = new Date(test.getFullYear(), test.getMonth(), 0);
+      days += prevMonth.getDate();
     }
     return `${months} months, ${days} days`;
   }, [state.childInfo]);
@@ -177,9 +190,15 @@ export default function UnifiedSummaryReport() {
               <span className="font-medium">{state.childInfo.reasonForReferral || 'N/A'}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-[#6B6B6B]">Age at Testing:</span>
-              <span className="font-medium">{ageDisplay}</span>
+              <span className="text-[#6B6B6B]">Chronological Age:</span>
+              <span className="font-medium">{chronAgeDisplay}</span>
             </div>
+            {adjAgeDisplay && (
+              <div className="flex justify-between">
+                <span className="text-[#6B6B6B]">Adjusted Age:</span>
+                <span className="font-medium">{adjAgeDisplay} <span className="text-xs text-[#6B6B6B]">(corrected for {state.childInfo.weeksPremature} wks prematurity)</span></span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-[#6B6B6B]">Total Assessment Time:</span>
               <span className="font-medium">{formatTime(state.totalElapsedSeconds)}</span>

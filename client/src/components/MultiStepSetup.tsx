@@ -144,16 +144,16 @@ export default function MultiStepSetup() {
 
   // Computed age
   const age = useMemo(() => {
+    if (!childInfo.dob || !childInfo.testDate) return { months: 0, days: 0, totalDays: 0 };
+    const birthDate = new Date(childInfo.dob);
+    if (isNaN(birthDate.getTime())) return { months: 0, days: 0, totalDays: 0 };
     let ageInfo = calculateAgeDays(childInfo.dob, childInfo.testDate);
     if (childInfo.premature && childInfo.weeksPremature > 0) {
       const adjustDays = childInfo.weeksPremature * 7;
-      const birth = new Date(childInfo.dob);
-      const adjusted = new Date(birth.getTime() + adjustDays * 86400000);
+      const adjusted = new Date(birthDate.getTime() + adjustDays * 86400000);
       ageInfo = calculateAgeDays(adjusted.toISOString().split('T')[0], childInfo.testDate);
     }
-    const totalDays = childInfo.dob && childInfo.testDate
-      ? Math.floor((new Date(childInfo.testDate).getTime() - new Date(childInfo.dob).getTime()) / 86400000)
-      : 0;
+    const totalDays = Math.floor((new Date(childInfo.testDate).getTime() - birthDate.getTime()) / 86400000);
     return { ...ageInfo, totalDays };
   }, [childInfo.dob, childInfo.testDate, childInfo.premature, childInfo.weeksPremature]);
 
