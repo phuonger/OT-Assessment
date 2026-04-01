@@ -19,9 +19,9 @@ import { lookupScaledScore, lookupAgeEquivalent, lookupGrowthScaleValue, lookupS
 import { REEL3_AGE_EQUIVALENT } from '@/lib/reel3Data';
 import { SP2_ENGLISH_CUTOFFS, SP2_BIRTH6MO_CUTOFFS, SP2_QUADRANT_MAP, getSP2Description } from '@/lib/sensoryProfileData';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Download, Printer, FileText, ChevronDown, ChevronUp, Pencil, Check, RotateCcw, Save, Eye, EyeOff, LayoutTemplate, FileDown } from 'lucide-react';
+import { ArrowLeft, Download, Printer, FileText, ChevronDown, ChevronUp, Pencil, Check, RotateCcw, Save, Eye, EyeOff, LayoutTemplate, FileDown, BookmarkPlus } from 'lucide-react';
 import { generateDocxReport, type DocxReportData, type DomainNarrativeData as DocxDomainNarrative } from '@/lib/generateDocx';
-import { loadAppSettings } from '@/components/SettingsPreferences';
+import { loadAppSettings, type RecommendationTemplate } from '@/components/SettingsPreferences';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 
@@ -474,6 +474,18 @@ export default function ClinicalReportEditor() {
     return hasSP2 ? 'sensory' : 'developmental';
   });
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  const [showRecTemplatePicker, setShowRecTemplatePicker] = useState(false);
+
+  // Insert a recommendation template into the recommendations field
+  const insertRecTemplate = useCallback((tpl: RecommendationTemplate) => {
+    const text = tpl.text.replace(/\{child\}/g, firstName);
+    setRecommendations(prev => {
+      if (!prev.trim()) return text;
+      return prev.trimEnd() + '\n\n' + text;
+    });
+    setShowRecTemplatePicker(false);
+    toast.success(`Inserted "${tpl.title}"`);
+  }, [firstName]);
 
   // ============================================================
   // Editable report sections — shared
@@ -1225,7 +1237,39 @@ export default function ClinicalReportEditor() {
                 {/* Recommendations */}
                 <SectionHeader title="Recommendations" sectionKey="recs" collapsed={collapsedSections} toggle={toggleSection} />
                 {!collapsedSections.recs && (
-                  <EditableSection label="" value={recommendations} onChange={setRecommendations} placeholder="Enter recommendations..." rows={10} />
+                  <>
+                    {appSettings.recommendationTemplates.length > 0 && (
+                      <div className="mb-2 relative">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowRecTemplatePicker(!showRecTemplatePicker)}
+                          className="gap-1.5 text-xs"
+                        >
+                          <BookmarkPlus className="w-3.5 h-3.5" />
+                          Insert Template
+                        </Button>
+                        {showRecTemplatePicker && (
+                          <div className="absolute top-9 left-0 z-50 bg-white border border-slate-200 rounded-lg shadow-lg w-80 max-h-64 overflow-y-auto">
+                            <div className="p-2 border-b border-slate-100">
+                              <p className="text-xs font-medium text-slate-500 px-2">Click to append to recommendations</p>
+                            </div>
+                            {appSettings.recommendationTemplates.map(tpl => (
+                              <button
+                                key={tpl.id}
+                                onClick={() => insertRecTemplate(tpl)}
+                                className="w-full text-left px-3 py-2.5 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors"
+                              >
+                                <p className="text-sm font-medium text-slate-800 truncate">{tpl.title}</p>
+                                <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{tpl.text}</p>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <EditableSection label="" value={recommendations} onChange={setRecommendations} placeholder="Enter recommendations..." rows={10} />
+                  </>
                 )}
               </>
             )}
@@ -1402,7 +1446,39 @@ export default function ClinicalReportEditor() {
                 {/* Summary and Recommendations */}
                 <SectionHeader title="Summary and Recommendations" sectionKey="si_recs" collapsed={collapsedSections} toggle={toggleSection} />
                 {!collapsedSections.si_recs && (
-                  <EditableSection label="" value={recommendations} onChange={setRecommendations} placeholder="Enter summary and recommendations..." rows={10} />
+                  <>
+                    {appSettings.recommendationTemplates.length > 0 && (
+                      <div className="mb-2 relative">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowRecTemplatePicker(!showRecTemplatePicker)}
+                          className="gap-1.5 text-xs"
+                        >
+                          <BookmarkPlus className="w-3.5 h-3.5" />
+                          Insert Template
+                        </Button>
+                        {showRecTemplatePicker && (
+                          <div className="absolute top-9 left-0 z-50 bg-white border border-slate-200 rounded-lg shadow-lg w-80 max-h-64 overflow-y-auto">
+                            <div className="p-2 border-b border-slate-100">
+                              <p className="text-xs font-medium text-slate-500 px-2">Click to append to recommendations</p>
+                            </div>
+                            {appSettings.recommendationTemplates.map(tpl => (
+                              <button
+                                key={tpl.id}
+                                onClick={() => insertRecTemplate(tpl)}
+                                className="w-full text-left px-3 py-2.5 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors"
+                              >
+                                <p className="text-sm font-medium text-slate-800 truncate">{tpl.title}</p>
+                                <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{tpl.text}</p>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <EditableSection label="" value={recommendations} onChange={setRecommendations} placeholder="Enter summary and recommendations..." rows={10} />
+                  </>
                 )}
               </>
             )}

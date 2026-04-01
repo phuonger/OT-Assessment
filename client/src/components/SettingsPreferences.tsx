@@ -3,24 +3,32 @@
  *
  * Design: Clinical Precision / Swiss Medical
  * Allows clinicians to configure default practice info, examiner info,
- * preferred report template, and practice logo. All settings persist
- * in localStorage under key 'bayley4-app-settings'.
+ * preferred report template, custom recommendation snippets, and practice logo.
+ * All settings persist in localStorage under key 'bayley4-app-settings'.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   ArrowLeft, Settings, Building2, Stethoscope, FileText,
-  Save, RotateCcw, ImagePlus, Trash2, Check
+  Save, RotateCcw, ImagePlus, Trash2, Check, Plus, GripVertical,
+  BookmarkPlus, Pencil
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 // ============================================================
 // Types
 // ============================================================
+
+export interface RecommendationTemplate {
+  id: string;
+  title: string;
+  text: string;
+}
 
 export interface AppSettings {
   // Practice info
@@ -38,6 +46,9 @@ export interface AppSettings {
   // Report preferences
   defaultReportTemplate: 'developmental' | 'sensory' | 'auto';
 
+  // Custom recommendation templates
+  recommendationTemplates: RecommendationTemplate[];
+
   // Metadata
   savedAt: string;
 }
@@ -54,6 +65,7 @@ const defaultSettings: AppSettings = {
   defaultExaminerTitle: '',
   defaultExaminerAgency: '',
   defaultReportTemplate: 'auto',
+  recommendationTemplates: [],
   savedAt: '',
 };
 
@@ -81,6 +93,10 @@ export function saveAppSettings(settings: AppSettings): void {
   } catch { /* localStorage full */ }
 }
 
+function generateTemplateId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+}
+
 // ============================================================
 // Component
 // ============================================================
@@ -90,6 +106,12 @@ export default function SettingsPreferences({ onBack }: { onBack: () => void }) 
   const [hasChanges, setHasChanges] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Recommendation template editing
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [newTemplateTitle, setNewTemplateTitle] = useState('');
+  const [newTemplateText, setNewTemplateText] = useState('');
+  const [showAddTemplate, setShowAddTemplate] = useState(false);
 
   // Track changes
   const initialRef = useRef(JSON.stringify(settings));
@@ -146,6 +168,65 @@ export default function SettingsPreferences({ onBack }: { onBack: () => void }) 
     update('practiceLogo', '');
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, [update]);
+
+  // Recommendation template CRUD
+  const addTemplate = useCallback(() => {
+    if (!newTemplateTitle.trim()) {
+      toast.error('Please enter a template title');
+      return;
+    }
+    if (!newTemplateText.trim()) {
+      toast.error('Please enter template text');
+      return;
+    }
+    const newTpl: RecommendationTemplate = {
+      id: generateTemplateId(),
+      title: newTemplateTitle.trim(),
+      text: newTemplateText.trim(),
+    };
+    setSettings(prev => ({
+      ...prev,
+      recommendationTemplates: [...prev.recommendationTemplates, newTpl],
+    }));
+    setNewTemplateTitle('');
+    setNewTemplateText('');
+    setShowAddTemplate(false);
+    setJustSaved(false);
+    toast.success('Template added — remember to save settings');
+  }, [newTemplateTitle, newTemplateText]);
+
+  const updateTemplate = useCallback((id: string, field: 'title' | 'text', value: string) => {
+    setSettings(prev => ({
+      ...prev,
+      recommendationTemplates: prev.recommendationTemplates.map(t =>
+        t.id === id ? { ...t, [field]: value } : t
+      ),
+    }));
+    setJustSaved(false);
+  }, []);
+
+  const deleteTemplate = useCallback((id: string) => {
+    setSettings(prev => ({
+      ...prev,
+      recommendationTemplates: prev.recommendationTemplates.filter(t => t.id !== id),
+    }));
+    setEditingTemplateId(null);
+    setJustSaved(false);
+    toast.success('Template removed — remember to save settings');
+  }, []);
+
+  const moveTemplate = useCallback((id: string, direction: 'up' | 'down') => {
+    setSettings(prev => {
+      const templates = [...prev.recommendationTemplates];
+      const idx = templates.findIndex(t => t.id === id);
+      if (idx < 0) return prev;
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= templates.length) return prev;
+      [templates[idx], templates[swapIdx]] = [templates[swapIdx], templates[idx]];
+      return { ...prev, recommendationTemplates: templates };
+    });
+    setJustSaved(false);
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#FAF9F6]">
@@ -380,6 +461,167 @@ export default function SettingsPreferences({ onBack }: { onBack: () => void }) 
                 <strong>Auto-detect:</strong> Uses SI Assessment when Sensory Profile 2 is administered, otherwise Developmental Intake.
               </p>
             </div>
+          </div>
+        </section>
+
+        {/* Custom Recommendation Templates */}
+        <section>
+          <div className="flex items-center gap-2 mb-4">
+            <BookmarkPlus className="w-5 h-5 text-[#0D7377]" />
+            <h2 className="text-lg font-semibold text-[#2C2C2C]">Recommendation Templates</h2>
+          </div>
+          <p className="text-sm text-[#6B6B6B] mb-4">
+            Save reusable recommendation text blocks that can be inserted into reports with one click.
+            Use <code className="text-xs bg-[#F0EDE8] px-1 py-0.5 rounded">{'{child}'}</code> as a placeholder for the child's first name.
+          </p>
+          <div className="bg-white rounded-lg border border-[#E5E1D8] p-6 space-y-4">
+            {/* Existing templates */}
+            {settings.recommendationTemplates.length === 0 && !showAddTemplate && (
+              <div className="text-center py-6 text-[#8B8B8B]">
+                <BookmarkPlus className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm">No recommendation templates yet.</p>
+                <p className="text-xs mt-1">Add templates to quickly insert common recommendations into reports.</p>
+              </div>
+            )}
+
+            {settings.recommendationTemplates.map((tpl, idx) => (
+              <div
+                key={tpl.id}
+                className="border border-[#E5E1D8] rounded-lg overflow-hidden"
+              >
+                <div className="flex items-center gap-2 px-4 py-2.5 bg-[#FAF9F6] border-b border-[#E5E1D8]">
+                  <GripVertical className="w-4 h-4 text-[#C0BDB6] flex-shrink-0" />
+                  {editingTemplateId === tpl.id ? (
+                    <Input
+                      value={tpl.title}
+                      onChange={e => updateTemplate(tpl.id, 'title', e.target.value)}
+                      className="h-7 text-sm font-medium flex-1"
+                      autoFocus
+                    />
+                  ) : (
+                    <span className="text-sm font-medium text-[#2C2C2C] flex-1 truncate">{tpl.title}</span>
+                  )}
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {idx > 0 && (
+                      <button
+                        onClick={() => moveTemplate(tpl.id, 'up')}
+                        className="p-1 text-[#8B8B8B] hover:text-[#0D7377] transition-colors"
+                        title="Move up"
+                      >
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 15l-6-6-6 6"/></svg>
+                      </button>
+                    )}
+                    {idx < settings.recommendationTemplates.length - 1 && (
+                      <button
+                        onClick={() => moveTemplate(tpl.id, 'down')}
+                        className="p-1 text-[#8B8B8B] hover:text-[#0D7377] transition-colors"
+                        title="Move down"
+                      >
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setEditingTemplateId(editingTemplateId === tpl.id ? null : tpl.id)}
+                      className={`p-1 transition-colors ${editingTemplateId === tpl.id ? 'text-[#0D7377]' : 'text-[#8B8B8B] hover:text-[#0D7377]'}`}
+                      title="Edit"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => deleteTemplate(tpl.id)}
+                      className="p-1 text-[#8B8B8B] hover:text-red-500 transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+                {editingTemplateId === tpl.id ? (
+                  <div className="p-3">
+                    <Textarea
+                      value={tpl.text}
+                      onChange={e => updateTemplate(tpl.id, 'text', e.target.value)}
+                      rows={4}
+                      className="text-sm"
+                      placeholder="Enter recommendation text..."
+                    />
+                    <div className="flex justify-end mt-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingTemplateId(null)}
+                        className="gap-1.5"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        Done Editing
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="px-4 py-2.5">
+                    <p className="text-sm text-[#6B6B6B] whitespace-pre-wrap line-clamp-3">{tpl.text}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Add new template form */}
+            {showAddTemplate ? (
+              <div className="border-2 border-dashed border-[#0D7377]/30 rounded-lg p-4 space-y-3 bg-[#0D7377]/[0.02]">
+                <div>
+                  <Label htmlFor="newTplTitle" className="text-sm">Template Title</Label>
+                  <Input
+                    id="newTplTitle"
+                    value={newTemplateTitle}
+                    onChange={e => setNewTemplateTitle(e.target.value)}
+                    placeholder="e.g., OT Services Recommendation"
+                    className="mt-1"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="newTplText" className="text-sm">Recommendation Text</Label>
+                  <Textarea
+                    id="newTplText"
+                    value={newTemplateText}
+                    onChange={e => setNewTemplateText(e.target.value)}
+                    placeholder="e.g., Please consider the recommendation of occupational therapy services to address skills related to {child}'s fine motor and visual motor development."
+                    rows={4}
+                    className="mt-1 text-sm"
+                  />
+                  <p className="text-xs text-[#8B8B8B] mt-1">
+                    Tip: Use <code className="bg-[#F0EDE8] px-1 py-0.5 rounded">{'{child}'}</code> and it will be replaced with the child's first name when inserted.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => { setShowAddTemplate(false); setNewTemplateTitle(''); setNewTemplateText(''); }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={addTemplate}
+                    className="gap-1.5 bg-[#0D7377] hover:bg-[#0a5c5f] text-white"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add Template
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAddTemplate(true)}
+                className="gap-1.5 w-full border-dashed"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Recommendation Template
+              </Button>
+            )}
           </div>
         </section>
 
