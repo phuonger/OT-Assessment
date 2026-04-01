@@ -50,7 +50,7 @@ export interface FormState {
   ageRangeLabel: string;
 }
 
-export type AppPhase = 'childInfo' | 'examinerInfo' | 'formSelection' | 'assessment' | 'summary' | 'report';
+export type AppPhase = 'childInfo' | 'examinerInfo' | 'formSelection' | 'assessment' | 'summary' | 'report' | 'history';
 
 export interface MultiAssessmentState {
   phase: AppPhase;

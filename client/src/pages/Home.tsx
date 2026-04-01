@@ -2,7 +2,7 @@
  * Home Page — Multi-Assessment Flow
  * 
  * Design: Clinical Precision — Swiss Medical Design
- * Routes between setup, assessment, and summary phases.
+ * Routes between setup, assessment, summary, report, and history phases.
  */
 
 import { MultiAssessmentProvider, useMultiAssessment } from '@/contexts/MultiAssessmentContext';
@@ -10,9 +10,10 @@ import MultiStepSetup from '@/components/MultiStepSetup';
 import UnifiedAssessmentLayout from '@/components/UnifiedAssessmentLayout';
 import UnifiedSummaryReport from '@/components/UnifiedSummaryReport';
 import ClinicalReportEditor from '@/components/ClinicalReportEditor';
+import AssessmentHistory from '@/components/AssessmentHistory';
 
 function AssessmentFlow() {
-  const { state } = useMultiAssessment();
+  const { state, dispatch } = useMultiAssessment();
 
   switch (state.phase) {
     case 'childInfo':
@@ -25,6 +26,12 @@ function AssessmentFlow() {
       return <UnifiedSummaryReport />;
     case 'report':
       return <ClinicalReportEditor />;
+    case 'history':
+      return (
+        <AssessmentHistory
+          onBack={() => dispatch({ type: 'GO_TO_PHASE', phase: 'summary' })}
+        />
+      );
     default:
       return <MultiStepSetup />;
   }

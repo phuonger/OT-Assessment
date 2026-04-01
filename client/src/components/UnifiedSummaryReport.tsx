@@ -15,8 +15,9 @@ import { lookupScaledScore, lookupAgeEquivalent, lookupGrowthScaleValue, lookupS
 import { REEL3_AGE_EQUIVALENT, REEL3_ABILITY_TO_PERCENTILE, REEL3_DESCRIPTIVE_TERMS, REEL3_LANGUAGE_ABILITY } from '@/lib/reel3Data';
 import { SP2_BIRTH6MO_CUTOFFS, SP2_ENGLISH_CUTOFFS, SP2_QUADRANT_MAP, getSP2Description } from '@/lib/sensoryProfileData';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Download, Printer, RotateCcw, Clock, FileText } from 'lucide-react';
-import { useMemo, useCallback } from 'react';
+import { ArrowLeft, Download, Printer, RotateCcw, Clock, FileText, Save, History } from 'lucide-react';
+import { useMemo, useCallback, useState } from 'react';
+import { saveMultiSession } from '@/lib/multiSessionStorage';
 import { toast } from 'sonner';
 
 function formatTime(seconds: number): string {
@@ -112,6 +113,21 @@ export default function UnifiedSummaryReport() {
     toast.success('CSV exported successfully');
   }, [state]);
 
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [saveLabel, setSaveLabel] = useState('');
+
+  const handleSaveSession = useCallback(() => {
+    setShowSaveDialog(true);
+    setSaveLabel('');
+  }, []);
+
+  const confirmSaveSession = useCallback(() => {
+    saveMultiSession(state, 'completed', saveLabel || undefined);
+    setShowSaveDialog(false);
+    setSaveLabel('');
+    toast.success('Assessment saved to history');
+  }, [state, saveLabel]);
+
   const handleReset = useCallback(() => {
     if (confirm('Are you sure you want to start a new assessment? All current data will be cleared.')) {
       dispatch({ type: 'RESET_ALL' });
@@ -143,6 +159,19 @@ export default function UnifiedSummaryReport() {
             >
               <FileText className="w-3.5 h-3.5" />
               Generate Report
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleSaveSession} className="gap-1.5">
+              <Save className="w-3.5 h-3.5" />
+              Save Session
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => dispatch({ type: 'GO_TO_PHASE', phase: 'history' })}
+              className="gap-1.5"
+            >
+              <History className="w-3.5 h-3.5" />
+              History
             </Button>
             <Button variant="outline" size="sm" onClick={handleExportCSV} className="gap-1.5">
               <Download className="w-3.5 h-3.5" />
@@ -233,6 +262,36 @@ export default function UnifiedSummaryReport() {
           </p>
         </div>
       </main>
+
+      {/* Save Dialog */}
+      {showSaveDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 print:hidden">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-[#2C2825] mb-2">Save Assessment Session</h3>
+            <p className="text-sm text-[#8A8480] mb-4">
+              Enter a label to identify this session (e.g., "Initial Evaluation", "6-Month Re-eval")
+            </p>
+            <input
+              type="text"
+              value={saveLabel}
+              onChange={e => setSaveLabel(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') confirmSaveSession(); }}
+              placeholder="Session label (optional)"
+              className="w-full px-3 py-2.5 border border-[#E8E4DF] rounded-lg text-sm text-[#2C2825] placeholder-[#B5B0AB] focus:outline-none focus:ring-2 focus:ring-[#2D7D6F]/20 focus:border-[#2D7D6F] mb-4"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowSaveDialog(false)}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={confirmSaveSession} className="bg-[#2D7D6F] hover:bg-[#256B5F]">
+                <Save className="w-4 h-4 mr-1.5" />
+                Save Session
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
