@@ -7,7 +7,7 @@
  */
 
 import { useMultiAssessment } from '@/contexts/MultiAssessmentContext';
-import { getScoringLabels, type ScoringType, type UnifiedItem } from '@/lib/formRegistry';
+import { getScoringLabels, getFormById, type ScoringType, type UnifiedItem } from '@/lib/formRegistry';
 import { cn } from '@/lib/utils';
 import { Info, MessageCircle, Lock, Ban, StickyNote, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
@@ -57,7 +57,7 @@ export default function UnifiedScoringItem({
   const isAtDiscontinueBoundary = !isDiscontinued && !isPreScored &&
     domainState?.discontinued && domainState.discontinuedAtItem !== null &&
     item.number <= domainState.discontinuedAtItem &&
-    item.number > domainState.discontinuedAtItem - (5); // show hint on last 5 items before/at boundary
+    item.number > domainState.discontinuedAtItem - (getFormById(formId)?.discontinueRule?.consecutiveZeros || 5); // show hint on items in the discontinue window
 
   useEffect(() => {
     if (notesOpen && textareaRef.current && !currentNote) {
