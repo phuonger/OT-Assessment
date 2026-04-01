@@ -16,7 +16,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowRight, ArrowLeft, User, Stethoscope, ClipboardList, Settings2, Check, Baby } from 'lucide-react';
+import { ArrowRight, ArrowLeft, User, Stethoscope, ClipboardList, Settings2, Check, Baby, Settings } from 'lucide-react';
+import { loadAppSettings } from '@/components/SettingsPreferences';
 
 // ============================================================
 // Age calculation helpers
@@ -131,8 +132,21 @@ export default function MultiStepSetup() {
   // Step 1: Child Info
   const [childInfo, setChildInfo] = useState<ChildInfo>(state.childInfo);
 
-  // Step 2: Examiner Info
-  const [examinerInfo, setExaminerInfo] = useState<ExaminerInfo>(state.examinerInfo);
+  // Step 2: Examiner Info — pre-fill from saved settings if examiner info is empty
+  const [examinerInfo, setExaminerInfo] = useState<ExaminerInfo>(() => {
+    // If context already has examiner info (e.g., resumed session), use that
+    if (state.examinerInfo.name) return state.examinerInfo;
+    // Otherwise, try loading defaults from settings
+    const settings = loadAppSettings();
+    if (settings.defaultExaminerName || settings.defaultExaminerTitle || settings.defaultExaminerAgency) {
+      return {
+        name: settings.defaultExaminerName || '',
+        title: settings.defaultExaminerTitle || '',
+        agency: settings.defaultExaminerAgency || '',
+      };
+    }
+    return state.examinerInfo;
+  });
 
   // Step 3: Selected form IDs
   const [selectedFormIds, setSelectedFormIds] = useState<string[]>(
@@ -217,11 +231,20 @@ export default function MultiStepSetup() {
     <div className="min-h-screen bg-[#FAF9F6]">
       {/* Header */}
       <header className="bg-white border-b border-[#E5E1D8] px-6 py-4">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-2xl font-bold text-[#2C2C2C] tracking-tight" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-            Developmental Assessment Suite
-          </h1>
-          <p className="text-sm text-[#6B6B6B] mt-1">Multi-form assessment administration tool</p>
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-[#2C2C2C] tracking-tight" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+              Developmental Assessment Suite
+            </h1>
+            <p className="text-sm text-[#6B6B6B] mt-1">Multi-form assessment administration tool</p>
+          </div>
+          <button
+            onClick={() => dispatch({ type: 'GO_TO_PHASE', phase: 'settings' })}
+            className="p-2 rounded-lg text-[#6B6B6B] hover:text-[#0D7377] hover:bg-[#0D7377]/5 transition-colors"
+            title="Settings & Preferences"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
         </div>
       </header>
 

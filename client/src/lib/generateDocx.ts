@@ -95,6 +95,9 @@ export interface SummaryRow {
 export interface DocxReportData {
   template: ReportTemplate;
   practiceName: string;
+  practiceAddress?: string;
+  practicePhone?: string;
+  practiceEmail?: string;
   reportTitle: string;
   examinerName: string;
   examinerTitle: string;
@@ -722,10 +725,10 @@ export async function generateDocxReport(data: DocxReportData): Promise<void> {
   children.push(
     new Paragraph({
       alignment: AlignmentType.CENTER,
-      spacing: { after: 100 },
+      spacing: { after: 40 },
       children: [
         new TextRun({
-          text: `${data.examinerName} — ${data.examinerTitle}`,
+          text: `${data.examinerName} \u2014 ${data.examinerTitle}`,
           font: FONT,
           size: FONT_SIZE,
           color: '666666',
@@ -733,6 +736,25 @@ export async function generateDocxReport(data: DocxReportData): Promise<void> {
       ],
     })
   );
+
+  // Practice contact info line
+  const contactParts = [data.practiceAddress, data.practicePhone, data.practiceEmail].filter(Boolean);
+  if (contactParts.length > 0) {
+    children.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 100 },
+        children: [
+          new TextRun({
+            text: contactParts.join(' | '),
+            font: FONT,
+            size: SMALL_SIZE,
+            color: '888888',
+          }),
+        ],
+      })
+    );
+  }
 
   // Horizontal rule
   children.push(

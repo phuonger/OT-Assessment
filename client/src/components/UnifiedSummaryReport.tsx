@@ -15,7 +15,7 @@ import { lookupScaledScore, lookupAgeEquivalent, lookupGrowthScaleValue, lookupS
 import { REEL3_AGE_EQUIVALENT, REEL3_ABILITY_TO_PERCENTILE, REEL3_DESCRIPTIVE_TERMS, REEL3_LANGUAGE_ABILITY } from '@/lib/reel3Data';
 import { SP2_BIRTH6MO_CUTOFFS, SP2_ENGLISH_CUTOFFS, SP2_QUADRANT_MAP, getSP2Description } from '@/lib/sensoryProfileData';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Download, Printer, RotateCcw, Clock, FileText, Save, History, Shield } from 'lucide-react';
+import { ArrowLeft, Download, Printer, RotateCcw, Clock, FileText, Save, History, Shield, Settings } from 'lucide-react';
 import { useMemo, useCallback, useState } from 'react';
 import { saveMultiSession } from '@/lib/multiSessionStorage';
 import { toast } from 'sonner';
@@ -181,6 +181,15 @@ export default function UnifiedSummaryReport() {
             >
               <Shield className="w-3.5 h-3.5" />
               Backup
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => dispatch({ type: 'GO_TO_PHASE', phase: 'settings' })}
+              className="gap-1.5"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              Settings
             </Button>
             <Button variant="outline" size="sm" onClick={handleExportCSV} className="gap-1.5">
               <Download className="w-3.5 h-3.5" />

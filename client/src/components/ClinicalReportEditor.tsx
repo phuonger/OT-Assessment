@@ -21,6 +21,7 @@ import { SP2_ENGLISH_CUTOFFS, SP2_BIRTH6MO_CUTOFFS, SP2_QUADRANT_MAP, getSP2Desc
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Download, Printer, FileText, ChevronDown, ChevronUp, Pencil, Check, RotateCcw, Save, Eye, EyeOff, LayoutTemplate, FileDown } from 'lucide-react';
 import { generateDocxReport, type DocxReportData, type DomainNarrativeData as DocxDomainNarrative } from '@/lib/generateDocx';
+import { loadAppSettings } from '@/components/SettingsPreferences';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 
@@ -462,7 +463,16 @@ export default function ClinicalReportEditor() {
   // Template selector state
   // ============================================================
   const hasSP2 = formSelections.some(f => f.formId === 'sp2');
-  const [template, setTemplate] = useState<ReportTemplate>(() => savedReport?.template ?? (hasSP2 ? 'sensory' : 'developmental'));
+  const appSettings = useMemo(() => loadAppSettings(), []);
+  const [template, setTemplate] = useState<ReportTemplate>(() => {
+    if (savedReport?.template) return savedReport.template;
+    // Use settings default if not 'auto'
+    if (appSettings.defaultReportTemplate && appSettings.defaultReportTemplate !== 'auto') {
+      return appSettings.defaultReportTemplate;
+    }
+    // Auto-detect
+    return hasSP2 ? 'sensory' : 'developmental';
+  });
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
 
   // ============================================================
@@ -485,7 +495,7 @@ export default function ClinicalReportEditor() {
     savedReport?.closingNote ??
     `Thank you for this referral. It was a pleasure to work with ${childName} and ${pronoun(gender, 'possessive')} family. Please feel free to contact me with any additional questions and/or concerns.`
   );
-  const [practiceName, setPracticeName] = useState(() => savedReport?.practiceName ?? (examinerInfo.agency || 'Practice Name'));
+  const [practiceName, setPracticeName] = useState(() => savedReport?.practiceName ?? (appSettings.practiceName || examinerInfo.agency || 'Practice Name'));
   const [reportTitle, setReportTitle] = useState(() => savedReport?.reportTitle ?? TEMPLATE_INFO[template].title);
   const [domainOverrides, setDomainOverrides] = useState<Record<string, string>>(() => savedReport?.domainOverrides ?? {});
 
@@ -769,6 +779,9 @@ export default function ClinicalReportEditor() {
       const data: DocxReportData = {
         template,
         practiceName,
+        practiceAddress: appSettings.practiceAddress,
+        practicePhone: appSettings.practicePhone,
+        practiceEmail: appSettings.practiceEmail,
         reportTitle,
         examinerName: examinerInfo.name,
         examinerTitle: examinerInfo.title,
@@ -911,9 +924,25 @@ export default function ClinicalReportEditor() {
           <div className="p-8 print:p-12 space-y-6">
 
             {/* ===== HEADER ===== */}
-            <div className="text-center border-b-2 border-slate-800 pb-4 mb-6">
-              <EditableSection label="" value={practiceName} onChange={setPracticeName} rows={1} />
-              <p className="text-sm text-slate-600 font-serif">{examinerInfo.name} — {examinerInfo.title}</p>
+            <div className="border-b-2 border-slate-800 pb-4 mb-6">
+              <div className="flex items-center justify-center gap-4">
+                {appSettings.practiceLogo && (
+                  <img
+                    src={appSettings.practiceLogo}
+                    alt="Practice logo"
+                    className="w-16 h-16 object-contain print:w-14 print:h-14"
+                  />
+                )}
+                <div className="text-center">
+                  <EditableSection label="" value={practiceName} onChange={setPracticeName} rows={1} />
+                  <p className="text-sm text-slate-600 font-serif">{examinerInfo.name} — {examinerInfo.title}</p>
+                  {(appSettings.practiceAddress || appSettings.practicePhone || appSettings.practiceEmail) && (
+                    <p className="text-xs text-slate-500 font-serif mt-1">
+                      {[appSettings.practiceAddress, appSettings.practicePhone, appSettings.practiceEmail].filter(Boolean).join(' | ')}
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* ===== TITLE ===== */}

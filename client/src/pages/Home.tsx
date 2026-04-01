@@ -12,6 +12,7 @@ import UnifiedSummaryReport from '@/components/UnifiedSummaryReport';
 import ClinicalReportEditor from '@/components/ClinicalReportEditor';
 import AssessmentHistory from '@/components/AssessmentHistory';
 import DataBackupRestore from '@/components/DataBackupRestore';
+import SettingsPreferences from '@/components/SettingsPreferences';
 
 function AssessmentFlow() {
   const { state, dispatch } = useMultiAssessment();
@@ -37,6 +38,16 @@ function AssessmentFlow() {
       return (
         <DataBackupRestore
           onBack={() => dispatch({ type: 'GO_TO_PHASE', phase: 'summary' })}
+        />
+      );
+    case 'settings':
+      return (
+        <SettingsPreferences
+          onBack={() => {
+            // Go back to wherever the user came from — summary if mid-assessment, childInfo if at setup
+            const hasAssessment = Object.keys(state.formStates).length > 0;
+            dispatch({ type: 'GO_TO_PHASE', phase: hasAssessment ? 'summary' : 'childInfo' });
+          }}
         />
       );
     default:
