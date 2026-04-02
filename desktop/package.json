@@ -1,6 +1,6 @@
 {
   "name": "developmental-assessment-suite",
-  "version": "1.3.0",
+  "version": "1.4.7",
   "description": "Standalone developmental assessment tool supporting Bayley-4, DAYC-2, REEL-3, and Sensory Profile 2",
   "main": "main.js",
   "author": "OT Assessment Tools",
@@ -59,7 +59,7 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "identity": null
+      "identity": "C948C454E210B228D35107769035CA188F741EB2"
     },
     "win": {
       "target": [

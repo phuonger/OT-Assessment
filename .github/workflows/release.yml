@@ -2,8 +2,10 @@
 # Developmental Assessment Suite — Automated Release Workflow
 # ─────────────────────────────────────────────────────────────────────────────
 # Triggers when you push a version tag like v1.4.0
-# Builds the web frontend, packages the Electron app for macOS and Windows,
-# signs + notarizes the macOS build, and publishes a GitHub Release.
+# Builds the web frontend with relative asset paths for Electron (file://),
+# strips the Manus runtime/debug scripts, packages the Electron app for
+# macOS and Windows, signs + notarizes the macOS build, and publishes a
+# GitHub Release.
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: Build & Release
@@ -13,7 +15,6 @@ on:
     tags:
       - 'v*.*.*'
 
-# Only allow one release build at a time
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
@@ -28,8 +29,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -40,22 +39,46 @@ jobs:
       - name: Install web dependencies
         run: pnpm install --frozen-lockfile
 
+      # Build with base './' so asset paths are relative (./assets/...)
+      # instead of absolute (/assets/...). Electron loads via file:// protocol,
+      # so absolute paths resolve to the filesystem root and cause a blank screen.
       - name: Build web frontend
-        run: pnpm run build
+        run: NODE_ENV=production pnpm vite build --base './'
+
+      # Strip Manus-specific runtime and debug scripts from the built HTML.
+      # These are injected by Vite plugins for the Manus hosting environment
+      # but cause issues in standalone Electron (no parent iframe to respond).
+      - name: Clean build for Electron
+        run: |
+          cd dist/public
+          # Remove the manus debug-collector script tag
+          sed -i '/<script src="\/__manus__\/debug-collector.js" defer><\/script>/d' index.html
+          # Remove the entire manus-runtime inline script block
+          # The script starts with <script id="manus-runtime"> and ends with </script>
+          python3 -c "
+          import re
+          with open('index.html', 'r') as f:
+              html = f.read()
+          # Remove the manus-runtime script block (it's a huge inline script)
+          html = re.sub(r'<script id=\"manus-runtime\">.*?</script>\s*', '', html, flags=re.DOTALL)
+          with open('index.html', 'w') as f:
+              f.write(html)
+          "
+          # Remove the __manus__ directory (debug collector files)
+          rm -rf __manus__
 
       # Upload the compiled frontend so the platform jobs can download it
       - name: Upload frontend build
         uses: actions/upload-artifact@v4
         with:
           name: frontend-build
-          path: dist/
+          path: dist/public/
           retention-days: 1
 
   # ─── macOS: sign, notarize, publish ───────────────────────────────────
   release-mac:
     needs: build-frontend
     runs-on: macos-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -88,17 +111,12 @@ jobs:
           P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
-          # Decode the certificate
           CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
           echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
-
-          # Create a temporary keychain
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-
-          # Import certificate into keychain
           security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH
@@ -107,14 +125,11 @@ jobs:
       - name: Build and publish macOS app
         working-directory: desktop
         env:
-          # Code signing — electron-builder reads these automatically
           CSC_LINK: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.P12_PASSWORD }}
-          # Notarization — read by your notarize.js afterSign hook
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # GitHub Release upload
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: npx electron-builder --mac --publish always
 
@@ -128,7 +143,6 @@ jobs:
   release-windows:
     needs: build-frontend
     runs-on: windows-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
