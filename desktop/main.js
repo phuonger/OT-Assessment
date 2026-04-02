@@ -67,11 +67,51 @@ function setupAutoUpdater() {
     mainWindow.webContents.send('update-downloaded', {
       version: info.version,
     });
+
+    // Show a native dialog prompting the user to restart
+    dialog
+      .showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'Update Ready',
+        message: `Version ${info.version} has been downloaded.`,
+        detail:
+          'The update will be installed when you restart the application. Would you like to restart now?',
+        buttons: ['Restart Now', 'Later'],
+        defaultId: 0,
+        cancelId: 1,
+      })
+      .then(({ response }) => {
+        if (response === 0) {
+          autoUpdater.quitAndInstall();
+        }
+      });
   });
 
   autoUpdater.on('error', (err) => {
     console.error('[updater] Error:', err.message);
-    mainWindow.webContents.send('update-error', err.message);
+
+    // Detect read-only volume error and show a helpful message
+    const msg = err.message || '';
+    if (msg.includes('read-only volume') || msg.includes('EROFS') || msg.includes('Cannot update')) {
+      mainWindow.webContents.send('update-error',
+        'The app is installed in a read-only location (e.g. Downloads or a DMG). ' +
+        'Please move the app to your Applications folder and try again.'
+      );
+      dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        title: 'Cannot Update',
+        message: 'The application is in a read-only location.',
+        detail:
+          'To enable automatic updates, please move the app to your Applications folder:\n\n' +
+          '1. Close this application\n' +
+          '2. Drag it from its current location to /Applications\n' +
+          '3. Re-open the app from Applications\n\n' +
+          'Then try updating again.',
+        buttons: ['OK'],
+      });
+    } else {
+      mainWindow.webContents.send('update-error', msg);
+    }
   });
 
   // Check for updates after a short delay

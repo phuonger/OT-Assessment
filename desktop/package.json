@@ -1,6 +1,6 @@
 {
   "name": "developmental-assessment-suite",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "description": "Standalone developmental assessment tool supporting Bayley-4, DAYC-2, REEL-3, and Sensory Profile 2",
   "main": "main.js",
   "author": "OT Assessment Tools",
@@ -57,6 +57,10 @@
     "mac": {
       "category": "public.app-category.medical",
       "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
         {
           "target": "zip",
           "arch": ["x64", "arm64"]
