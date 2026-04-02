@@ -4,6 +4,7 @@ import { Route, Switch, Router as WouterRouter } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import UpdateNotification from "./components/UpdateNotification";
 import Home from "./pages/Home";
 
 /**
@@ -37,6 +38,7 @@ function App() {
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster />
+          <UpdateNotification />
           {isElectron ? (
             <WouterRouter hook={useHashLocation}>
               <AppRouter />

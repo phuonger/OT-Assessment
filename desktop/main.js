@@ -112,6 +112,16 @@ ipcMain.handle('check-for-updates', async () => {
   }
 });
 
+ipcMain.handle('download-update', async () => {
+  if (!autoUpdater) return { success: false };
+  try {
+    await autoUpdater.downloadUpdate();
+    return { success: true };
+  } catch (err) {
+    return { success: false, reason: err.message };
+  }
+});
+
 ipcMain.handle('install-update', async () => {
   if (!autoUpdater) return;
   autoUpdater.quitAndInstall();
@@ -276,10 +286,25 @@ function createWindow() {
           label: 'Check for Updates…',
           click: () => {
             if (autoUpdater) {
+              dialog.showMessageBox(mainWindow, {
+                type: 'info',
+                title: 'Checking for Updates',
+                message: 'Checking for updates…',
+                detail: 'Please wait while we check for the latest version.',
+                buttons: ['OK'],
+              });
               autoUpdater
                 .checkForUpdates()
                 .then((result) => {
-                  if (!result || !result.updateInfo) {
+                  if (result && result.updateInfo && result.updateInfo.version !== app.getVersion()) {
+                    dialog.showMessageBox(mainWindow, {
+                      type: 'info',
+                      title: 'Update Available',
+                      message: `Version ${result.updateInfo.version} is available.`,
+                      detail: 'The update notification will appear in the app. You can download it from there.',
+                      buttons: ['OK'],
+                    });
+                  } else {
                     dialog.showMessageBox(mainWindow, {
                       type: 'info',
                       title: 'No Updates',
