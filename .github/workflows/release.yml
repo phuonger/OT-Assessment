@@ -29,7 +29,22 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build web frontend
-        run: pnpm run build
+        run: NODE_ENV=production pnpm vite build --base './'
+
+      - name: Clean build for Electron
+        run: |
+          cd dist/public
+          sed -i '/<script src="\/__manus__\/debug-collector.js" defer><\/script>/d' index.html
+          python3 -c "
+          import re
+          with open('index.html', 'r') as f:
+             html = f.read()
+          html = re.sub(r'<script id=\"manus-runtime\">.*?</script>\s*', '', html, flags=re.DOTALL)
+          with open('index.html', 'w') as f:
+             f.write(html)
+          "
+          rm -rf __manus__
+
 
       - name: Upload frontend build
         uses: actions/upload-artifact@v4
