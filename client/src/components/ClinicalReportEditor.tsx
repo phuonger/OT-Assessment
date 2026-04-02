@@ -955,6 +955,17 @@ export default function ClinicalReportEditor() {
             <Button variant="outline" size="sm" onClick={handlePrint}>
               <Printer className="w-4 h-4 mr-1" /> Print
             </Button>
+            <div className="h-5 w-px bg-slate-300" />
+            <Button variant="ghost" size="sm" onClick={() => dispatch({ type: 'GO_TO_PHASE', phase: 'dashboard' })} className="text-slate-600">
+              Dashboard
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => {
+              if (confirm('Start a new assessment? Make sure you have saved the current one first.')) {
+                dispatch({ type: 'NEW_ASSESSMENT' });
+              }
+            }} className="text-teal-700">
+              New Assessment
+            </Button>
           </div>
         </div>
       </div>
