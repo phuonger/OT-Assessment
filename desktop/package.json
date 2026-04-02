@@ -59,7 +59,7 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "identity": null
+      "identity": "C948C454E210B228D35107769035CA188F741EB2"
     },
     "win": {
       "target": [
