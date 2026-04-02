@@ -35,7 +35,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: frontend-build
-          path: dist/
+          path: dist/public/
           retention-days: 1
 
   release-mac:
@@ -54,8 +54,8 @@ jobs:
       - name: Copy frontend into Electron shell
         run: |
           rm -rf desktop/build/assets desktop/build/index.html
-          cp -r dist/index.html desktop/build/
-          cp -r dist/assets desktop/build/
+          cp -r dist/public/index.html desktop/build/
+          cp -r dist/public/assets desktop/build/
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -115,8 +115,8 @@ jobs:
         shell: bash
         run: |
           rm -rf desktop/build/assets desktop/build/index.html
-          cp -r dist/index.html desktop/build/
-          cp -r dist/assets desktop/build/
+          cp -r dist/public/index.html desktop/build/
+          cp -r dist/public/assets desktop/build/
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
