@@ -8,6 +8,7 @@ import type { MultiAssessmentState } from '@/contexts/MultiAssessmentContext';
 import { getFormById, getScoringLabels } from '@/lib/formRegistry';
 import { lookupScaledScore, lookupAgeEquivalent, lookupGrowthScaleValue, lookupStandardScore } from '@/lib/scoringTables';
 import { REEL3_AGE_EQUIVALENT, REEL3_LANGUAGE_ABILITY, REEL3_ABILITY_TO_PERCENTILE, REEL3_DESCRIPTIVE_TERMS } from '@/lib/reel3Data';
+import { parseLocalDate } from '@/lib/dateUtils';
 
 const bayleyDomainKey: Record<string, 'CG' | 'FM' | 'GM' | 'RC' | 'EC' | null> = {
   cognitive: 'CG',
@@ -27,8 +28,8 @@ function formatTime(seconds: number): string {
 
 function calculateAgeInDays(dob: string, testDate: string, premWeeks: number): number | null {
   if (!dob || !testDate) return null;
-  const birth = new Date(dob);
-  const test = new Date(testDate);
+  const birth = parseLocalDate(dob);
+  const test = parseLocalDate(testDate);
   let days = Math.floor((test.getTime() - birth.getTime()) / 86400000);
   if (premWeeks > 0) days -= premWeeks * 7;
   return Math.max(0, days);

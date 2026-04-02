@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef } from 'react';
 import { ALL_DOMAINS, AGE_RANGES, type DomainData, type AssessmentItem, getStartItem } from '@/lib/assessmentData';
+import { todayLocal } from '@/lib/dateUtils';
 
 const STORAGE_KEY = 'bayley4-assessment-state';
 
@@ -51,7 +52,7 @@ const defaultChildInfo: ChildInfo = {
   dateOfBirth: '',
   gender: '',
   examinerName: '',
-  examDate: new Date().toISOString().split('T')[0],
+  examDate: todayLocal(),
   ageRange: '',
   startPointLetter: 'A',
   notes: '',

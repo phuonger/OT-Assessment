@@ -4,6 +4,7 @@
  */
 
 import { useState, useMemo } from 'react';
+import { parseLocalDate } from '@/lib/dateUtils';
 import { useAssessment } from '@/contexts/AssessmentContext';
 import {
   getAllSessions,
@@ -123,7 +124,7 @@ export default function SessionManager({ onNewAssessment, onLoadSession }: Sessi
 
   function formatDate(dateStr: string) {
     try {
-      return new Date(dateStr).toLocaleDateString('en-US', {
+      return parseLocalDate(dateStr).toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
@@ -478,7 +479,7 @@ function ComparisonView({
               </span>
             </div>
             <div className="text-xs text-[#8A8480] space-y-1">
-              <p>Date: {new Date(session1.examDate).toLocaleDateString()}</p>
+              <p>Date: {parseLocalDate(session1.examDate).toLocaleDateString()}</p>
               <p>Examiner: {session1.examinerName}</p>
               <p>Start Point: {session1.startPointLetter}</p>
               <p>Total Score: <span className="font-semibold text-[#2C2825]">{session1.totalRawScore}</span></p>
@@ -492,7 +493,7 @@ function ComparisonView({
               </span>
             </div>
             <div className="text-xs text-[#8A8480] space-y-1">
-              <p>Date: {new Date(session2.examDate).toLocaleDateString()}</p>
+              <p>Date: {parseLocalDate(session2.examDate).toLocaleDateString()}</p>
               <p>Examiner: {session2.examinerName}</p>
               <p>Start Point: {session2.startPointLetter}</p>
               <p>Total Score: <span className="font-semibold text-[#2C2825]">{session2.totalRawScore}</span></p>

@@ -8,6 +8,7 @@
 
 import React, { createContext, useContext, useReducer, useEffect, useRef, useCallback } from 'react';
 import { FORM_REGISTRY, getFormById, type FormDefinition, type UnifiedDomain } from '@/lib/formRegistry';
+import { todayLocal } from '@/lib/dateUtils';
 
 // ============================================================
 // Types
@@ -96,7 +97,7 @@ const initialChildInfo: ChildInfo = {
   firstName: '',
   lastName: '',
   dob: '',
-  testDate: new Date().toISOString().split('T')[0],
+  testDate: todayLocal(),
   gender: '',
   premature: false,
   weeksPremature: 0,
@@ -496,7 +497,7 @@ function reducer(state: MultiAssessmentState, action: Action): MultiAssessmentSt
         phase: 'childInfo',
         childInfo: {
           ...initialChildInfo,
-          testDate: new Date().toISOString().split('T')[0],
+          testDate: todayLocal(),
         },
         examinerInfo: { ...initialExaminerInfo },
       };

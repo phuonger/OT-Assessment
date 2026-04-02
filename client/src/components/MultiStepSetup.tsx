@@ -20,6 +20,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ArrowRight, ArrowLeft, User, Stethoscope, ClipboardList, Settings2, Check, Baby, Settings, Clock, Play } from 'lucide-react';
 import { loadAppSettings } from '@/components/SettingsPreferences';
 import { toast } from 'sonner';
+import { parseLocalDate, calculateAge } from '@/lib/dateUtils';
 
 // ============================================================
 // Age calculation helpers
@@ -27,25 +28,15 @@ import { toast } from 'sonner';
 
 function calculateAgeMonths(dob: string, testDate: string): number {
   if (!dob || !testDate) return -1;
-  const birth = new Date(dob);
-  const test = new Date(testDate);
+  const birth = parseLocalDate(dob);
+  const test = parseLocalDate(testDate);
   let months = (test.getFullYear() - birth.getFullYear()) * 12 + (test.getMonth() - birth.getMonth());
   if (test.getDate() < birth.getDate()) months--;
   return Math.max(0, months);
 }
 
 function calculateAgeDays(dob: string, testDate: string): { months: number; days: number } {
-  if (!dob || !testDate) return { months: 0, days: 0 };
-  const birth = new Date(dob);
-  const test = new Date(testDate);
-  let months = (test.getFullYear() - birth.getFullYear()) * 12 + (test.getMonth() - birth.getMonth());
-  let days = test.getDate() - birth.getDate();
-  if (days < 0) {
-    months--;
-    const prevMonth = new Date(test.getFullYear(), test.getMonth(), 0);
-    days += prevMonth.getDate();
-  }
-  return { months: Math.max(0, months), days: Math.max(0, days) };
+  return calculateAge(dob, testDate);
 }
 
 function autoSelectBayleyAgeRange(ageMonths: number, ageDays: number, totalDays: number): string {
@@ -161,15 +152,19 @@ export default function MultiStepSetup() {
   // Computed age
   const age = useMemo(() => {
     if (!childInfo.dob || !childInfo.testDate) return { months: 0, days: 0, totalDays: 0 };
-    const birthDate = new Date(childInfo.dob);
+    const birthDate = parseLocalDate(childInfo.dob);
     if (isNaN(birthDate.getTime())) return { months: 0, days: 0, totalDays: 0 };
     let ageInfo = calculateAgeDays(childInfo.dob, childInfo.testDate);
     if (childInfo.premature && childInfo.weeksPremature > 0) {
       const adjustDays = childInfo.weeksPremature * 7;
       const adjusted = new Date(birthDate.getTime() + adjustDays * 86400000);
-      ageInfo = calculateAgeDays(adjusted.toISOString().split('T')[0], childInfo.testDate);
+      const adjY = adjusted.getFullYear();
+      const adjM = String(adjusted.getMonth() + 1).padStart(2, '0');
+      const adjD = String(adjusted.getDate()).padStart(2, '0');
+      ageInfo = calculateAgeDays(`${adjY}-${adjM}-${adjD}`, childInfo.testDate);
     }
-    const totalDays = Math.floor((new Date(childInfo.testDate).getTime() - birthDate.getTime()) / 86400000);
+    const testDate = parseLocalDate(childInfo.testDate);
+    const totalDays = Math.floor((testDate.getTime() - birthDate.getTime()) / 86400000);
     return { ...ageInfo, totalDays };
   }, [childInfo.dob, childInfo.testDate, childInfo.premature, childInfo.weeksPremature]);
 

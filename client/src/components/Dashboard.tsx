@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
+import { parseLocalDate } from '@/lib/dateUtils';
 
 function formatRelativeTime(dateStr: string): string {
   const now = Date.now();
@@ -237,7 +238,7 @@ export default function Dashboard() {
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
                             {session.testDate
-                              ? new Date(session.testDate).toLocaleDateString()
+                              ? parseLocalDate(session.testDate).toLocaleDateString()
                               : 'No date'}
                           </span>
                           <span>

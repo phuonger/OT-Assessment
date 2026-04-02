@@ -4,6 +4,7 @@
  */
 
 import type { AssessmentState, ChildInfo } from '@/contexts/AssessmentContext';
+import { parseLocalDate } from '@/lib/dateUtils';
 
 const SESSIONS_KEY = 'bayley4-saved-sessions';
 
@@ -122,7 +123,7 @@ export function deleteSession(sessionId: string): void {
 
 export function compareSessions(session1: SavedSession, session2: SavedSession): SessionComparison {
   // Ensure session1 is the earlier one
-  const [s1, s2] = new Date(session1.examDate) <= new Date(session2.examDate)
+  const [s1, s2] = parseLocalDate(session1.examDate) <= parseLocalDate(session2.examDate)
     ? [session1, session2]
     : [session2, session1];
 
@@ -155,8 +156,8 @@ export function compareSessions(session1: SavedSession, session2: SavedSession):
   const totalChange = (s2.totalRawScore || 0) - (s1.totalRawScore || 0);
 
   // Calculate time between sessions
-  const d1 = new Date(s1.examDate);
-  const d2 = new Date(s2.examDate);
+  const d1 = parseLocalDate(s1.examDate);
+  const d2 = parseLocalDate(s2.examDate);
   const diffDays = Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
   let timeBetween: string;
   if (diffDays < 7) {

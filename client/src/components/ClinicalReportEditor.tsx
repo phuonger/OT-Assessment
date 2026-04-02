@@ -25,6 +25,7 @@ import { generatePdfReport } from '@/lib/generateReportPdf';
 import { loadAppSettings, type RecommendationTemplate } from '@/components/SettingsPreferences';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
+import { parseLocalDate, formatDateLocal, calculateAge } from '@/lib/dateUtils';
 
 // ============================================================
 // Types & Constants
@@ -53,8 +54,8 @@ const TEMPLATE_INFO: Record<ReportTemplate, { label: string; title: string; desc
 
 function calculateAgeInDays(dob: string, testDate: string, premWeeks: number): number | null {
   if (!dob || !testDate) return null;
-  const birth = new Date(dob);
-  const test = new Date(testDate);
+  const birth = parseLocalDate(dob);
+  const test = parseLocalDate(testDate);
   let days = Math.floor((test.getTime() - birth.getTime()) / 86400000);
   if (premWeeks > 0) days -= premWeeks * 7;
   return Math.max(0, days);
@@ -68,22 +69,12 @@ function ageInMonths(dob: string, testDate: string, premWeeks: number): number {
 
 function formatAgeDisplay(dob: string, testDate: string): string {
   if (!dob || !testDate) return 'N/A';
-  const birth = new Date(dob);
-  const test = new Date(testDate);
-  let months = (test.getFullYear() - birth.getFullYear()) * 12 + (test.getMonth() - birth.getMonth());
-  let days = test.getDate() - birth.getDate();
-  if (days < 0) {
-    months--;
-    const prevMonth = new Date(test.getFullYear(), test.getMonth(), 0);
-    days += prevMonth.getDate();
-  }
+  const { months, days } = calculateAge(dob, testDate);
   return `${months} months, ${days} days`;
 }
 
 function formatDate(dateStr: string): string {
-  if (!dateStr) return 'N/A';
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+  return formatDateLocal(dateStr);
 }
 
 function pronoun(gender: string, type: 'subject' | 'object' | 'possessive'): string {
@@ -438,9 +429,12 @@ export default function ClinicalReportEditor() {
   const chronAge = useMemo(() => formatAgeDisplay(childInfo.dob, childInfo.testDate), [childInfo]);
   const adjAge = useMemo(() => {
     if (!childInfo.premature || !childInfo.weeksPremature) return null;
-    const birth = new Date(childInfo.dob);
+    const birth = parseLocalDate(childInfo.dob);
     const adjusted = new Date(birth.getTime() + childInfo.weeksPremature * 7 * 86400000);
-    return formatAgeDisplay(adjusted.toISOString().split('T')[0], childInfo.testDate);
+    const adjY = adjusted.getFullYear();
+    const adjM = String(adjusted.getMonth() + 1).padStart(2, '0');
+    const adjD = String(adjusted.getDate()).padStart(2, '0');
+    return formatAgeDisplay(`${adjY}-${adjM}-${adjD}`, childInfo.testDate);
   }, [childInfo]);
 
   // ============================================================

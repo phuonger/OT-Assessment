@@ -44,6 +44,7 @@ import {
   BarChart3,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { parseLocalDate } from '@/lib/dateUtils';
 import {
   BarChart,
   Bar,
@@ -81,7 +82,7 @@ function formatTime(seconds: number): string {
 
 function formatDate(dateStr: string): string {
   try {
-    return new Date(dateStr).toLocaleDateString('en-US', {
+    return parseLocalDate(dateStr).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',

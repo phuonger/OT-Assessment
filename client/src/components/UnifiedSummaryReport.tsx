@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, Download, Printer, RotateCcw, Clock, FileText, Save, History, Shield, Settings, Home, Plus } from 'lucide-react';
 import { useMemo, useCallback, useState } from 'react';
 import { saveMultiSession } from '@/lib/multiSessionStorage';
+import { parseLocalDate, calculateAge } from '@/lib/dateUtils';
 import { toast } from 'sonner';
 
 function formatTime(seconds: number): string {
@@ -30,8 +31,8 @@ function formatTime(seconds: number): string {
 
 function calculateAgeInDays(dob: string, testDate: string, premWeeks: number): number | null {
   if (!dob || !testDate) return null;
-  const birth = new Date(dob);
-  const test = new Date(testDate);
+  const birth = parseLocalDate(dob);
+  const test = parseLocalDate(testDate);
   let days = Math.floor((test.getTime() - birth.getTime()) / 86400000);
   if (premWeeks > 0) days -= premWeeks * 7;
   return Math.max(0, days);
@@ -58,31 +59,19 @@ export default function UnifiedSummaryReport() {
   // Calculate chronological age display
   const chronAgeDisplay = useMemo(() => {
     if (!state.childInfo.dob || !state.childInfo.testDate) return 'N/A';
-    const birth = new Date(state.childInfo.dob);
-    const test = new Date(state.childInfo.testDate);
-    let months = (test.getFullYear() - birth.getFullYear()) * 12 + (test.getMonth() - birth.getMonth());
-    let days = test.getDate() - birth.getDate();
-    if (days < 0) {
-      months--;
-      const prevMonth = new Date(test.getFullYear(), test.getMonth(), 0);
-      days += prevMonth.getDate();
-    }
+    const { months, days } = calculateAge(state.childInfo.dob, state.childInfo.testDate);
     return `${months} months, ${days} days`;
   }, [state.childInfo]);
 
   // Calculate adjusted age display (for premature children)
   const adjAgeDisplay = useMemo(() => {
     if (!state.childInfo.premature || !state.childInfo.weeksPremature || !state.childInfo.dob || !state.childInfo.testDate) return null;
-    const birth = new Date(state.childInfo.dob);
+    const birth = parseLocalDate(state.childInfo.dob);
     const adjusted = new Date(birth.getTime() + state.childInfo.weeksPremature * 7 * 86400000);
-    const test = new Date(state.childInfo.testDate);
-    let months = (test.getFullYear() - adjusted.getFullYear()) * 12 + (test.getMonth() - adjusted.getMonth());
-    let days = test.getDate() - adjusted.getDate();
-    if (days < 0) {
-      months--;
-      const prevMonth = new Date(test.getFullYear(), test.getMonth(), 0);
-      days += prevMonth.getDate();
-    }
+    const adjY = adjusted.getFullYear();
+    const adjM = String(adjusted.getMonth() + 1).padStart(2, '0');
+    const adjD = String(adjusted.getDate()).padStart(2, '0');
+    const { months, days } = calculateAge(`${adjY}-${adjM}-${adjD}`, state.childInfo.testDate);
     return `${months} months, ${days} days`;
   }, [state.childInfo]);
 

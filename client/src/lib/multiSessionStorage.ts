@@ -7,6 +7,7 @@
 
 import type { MultiAssessmentState, ChildInfo, ExaminerInfo, FormState } from '@/contexts/MultiAssessmentContext';
 import { getFormById } from '@/lib/formRegistry';
+import { parseLocalDate, todayLocal } from '@/lib/dateUtils';
 
 const SESSIONS_KEY = 'bayley4-multi-sessions';
 
@@ -87,8 +88,8 @@ function generateId(): string {
 function computeAge(dob: string, testDate: string): string {
   if (!dob || !testDate) return 'N/A';
   try {
-    const birth = new Date(dob);
-    const test = new Date(testDate);
+    const birth = parseLocalDate(dob);
+    const test = parseLocalDate(testDate);
     let months = (test.getFullYear() - birth.getFullYear()) * 12 + (test.getMonth() - birth.getMonth());
     let days = test.getDate() - birth.getDate();
     if (days < 0) {
@@ -104,8 +105,8 @@ function computeAge(dob: string, testDate: string): string {
 
 function computeTimeBetween(date1: string, date2: string): { text: string; days: number } {
   try {
-    const d1 = new Date(date1);
-    const d2 = new Date(date2);
+    const d1 = parseLocalDate(date1);
+    const d2 = parseLocalDate(date2);
     const diffMs = Math.abs(d2.getTime() - d1.getTime());
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
@@ -210,7 +211,7 @@ export function saveMultiSession(
   const session: SavedMultiSession = {
     id: generateId(),
     savedAt: new Date().toISOString(),
-    label: label || `Assessment ${new Date(state.childInfo.testDate || Date.now()).toLocaleDateString()}`,
+    label: label || `Assessment ${parseLocalDate(state.childInfo.testDate || todayLocal()).toLocaleDateString()}`,
     childInfo: { ...state.childInfo },
     examinerInfo: { ...state.examinerInfo },
     childName,
@@ -298,7 +299,7 @@ export function duplicateMultiSession(sessionId: string): SavedMultiSession | nu
     // Update test date to today
     duplicate.stateSnapshot.childInfo = {
       ...duplicate.stateSnapshot.childInfo,
-      testDate: new Date().toISOString().split('T')[0],
+      testDate: todayLocal(),
     };
   }
 
@@ -337,7 +338,7 @@ export function compareMultiSessions(
   sessionB: SavedMultiSession
 ): MultiSessionComparison {
   // Ensure session1 is the earlier one
-  const [session1, session2] = new Date(sessionA.testDate) <= new Date(sessionB.testDate)
+  const [session1, session2] = parseLocalDate(sessionA.testDate) <= parseLocalDate(sessionB.testDate)
     ? [sessionA, sessionB]
     : [sessionB, sessionA];
 
