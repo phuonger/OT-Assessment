@@ -410,7 +410,11 @@ export default function MultiStepSetup() {
               )}
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => dispatch({ type: 'GO_TO_PHASE', phase: 'dashboard' })} className="gap-2">
+                <ArrowLeft className="w-4 h-4" />
+                Back to Dashboard
+              </Button>
               <Button
                 onClick={() => setStep(2)}
                 disabled={!canProceedStep1}
@@ -420,9 +424,6 @@ export default function MultiStepSetup() {
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </div>
-
-            {/* Recent Assessments Panel */}
-            <RecentAssessmentsPanel />
           </div>
         )}
 
@@ -713,96 +714,4 @@ export default function MultiStepSetup() {
   );
 }
 
-// ============================================================
-// Recent Assessments Panel
-// ============================================================
-
-function RecentAssessmentsPanel() {
-  const { dispatch } = useMultiAssessment();
-  const [recentSessions, setRecentSessions] = useState<SavedMultiSession[]>([]);
-
-  useEffect(() => {
-    const sessions = getAllMultiSessions();
-    // Show up to 5 most recent sessions
-    setRecentSessions(sessions.slice(0, 5));
-  }, []);
-
-  if (recentSessions.length === 0) return null;
-
-  const handleResume = (session: SavedMultiSession) => {
-    dispatch({ type: 'LOAD_STATE', payload: session.stateSnapshot });
-    toast.success(`Loaded assessment for ${session.childName}`);
-  };
-
-  const formatDate = (dateStr: string) => {
-    try {
-      return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    } catch {
-      return dateStr;
-    }
-  };
-
-  const formatTimeAgo = (dateStr: string) => {
-    try {
-      const diff = Date.now() - new Date(dateStr).getTime();
-      const mins = Math.floor(diff / 60000);
-      if (mins < 60) return `${mins}m ago`;
-      const hours = Math.floor(mins / 60);
-      if (hours < 24) return `${hours}h ago`;
-      const days = Math.floor(hours / 24);
-      if (days < 7) return `${days}d ago`;
-      return formatDate(dateStr);
-    } catch {
-      return '';
-    }
-  };
-
-  return (
-    <div className="mt-8 pt-6 border-t border-[#E5E1D8]">
-      <div className="flex items-center gap-2 mb-4">
-        <Clock className="w-4.5 h-4.5 text-[#0D7377]" />
-        <h3 className="text-base font-semibold text-[#2C2C2C]">Recent Assessments</h3>
-        <span className="text-xs text-[#8B8B8B] ml-auto">Click to resume</span>
-      </div>
-      <div className="space-y-2">
-        {recentSessions.map(session => (
-          <button
-            key={session.id}
-            onClick={() => handleResume(session)}
-            className="w-full text-left bg-white rounded-lg border border-[#E5E1D8] hover:border-[#0D7377]/40 hover:shadow-sm px-4 py-3 transition-all group"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-[#0D7377]/8 flex items-center justify-center flex-shrink-0">
-                  <Baby className="w-4 h-4 text-[#0D7377]" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-[#2C2C2C] truncate">{session.childName}</p>
-                  <div className="flex items-center gap-2 text-xs text-[#8B8B8B]">
-                    <span>{formatDate(session.testDate)}</span>
-                    <span className="text-[#D0CDC6]">&middot;</span>
-                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
-                      session.status === 'completed'
-                        ? 'bg-green-50 text-green-700'
-                        : 'bg-amber-50 text-amber-700'
-                    }`}>
-                      {session.status === 'completed' ? 'Completed' : 'In Progress'}
-                    </span>
-                    <span className="text-[#D0CDC6]">&middot;</span>
-                    <span>{session.formSummaries.map(f => f.formName.split(' ')[0]).join(', ')}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-xs text-[#8B8B8B]">{formatTimeAgo(session.savedAt)}</span>
-                <div className="w-7 h-7 rounded-full bg-[#0D7377]/0 group-hover:bg-[#0D7377]/10 flex items-center justify-center transition-colors">
-                  <Play className="w-3.5 h-3.5 text-[#0D7377] opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
-              </div>
-            </div>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
+// RecentAssessmentsPanel has been moved to the Dashboard component

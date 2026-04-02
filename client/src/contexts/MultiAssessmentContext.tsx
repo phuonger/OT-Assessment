@@ -50,7 +50,7 @@ export interface FormState {
   ageRangeLabel: string;
 }
 
-export type AppPhase = 'welcome' | 'childInfo' | 'examinerInfo' | 'formSelection' | 'assessment' | 'summary' | 'report' | 'history' | 'backup' | 'settings';
+export type AppPhase = 'welcome' | 'dashboard' | 'allAssessments' | 'childInfo' | 'examinerInfo' | 'formSelection' | 'assessment' | 'summary' | 'report' | 'history' | 'backup' | 'settings';
 
 export interface MultiAssessmentState {
   phase: AppPhase;
@@ -83,6 +83,7 @@ type Action =
   | { type: 'TICK_TIMER' }
   | { type: 'TOGGLE_TIMER' }
   | { type: 'RESET_ALL' }
+  | { type: 'NEW_ASSESSMENT' }
   | { type: 'LOAD_STATE'; payload: MultiAssessmentState }
   | { type: 'GO_TO_PHASE'; phase: AppPhase }
   | { type: 'GO_TO_REPORT' };
@@ -486,7 +487,19 @@ function reducer(state: MultiAssessmentState, action: Action): MultiAssessmentSt
 
     case 'RESET_ALL':
       localStorage.removeItem('bayley4-multi-assessment');
-      return { ...initialState };
+      return { ...initialState, phase: 'dashboard' };
+
+    case 'NEW_ASSESSMENT':
+      localStorage.removeItem('bayley4-multi-assessment');
+      return {
+        ...initialState,
+        phase: 'childInfo',
+        childInfo: {
+          ...initialChildInfo,
+          testDate: new Date().toISOString().split('T')[0],
+        },
+        examinerInfo: { ...initialExaminerInfo },
+      };
 
     case 'LOAD_STATE':
       return action.payload;
@@ -512,23 +525,15 @@ interface MultiAssessmentContextType {
 const MultiAssessmentContext = createContext<MultiAssessmentContextType | null>(null);
 
 export function MultiAssessmentProvider({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, initialState, () => {
-    try {
-      const saved = localStorage.getItem('bayley4-multi-assessment');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.phase) {
-          return { ...parsed, timerRunning: false };
-        }
-      }
-    } catch { /* ignore */ }
-    return initialState;
-  });
+  // Always start at welcome — never auto-resume a previous assessment
+  const [state, dispatch] = useReducer(reducer, initialState);
 
-  // Save to localStorage
+  // Auto-save current assessment state for crash recovery (but we always start at welcome on fresh launch)
   const saveRef = useRef(state);
   saveRef.current = state;
   useEffect(() => {
+    // Only auto-save if we're in an active assessment phase (not welcome/dashboard)
+    if (state.phase === 'welcome' || state.phase === 'dashboard' || state.phase === 'allAssessments') return;
     const timeout = setTimeout(() => {
       try {
         localStorage.setItem('bayley4-multi-assessment', JSON.stringify(saveRef.current));

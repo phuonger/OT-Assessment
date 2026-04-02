@@ -2,11 +2,13 @@
  * Home Page — Multi-Assessment Flow
  * 
  * Design: Clinical Precision — Swiss Medical Design
- * Routes between setup, assessment, summary, report, history, and backup phases.
+ * Routes between welcome, dashboard, setup, assessment, summary, report, history, and backup phases.
  */
 
 import { MultiAssessmentProvider, useMultiAssessment } from '@/contexts/MultiAssessmentContext';
 import WelcomePage from '@/components/WelcomePage';
+import Dashboard from '@/components/Dashboard';
+import AllAssessments from '@/components/AllAssessments';
 import MultiStepSetup from '@/components/MultiStepSetup';
 import UnifiedAssessmentLayout from '@/components/UnifiedAssessmentLayout';
 import UnifiedSummaryReport from '@/components/UnifiedSummaryReport';
@@ -21,6 +23,10 @@ function AssessmentFlow() {
   switch (state.phase) {
     case 'welcome':
       return <WelcomePage />;
+    case 'dashboard':
+      return <Dashboard />;
+    case 'allAssessments':
+      return <AllAssessments />;
     case 'childInfo':
     case 'examinerInfo':
     case 'formSelection':
@@ -40,16 +46,16 @@ function AssessmentFlow() {
     case 'backup':
       return (
         <DataBackupRestore
-          onBack={() => dispatch({ type: 'GO_TO_PHASE', phase: 'summary' })}
+          onBack={() => dispatch({ type: 'GO_TO_PHASE', phase: 'dashboard' })}
         />
       );
     case 'settings':
       return (
         <SettingsPreferences
           onBack={() => {
-            // Go back to wherever the user came from — summary if mid-assessment, childInfo if at setup
+            // Go back to wherever the user came from — summary if mid-assessment, dashboard if at start
             const hasAssessment = Object.keys(state.formStates).length > 0;
-            dispatch({ type: 'GO_TO_PHASE', phase: hasAssessment ? 'summary' : 'childInfo' });
+            dispatch({ type: 'GO_TO_PHASE', phase: hasAssessment ? 'summary' : 'dashboard' });
           }}
         />
       );

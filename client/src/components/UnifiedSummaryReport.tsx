@@ -15,7 +15,7 @@ import { lookupScaledScore, lookupAgeEquivalent, lookupGrowthScaleValue, lookupS
 import { REEL3_AGE_EQUIVALENT, REEL3_ABILITY_TO_PERCENTILE, REEL3_DESCRIPTIVE_TERMS, REEL3_LANGUAGE_ABILITY } from '@/lib/reel3Data';
 import { SP2_BIRTH6MO_CUTOFFS, SP2_ENGLISH_CUTOFFS, SP2_QUADRANT_MAP, getSP2Description } from '@/lib/sensoryProfileData';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Download, Printer, RotateCcw, Clock, FileText, Save, History, Shield, Settings } from 'lucide-react';
+import { ArrowLeft, Download, Printer, RotateCcw, Clock, FileText, Save, History, Shield, Settings, Home, Plus } from 'lucide-react';
 import { useMemo, useCallback, useState } from 'react';
 import { saveMultiSession } from '@/lib/multiSessionStorage';
 import { toast } from 'sonner';
@@ -129,10 +129,14 @@ export default function UnifiedSummaryReport() {
     toast.success('Assessment saved to history');
   }, [state, saveLabel]);
 
-  const handleReset = useCallback(() => {
-    if (confirm('Are you sure you want to start a new assessment? All current data will be cleared.')) {
-      dispatch({ type: 'RESET_ALL' });
+  const handleNewAssessment = useCallback(() => {
+    if (confirm('Start a new assessment? Make sure you have saved the current one first.')) {
+      dispatch({ type: 'NEW_ASSESSMENT' });
     }
+  }, [dispatch]);
+
+  const handleBackToDashboard = useCallback(() => {
+    dispatch({ type: 'GO_TO_PHASE', phase: 'dashboard' });
   }, [dispatch]);
 
   return (
@@ -200,8 +204,12 @@ export default function UnifiedSummaryReport() {
               <Printer className="w-3.5 h-3.5" />
               Print
             </Button>
-            <Button variant="outline" size="sm" onClick={handleReset} className="gap-1.5 text-red-600 hover:text-red-700">
-              <RotateCcw className="w-3.5 h-3.5" />
+            <Button variant="outline" size="sm" onClick={handleBackToDashboard} className="gap-1.5">
+              <Home className="w-3.5 h-3.5" />
+              Dashboard
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleNewAssessment} className="gap-1.5 text-[#0D7377] hover:text-[#0a5c5f]">
+              <Plus className="w-3.5 h-3.5" />
               New Assessment
             </Button>
           </div>
