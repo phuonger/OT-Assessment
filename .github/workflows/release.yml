@@ -1,13 +1,3 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# Developmental Assessment Suite — Automated Release Workflow
-# ─────────────────────────────────────────────────────────────────────────────
-# Triggers when you push a version tag like v1.4.0
-# Builds the web frontend with relative asset paths for Electron (file://),
-# strips the Manus runtime/debug scripts, packages the Electron app for
-# macOS and Windows, signs + notarizes the macOS build, and publishes a
-# GitHub Release.
-# ─────────────────────────────────────────────────────────────────────────────
-
 name: Build & Release
 
 on:
@@ -20,7 +10,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ─── Build the web frontend (shared by both platform jobs) ────────────
   build-frontend:
     runs-on: ubuntu-latest
     steps:
@@ -29,7 +18,7 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -39,35 +28,24 @@ jobs:
       - name: Install web dependencies
         run: pnpm install --frozen-lockfile
 
-      # Build with base './' so asset paths are relative (./assets/...)
-      # instead of absolute (/assets/...). Electron loads via file:// protocol,
-      # so absolute paths resolve to the filesystem root and cause a blank screen.
       - name: Build web frontend
         run: NODE_ENV=production pnpm vite build --base './'
 
-      # Strip Manus-specific runtime and debug scripts from the built HTML.
-      # These are injected by Vite plugins for the Manus hosting environment
-      # but cause issues in standalone Electron (no parent iframe to respond).
       - name: Clean build for Electron
         run: |
           cd dist/public
-          # Remove the manus debug-collector script tag
           sed -i '/<script src="\/__manus__\/debug-collector.js" defer><\/script>/d' index.html
-          # Remove the entire manus-runtime inline script block
-          # The script starts with <script id="manus-runtime"> and ends with </script>
           python3 -c "
           import re
           with open('index.html', 'r') as f:
-              html = f.read()
-          # Remove the manus-runtime script block (it's a huge inline script)
+             html = f.read()
           html = re.sub(r'<script id=\"manus-runtime\">.*?</script>\s*', '', html, flags=re.DOTALL)
           with open('index.html', 'w') as f:
-              f.write(html)
+             f.write(html)
           "
-          # Remove the __manus__ directory (debug collector files)
           rm -rf __manus__
 
-      # Upload the compiled frontend so the platform jobs can download it
+
       - name: Upload frontend build
         uses: actions/upload-artifact@v4
         with:
@@ -75,7 +53,6 @@ jobs:
           path: dist/public/
           retention-days: 1
 
-  # ─── macOS: sign, notarize, publish ───────────────────────────────────
   release-mac:
     needs: build-frontend
     runs-on: macos-latest
@@ -104,7 +81,6 @@ jobs:
         working-directory: desktop
         run: npm install
 
-      # Import the Apple Developer ID certificate into a temporary keychain
       - name: Import Apple signing certificate
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
@@ -121,7 +97,6 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH
 
-      # Build, sign, notarize, and publish to GitHub Releases
       - name: Build and publish macOS app
         working-directory: desktop
         env:
@@ -133,13 +108,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: npx electron-builder --mac --publish always
 
-      # Clean up the temporary keychain
       - name: Clean up keychain
         if: always()
         run: |
           security delete-keychain $RUNNER_TEMP/app-signing.keychain-db 2>/dev/null || true
 
-  # ─── Windows: build and publish (no code signing) ─────────────────────
   release-windows:
     needs: build-frontend
     runs-on: windows-latest
