@@ -4,12 +4,12 @@
  * Design: Clinical Precision — Swiss Medical Design
  * Shown after the welcome screen. Displays:
  * - "Start New Assessment" button
- * - List of last 5 saved assessments
+ * - List of last 5 saved assessments with status badges and delete
  * - "See All Assessments" button if more exist
  */
 
 import { useMultiAssessment } from '@/contexts/MultiAssessmentContext';
-import { getAllMultiSessions, type SavedMultiSession } from '@/lib/multiSessionStorage';
+import { getAllMultiSessions, deleteMultiSession, type SavedMultiSession } from '@/lib/multiSessionStorage';
 import { Button } from '@/components/ui/button';
 import {
   Plus,
@@ -22,8 +22,10 @@ import {
   FileText,
   Settings,
   Shield,
+  Trash2,
 } from 'lucide-react';
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
+import { toast } from 'sonner';
 
 function formatRelativeTime(dateStr: string): string {
   const now = Date.now();
@@ -57,9 +59,9 @@ function StatusBadge({ status }: { status: string }) {
 export default function Dashboard() {
   const { dispatch } = useMultiAssessment();
 
-  const allSessions = useMemo(() => getAllMultiSessions(), []);
-  const recentSessions = useMemo(() => allSessions.slice(0, 5), [allSessions]);
-  const hasMore = allSessions.length > 5;
+  const [sessions, setSessions] = useState(() => getAllMultiSessions());
+  const recentSessions = useMemo(() => sessions.slice(0, 5), [sessions]);
+  const hasMore = sessions.length > 5;
 
   const handleNewAssessment = () => {
     dispatch({ type: 'NEW_ASSESSMENT' });
@@ -68,6 +70,15 @@ export default function Dashboard() {
   const handleLoadSession = (session: SavedMultiSession) => {
     if (session.stateSnapshot) {
       dispatch({ type: 'LOAD_STATE', payload: { ...session.stateSnapshot, timerRunning: false } });
+    }
+  };
+
+  const handleDelete = (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation();
+    if (confirm('Delete this assessment? This cannot be undone.')) {
+      deleteMultiSession(sessionId);
+      setSessions(getAllMultiSessions());
+      toast.success('Assessment deleted');
     }
   };
 
@@ -149,16 +160,16 @@ export default function Dashboard() {
               className="text-sm font-semibold uppercase tracking-wider text-[#6B6B6B]"
               style={{ fontFamily: "'DM Sans', sans-serif" }}
             >
-              {allSessions.length > 0 ? 'Recent Assessments' : 'No Saved Assessments'}
+              {sessions.length > 0 ? 'Recent Assessments' : 'No Saved Assessments'}
             </h3>
-            {allSessions.length > 0 && (
+            {sessions.length > 0 && (
               <span className="text-xs text-[#BEBEBE]">
-                {allSessions.length} total
+                {sessions.length} total
               </span>
             )}
           </div>
 
-          {allSessions.length === 0 ? (
+          {sessions.length === 0 ? (
             <div className="bg-white rounded-xl border border-[#E5E1D8] p-8 text-center">
               <div className="w-12 h-12 rounded-full bg-[#F5F3EF] flex items-center justify-center mx-auto mb-3">
                 <FileText className="w-5 h-5 text-[#BEBEBE]" />
@@ -202,12 +213,19 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* Time & arrow */}
+                  {/* Time, delete & arrow */}
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span className="text-[11px] text-[#BEBEBE] flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       {formatRelativeTime(session.savedAt)}
                     </span>
+                    <button
+                      onClick={(e) => handleDelete(e, session.id)}
+                      className="p-1.5 rounded-md text-[#D4D0C8] hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                      title="Delete assessment"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                     <ChevronRight className="w-4 h-4 text-[#D4D0C8] group-hover:text-[#0D7377] transition-colors" />
                   </div>
                 </button>

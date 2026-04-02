@@ -2,8 +2,8 @@
  * UpdateNotification
  *
  * Listens for auto-update events from Electron's main process via the preload bridge.
- * Shows a non-intrusive banner when an update is available, with download progress
- * and a restart button once the download is complete.
+ * Shows a non-intrusive banner when an update is available, with download progress,
+ * release notes ("What's New"), and a restart button once the download is complete.
  *
  * Handles common errors gracefully, including the macOS "read-only volume" issue
  * when the app isn't installed in /Applications.
@@ -12,7 +12,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Download, RefreshCw, X, Loader2, AlertTriangle, FolderOpen } from 'lucide-react';
+import { Download, RefreshCw, X, Loader2, AlertTriangle, FolderOpen, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface UpdateInfo {
@@ -29,6 +29,16 @@ interface DownloadProgress {
 
 type UpdateState = 'idle' | 'available' | 'downloading' | 'downloaded' | 'error';
 
+/** Strip HTML tags and trim whitespace from release notes */
+function cleanReleaseNotes(notes: string | undefined): string {
+  if (!notes) return '';
+  // electron-updater may send HTML or markdown — strip tags for plain display
+  return notes
+    .replace(/<[^>]*>/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export default function UpdateNotification() {
   const [state, setState] = useState<UpdateState>('idle');
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
@@ -36,6 +46,7 @@ export default function UpdateNotification() {
   const [errorMsg, setErrorMsg] = useState('');
   const [dismissed, setDismissed] = useState(false);
   const [isReadOnlyError, setIsReadOnlyError] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
 
   useEffect(() => {
     const api = (window as any).electronAPI;
@@ -48,6 +59,7 @@ export default function UpdateNotification() {
       setState('available');
       setDismissed(false);
       setIsReadOnlyError(false);
+      setShowNotes(false);
     });
 
     api.onDownloadProgress((prog: DownloadProgress) => {
@@ -112,6 +124,8 @@ export default function UpdateNotification() {
   // Don't render if no update or dismissed
   if (state === 'idle' || dismissed) return null;
 
+  const releaseNotes = cleanReleaseNotes(updateInfo?.releaseNotes);
+
   return (
     <div className="fixed bottom-4 right-4 z-[9999] max-w-sm animate-in slide-in-from-bottom-4 fade-in duration-300">
       <div className="bg-white border border-[#E5E0DB] rounded-xl shadow-lg p-4">
@@ -165,6 +179,24 @@ export default function UpdateNotification() {
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {/* Release Notes — "What's New" */}
+        {releaseNotes && (state === 'available' || state === 'downloaded') && (
+          <div className="mt-2.5">
+            <button
+              onClick={() => setShowNotes(!showNotes)}
+              className="flex items-center gap-1 text-[11px] font-medium text-[#0D7377] hover:text-[#0a5c5f] transition-colors"
+            >
+              <Sparkles className="w-3 h-3" />
+              {showNotes ? 'Hide' : "What's New"}
+            </button>
+            {showNotes && (
+              <div className="mt-1.5 p-2.5 bg-[#F5F3EF] rounded-lg text-xs text-[#4A4A4A] leading-relaxed max-h-32 overflow-y-auto whitespace-pre-line">
+                {releaseNotes}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Progress bar */}
         {state === 'downloading' && progress && (
