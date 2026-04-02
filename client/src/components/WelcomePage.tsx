@@ -6,12 +6,22 @@
  * Features branding, version info, and a "Get Started" button.
  */
 
+import { useEffect, useState } from 'react';
 import { useMultiAssessment } from '@/contexts/MultiAssessmentContext';
 import { ClipboardCheck, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function WelcomePage() {
   const { dispatch } = useMultiAssessment();
+  const [version, setVersion] = useState('');
+
+  useEffect(() => {
+    // Try to get version from Electron API, fallback to empty
+    const api = (window as any).electronAPI;
+    if (api?.getAppVersion) {
+      api.getAppVersion().then((v: string) => setVersion(`v${v}`)).catch(() => {});
+    }
+  }, []);
 
   const handleGetStarted = () => {
     dispatch({ type: 'GO_TO_PHASE', phase: 'dashboard' });
@@ -53,10 +63,12 @@ export default function WelcomePage() {
           <ArrowRight className="w-4 h-4 ml-2" />
         </Button>
 
-        {/* Version */}
-        <p className="text-[#BEBEBE] text-[10px] mt-8">
-          v1.4.8
-        </p>
+        {/* Version - dynamically read from Electron */}
+        {version && (
+          <p className="text-[#BEBEBE] text-[10px] mt-8">
+            {version}
+          </p>
+        )}
       </div>
     </div>
   );
