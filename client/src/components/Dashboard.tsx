@@ -4,12 +4,13 @@
  * Design: Clinical Precision — Swiss Medical Design
  * Shown after the welcome screen. Displays:
  * - "Start New Assessment" button
- * - List of last 5 saved assessments with status badges, delete, and Resume label
+ * - List of last 5 saved assessments with status badges, delete, duplicate,
+ *   Resume label, and completion progress bar on in-progress cards
  * - "See All Assessments" button if more exist
  */
 
 import { useMultiAssessment } from '@/contexts/MultiAssessmentContext';
-import { getAllMultiSessions, deleteMultiSession, type SavedMultiSession } from '@/lib/multiSessionStorage';
+import { getAllMultiSessions, deleteMultiSession, duplicateMultiSession, type SavedMultiSession } from '@/lib/multiSessionStorage';
 import { Button } from '@/components/ui/button';
 import {
   Plus,
@@ -24,6 +25,7 @@ import {
   Shield,
   Trash2,
   Play,
+  Copy,
 } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
@@ -57,6 +59,20 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+/** Compute completion percentage from formSummaries */
+function getCompletionProgress(session: SavedMultiSession): { scored: number; total: number; percent: number } {
+  let scored = 0;
+  let total = 0;
+  for (const form of session.formSummaries || []) {
+    for (const domain of form.domains || []) {
+      scored += domain.itemsScored;
+      total += domain.totalItems;
+    }
+  }
+  const percent = total > 0 ? Math.round((scored / total) * 100) : 0;
+  return { scored, total, percent };
+}
+
 export default function Dashboard() {
   const { dispatch } = useMultiAssessment();
 
@@ -80,6 +96,17 @@ export default function Dashboard() {
       deleteMultiSession(sessionId);
       setSessions(getAllMultiSessions());
       toast.success('Assessment deleted');
+    }
+  };
+
+  const handleDuplicate = (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation();
+    const dup = duplicateMultiSession(sessionId);
+    if (dup) {
+      setSessions(getAllMultiSessions());
+      toast.success('Assessment duplicated — scores reset, child info kept');
+    } else {
+      toast.error('Failed to duplicate assessment');
     }
   };
 
@@ -184,61 +211,88 @@ export default function Dashboard() {
             <div className="space-y-2">
               {recentSessions.map((session) => {
                 const isInProgress = session.status !== 'completed';
+                const progress = isInProgress ? getCompletionProgress(session) : null;
 
                 return (
                   <button
                     key={session.id}
                     onClick={() => handleLoadSession(session)}
-                    className="w-full flex items-center gap-4 px-5 py-4 bg-white rounded-xl border border-[#E5E1D8] hover:border-[#0D7377]/30 hover:shadow-md transition-all text-left group"
+                    className="w-full flex flex-col bg-white rounded-xl border border-[#E5E1D8] hover:border-[#0D7377]/30 hover:shadow-md transition-all text-left group"
                   >
-                    {/* Avatar */}
-                    <div className="w-10 h-10 rounded-full bg-[#0D7377]/8 flex items-center justify-center flex-shrink-0">
-                      <User className="w-5 h-5 text-[#0D7377]" />
+                    <div className="flex items-center gap-4 px-5 py-4">
+                      {/* Avatar */}
+                      <div className="w-10 h-10 rounded-full bg-[#0D7377]/8 flex items-center justify-center flex-shrink-0">
+                        <User className="w-5 h-5 text-[#0D7377]" />
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <p className="text-sm font-semibold text-[#2C2825] truncate group-hover:text-[#0D7377] transition-colors">
+                            {session.childName || 'Unknown Child'}
+                          </p>
+                          <StatusBadge status={session.status} />
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-[#8B8B8B]">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            {session.testDate
+                              ? new Date(session.testDate).toLocaleDateString()
+                              : 'No date'}
+                          </span>
+                          <span>
+                            {session.formSummaries?.map((f) => f.formName).join(', ') || 'No forms'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Time, Resume, actions & arrow */}
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {/* Resume label for in-progress */}
+                        {isInProgress && (
+                          <span className="flex items-center gap-1 text-[11px] font-medium text-[#0D7377] bg-[#0D7377]/8 px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Play className="w-3 h-3" />
+                            Resume
+                          </span>
+                        )}
+                        <span className="text-[11px] text-[#BEBEBE] flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {formatRelativeTime(session.savedAt)}
+                        </span>
+                        <button
+                          onClick={(e) => handleDuplicate(e, session.id)}
+                          className="p-1.5 rounded-md text-[#D4D0C8] hover:text-[#0D7377] hover:bg-[#0D7377]/5 transition-colors opacity-0 group-hover:opacity-100"
+                          title="Duplicate assessment (new eval, same child)"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => handleDelete(e, session.id)}
+                          className="p-1.5 rounded-md text-[#D4D0C8] hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                          title="Delete assessment"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                        <ChevronRight className="w-4 h-4 text-[#D4D0C8] group-hover:text-[#0D7377] transition-colors" />
+                      </div>
                     </div>
 
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <p className="text-sm font-semibold text-[#2C2825] truncate group-hover:text-[#0D7377] transition-colors">
-                          {session.childName || 'Unknown Child'}
-                        </p>
-                        <StatusBadge status={session.status} />
+                    {/* Completion progress bar for in-progress */}
+                    {isInProgress && progress && progress.total > 0 && (
+                      <div className="px-5 pb-3 -mt-1">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-[#E5E1D8] rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-[#0D7377]/60 rounded-full transition-all duration-500"
+                              style={{ width: `${progress.percent}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-[#8B8B8B] whitespace-nowrap">
+                            {progress.scored}/{progress.total} items ({progress.percent}%)
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-[#8B8B8B]">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {session.testDate
-                            ? new Date(session.testDate).toLocaleDateString()
-                            : 'No date'}
-                        </span>
-                        <span>
-                          {session.formSummaries?.map((f) => f.formName).join(', ') || 'No forms'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Time, Resume, delete & arrow */}
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {/* Resume label for in-progress */}
-                      {isInProgress && (
-                        <span className="flex items-center gap-1 text-[11px] font-medium text-[#0D7377] bg-[#0D7377]/8 px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Play className="w-3 h-3" />
-                          Resume
-                        </span>
-                      )}
-                      <span className="text-[11px] text-[#BEBEBE] flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {formatRelativeTime(session.savedAt)}
-                      </span>
-                      <button
-                        onClick={(e) => handleDelete(e, session.id)}
-                        className="p-1.5 rounded-md text-[#D4D0C8] hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
-                        title="Delete assessment"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                      <ChevronRight className="w-4 h-4 text-[#D4D0C8] group-hover:text-[#0D7377] transition-colors" />
-                    </div>
+                    )}
                   </button>
                 );
               })}

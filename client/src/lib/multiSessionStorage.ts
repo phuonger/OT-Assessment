@@ -257,6 +257,77 @@ export function deleteMultiSession(sessionId: string): void {
   localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
 }
 
+export function duplicateMultiSession(sessionId: string): SavedMultiSession | null {
+  const sessions = getAllMultiSessions();
+  const original = sessions.find(s => s.id === sessionId);
+  if (!original) return null;
+
+  const duplicate: SavedMultiSession = {
+    ...JSON.parse(JSON.stringify(original)),
+    id: generateId(),
+    savedAt: new Date().toISOString(),
+    label: `${original.label || 'Assessment'} (Copy)`,
+    status: 'in-progress' as const,
+  };
+
+  // Reset scores in the snapshot so it's a fresh start with same child/examiner info
+  // but keep the form selections and domain selections intact
+  if (duplicate.stateSnapshot) {
+    for (const formState of Object.values(duplicate.stateSnapshot.formStates)) {
+      for (const domainState of Object.values(formState.domains)) {
+        // Clear all scores
+        for (const key of Object.keys(domainState.scores)) {
+          domainState.scores[Number(key)] = null;
+        }
+        // Clear notes
+        if (domainState.notes) {
+          for (const key of Object.keys(domainState.notes)) {
+            domainState.notes[Number(key)] = '';
+          }
+        }
+        // Reset timer
+        domainState.timerSeconds = 0;
+        // Reset discontinue
+        domainState.discontinued = false;
+        domainState.discontinuedAtItem = null;
+      }
+    }
+    duplicate.stateSnapshot.totalElapsedSeconds = 0;
+    duplicate.stateSnapshot.timerRunning = false;
+    duplicate.stateSnapshot.sessionStartTime = null;
+    // Update test date to today
+    duplicate.stateSnapshot.childInfo = {
+      ...duplicate.stateSnapshot.childInfo,
+      testDate: new Date().toISOString().split('T')[0],
+    };
+  }
+
+  // Update top-level fields to match
+  duplicate.testDate = duplicate.stateSnapshot?.childInfo?.testDate || original.testDate;
+  duplicate.totalElapsedSeconds = 0;
+  duplicate.formSummaries = duplicate.formSummaries.map(fs => ({
+    ...fs,
+    totalRawScore: 0,
+    domains: fs.domains.map(d => ({ ...d, rawScore: 0, itemsScored: 0, timerSeconds: 0 })),
+  }));
+
+  sessions.unshift(duplicate);
+
+  // Keep max 50 sessions
+  while (sessions.length > 50) sessions.pop();
+
+  try {
+    localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+  } catch {
+    while (sessions.length > 10) sessions.pop();
+    try {
+      localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+    } catch { /* give up */ }
+  }
+
+  return duplicate;
+}
+
 // ============================================================
 // Comparison
 // ============================================================
