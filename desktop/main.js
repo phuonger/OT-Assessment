@@ -7,32 +7,54 @@ let mainWindow;
 
 // ─── Auto-updater (only in packaged builds) ────────────────────────────
 let autoUpdater = null;
+let autoUpdaterError = null;
 try {
   if (app.isPackaged) {
     const { autoUpdater: au } = require('electron-updater');
     autoUpdater = au;
     autoUpdater.autoDownload = false; // Let user decide
     autoUpdater.autoInstallOnAppQuit = true;
+    // Enable logging for debugging
+    autoUpdater.logger = {
+      info: (...args) => console.log('[updater]', ...args),
+      warn: (...args) => console.warn('[updater]', ...args),
+      error: (...args) => console.error('[updater]', ...args),
+      debug: (...args) => console.log('[updater:debug]', ...args),
+    };
+    console.log('[updater] electron-updater loaded successfully');
+  } else {
+    console.log('[updater] Skipped — app is not packaged (dev mode)');
   }
 } catch (e) {
-  console.log('electron-updater not available:', e.message);
+  autoUpdaterError = e.message;
+  console.error('[updater] Failed to load electron-updater:', e.message);
 }
 
 function setupAutoUpdater() {
-  if (!autoUpdater || !mainWindow) return;
+  if (!autoUpdater || !mainWindow) {
+    console.log('[updater] setupAutoUpdater skipped:', !autoUpdater ? 'no updater' : 'no window');
+    return;
+  }
+
+  autoUpdater.on('checking-for-update', () => {
+    console.log('[updater] Checking for update...');
+  });
 
   autoUpdater.on('update-available', (info) => {
+    console.log('[updater] Update available:', info.version);
     mainWindow.webContents.send('update-available', {
       version: info.version,
       releaseDate: info.releaseDate,
+      releaseNotes: info.releaseNotes || '',
     });
   });
 
-  autoUpdater.on('update-not-available', () => {
-    // Silently ignore — no update needed
+  autoUpdater.on('update-not-available', (info) => {
+    console.log('[updater] No update available. Current:', app.getVersion(), 'Latest:', info?.version);
   });
 
   autoUpdater.on('download-progress', (progress) => {
+    console.log('[updater] Download progress:', Math.round(progress.percent) + '%');
     mainWindow.webContents.send('download-progress', {
       percent: progress.percent,
       transferred: progress.transferred,
@@ -41,19 +63,32 @@ function setupAutoUpdater() {
   });
 
   autoUpdater.on('update-downloaded', (info) => {
+    console.log('[updater] Update downloaded:', info.version);
     mainWindow.webContents.send('update-downloaded', {
       version: info.version,
     });
   });
 
   autoUpdater.on('error', (err) => {
+    console.error('[updater] Error:', err.message);
     mainWindow.webContents.send('update-error', err.message);
   });
 
   // Check for updates after a short delay
   setTimeout(() => {
-    autoUpdater.checkForUpdates().catch(() => {});
+    console.log('[updater] Auto-checking for updates...');
+    autoUpdater.checkForUpdates().catch((err) => {
+      console.error('[updater] Auto-check failed:', err.message);
+    });
   }, 5000);
+
+  // Also check periodically (every 30 minutes)
+  setInterval(() => {
+    console.log('[updater] Periodic update check...');
+    autoUpdater.checkForUpdates().catch((err) => {
+      console.error('[updater] Periodic check failed:', err.message);
+    });
+  }, 30 * 60 * 1000);
 }
 
 // ─── IPC Handlers ──────────────────────────────────────────────────────
@@ -323,7 +358,10 @@ function createWindow() {
               dialog.showMessageBox(mainWindow, {
                 type: 'info',
                 title: 'Updates',
-                message: 'Auto-update is not available in development mode.',
+                message: 'Auto-update is not available.',
+                detail: autoUpdaterError
+                  ? `Error loading updater: ${autoUpdaterError}`
+                  : 'Auto-update is only available in the packaged application.',
               });
             }
           },
@@ -355,7 +393,18 @@ function createWindow() {
           label: 'Check for Updates…',
           click: () => {
             if (autoUpdater) {
-              autoUpdater.checkForUpdates().catch(() => {});
+              autoUpdater.checkForUpdates().catch((err) => {
+                console.error('[updater] macOS menu check failed:', err.message);
+              });
+            } else {
+              dialog.showMessageBox(mainWindow, {
+                type: 'info',
+                title: 'Updates',
+                message: 'Auto-update is not available.',
+                detail: autoUpdaterError
+                  ? `Error loading updater: ${autoUpdaterError}`
+                  : 'Auto-update is only available in the packaged application.',
+              });
             }
           },
         },

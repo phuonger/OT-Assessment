@@ -1,6 +1,6 @@
 {
   "name": "developmental-assessment-suite",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Standalone developmental assessment tool supporting Bayley-4, DAYC-2, REEL-3, and Sensory Profile 2",
   "main": "main.js",
   "author": "OT Assessment Tools",
@@ -37,7 +37,16 @@
       "node_modules/tiny-typed-emitter/**/*",
       "node_modules/js-yaml/**/*",
       "node_modules/argparse/**/*",
-      "node_modules/sax/**/*"
+      "node_modules/sax/**/*",
+      "node_modules/fs-extra/**/*",
+      "node_modules/graceful-fs/**/*",
+      "node_modules/jsonfile/**/*",
+      "node_modules/universalify/**/*",
+      "node_modules/at-least-node/**/*",
+      "node_modules/lodash.escaperegexp/**/*",
+      "node_modules/lodash.isequal/**/*",
+      "node_modules/debug/**/*",
+      "node_modules/ms/**/*"
     ],
     "publish": {
       "provider": "github",
