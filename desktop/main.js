@@ -393,9 +393,40 @@ function createWindow() {
           label: 'Check for Updates…',
           click: () => {
             if (autoUpdater) {
-              autoUpdater.checkForUpdates().catch((err) => {
-                console.error('[updater] macOS menu check failed:', err.message);
+              dialog.showMessageBox(mainWindow, {
+                type: 'info',
+                title: 'Checking for Updates',
+                message: 'Checking for updates…',
+                detail: 'Please wait while we check for the latest version.',
+                buttons: ['OK'],
               });
+              autoUpdater
+                .checkForUpdates()
+                .then((result) => {
+                  if (result && result.updateInfo && result.updateInfo.version !== app.getVersion()) {
+                    dialog.showMessageBox(mainWindow, {
+                      type: 'info',
+                      title: 'Update Available',
+                      message: `Version ${result.updateInfo.version} is available.`,
+                      detail: 'The update notification will appear in the app. You can download it from there.',
+                      buttons: ['OK'],
+                    });
+                  } else {
+                    dialog.showMessageBox(mainWindow, {
+                      type: 'info',
+                      title: 'No Updates',
+                      message: 'You are running the latest version.',
+                    });
+                  }
+                })
+                .catch((err) => {
+                  console.error('[updater] macOS menu check failed:', err.message);
+                  dialog.showMessageBox(mainWindow, {
+                    type: 'info',
+                    title: 'Update Check',
+                    message: 'Unable to check for updates. Please try again later.',
+                  });
+                });
             } else {
               dialog.showMessageBox(mainWindow, {
                 type: 'info',
