@@ -1,0 +1,3 @@
+cd OT-Assessment
+git pull origin main
+mkdir -p .github/workflows
