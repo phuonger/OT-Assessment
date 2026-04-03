@@ -54,3 +54,10 @@
 - [ ] 5. Add undo logic: when a score change breaks the consecutive chain, clear discontinued state and remove auto-scored trailing 0s
 - [ ] 6. Update UnifiedScoringItem to allow editing items at/before the discontinue point (not locked)
 - [ ] 7. Update UnifiedAssessmentPanel discontinued banner to show appropriate message and undo button
+
+## OT Feeding Evaluation Report Feature
+- [ ] Read existing report architecture (ClinicalReportEditor, generateDocx, App.tsx routes)
+- [ ] Create OTFeedingEvaluation.tsx editor component with all sections
+- [ ] Add route and navigation entry point from assessment completion
+- [ ] Create generateOTFeedingDocx function matching template format
+- [ ] Test and checkpoint

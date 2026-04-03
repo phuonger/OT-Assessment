@@ -29,7 +29,7 @@ import { saveAs } from 'file-saver';
 // Types
 // ============================================================
 
-export type ReportTemplate = 'developmental' | 'sensory';
+export type ReportTemplate = 'developmental' | 'sensory' | 'feeding';
 
 export interface BayleyScoreRow {
   domain: string;
@@ -154,6 +154,26 @@ export interface DocxReportData {
   sp2Sections: SP2SectionScore[];
   quadrantNarratives: Record<string, string>;
   sectionNarratives: Record<string, string>;
+
+  // Feeding template
+  feedingTestingConditions?: string;
+  feedingOralStructures?: string;
+  feedingBehaviors?: string;
+  feedingOralMotorCoord?: string;
+  feedingFoodRepertoire?: string;
+  feedingSelfFeeding?: string;
+  feedingPreviousHistory?: string;
+  feedingDrinking?: string;
+  feedingVestibular?: string;
+  feedingProprioceptive?: string;
+  feedingTactile?: string;
+  feedingROM?: string;
+  feedingMuscleStrength?: string;
+  feedingMuscleTone?: string;
+  feedingPosturalStability?: string;
+  feedingSummary?: string;
+  feedingAdaptiveItemsDemonstrated?: string[];
+  feedingAdaptiveItemsNotDemonstrated?: string[];
 }
 
 // ============================================================
@@ -1105,7 +1125,318 @@ export async function generateDocxReport(data: DocxReportData): Promise<void> {
     children.push(bodyParagraph(data.recommendations));
   }
 
-  // ===== CLOSING (both templates) =====
+  // ============================================================
+  // TEMPLATE: OT FEEDING EVALUATION
+  // ============================================================
+  if (data.template === 'feeding') {
+    // I. Referral Information
+    children.push(heading('Referral Information', 'I'));
+    children.push(bodyParagraph(data.referralInfo));
+
+    // II. Birth/Medical History
+    children.push(heading('Birth/Medical History', 'II'));
+    children.push(bodyParagraph(data.medicalHistory));
+
+    // III. Testing Conditions and Behavior During Evaluation
+    children.push(heading('Testing Conditions and Behavior During Evaluation', 'III'));
+    children.push(bodyParagraph(data.feedingTestingConditions || ''));
+
+    // IV. Assessment Tools
+    children.push(heading('Assessment Tools', 'IV'));
+    children.push(bulletItem('Clinical Observations'));
+    children.push(bulletItem('Parent Interview'));
+    children.push(bulletItem('Oral Motor Assessment'));
+    for (const tool of data.assessmentTools.filter(t => !['Clinical Observation', 'Parent/Caregiver Interview'].includes(t))) {
+      children.push(bulletItem(tool));
+    }
+
+    // DAYC-2 description if applicable
+    const hasDayc2 = data.dayc2Scores.length > 0;
+    const hasBayley = data.bayleyScores.length > 0;
+    if (hasDayc2) {
+      children.push(
+        new Paragraph({
+          spacing: { before: 100, after: 100 },
+          children: [
+            new TextRun({
+              text: 'Developmental Assessment of Young Children-Second Edition (DAYC-2): ',
+              bold: true,
+              font: FONT,
+              size: SMALL_SIZE,
+            }),
+            new TextRun({
+              text: 'The DAYC-2 is a battery of five subtests that measures different but interrelated developmental abilities (cognitive, communication, social-emotional development, physical development, and adaptive behavior). This battery is designed for children from birth to 5 years, 11 months. For the purpose of this evaluation, the adaptive domain was utilized.',
+              font: FONT,
+              size: SMALL_SIZE,
+            }),
+          ],
+        })
+      );
+    }
+    if (hasBayley) {
+      children.push(
+        new Paragraph({
+          spacing: { before: 100, after: 100 },
+          children: [
+            new TextRun({
+              text: 'Bayley Scales of Infant and Toddler Development, Fourth Edition (Bayley-4): ',
+              bold: true,
+              font: FONT,
+              size: SMALL_SIZE,
+            }),
+            new TextRun({
+              text: 'The Bayley-4 is a comprehensive developmental assessment for children ages 1-42 months. For the purpose of this evaluation, the adaptive behavior domain was utilized.',
+              font: FONT,
+              size: SMALL_SIZE,
+            }),
+          ],
+        })
+      );
+    }
+
+    // V. Testing Results
+    children.push(heading('Testing Results', 'V'));
+
+    // Show only adaptive behavior scores from DAYC-2
+    const adaptiveDayc2 = data.dayc2Scores.filter(r => r.domain.toLowerCase().includes('adaptive'));
+    if (adaptiveDayc2.length > 0) {
+      const isBayley4AB = adaptiveDayc2[0]?.scoringMethod === 'bayley4ab';
+      children.push(
+        new Paragraph({
+          spacing: { before: 100, after: 60 },
+          children: [
+            new TextRun({
+              text: isBayley4AB ? 'DAYC-2 (BAYLEY-4 ADAPTIVE BEHAVIOR SCORING)' : 'DAYC-2',
+              bold: true,
+              font: FONT,
+              size: SMALL_SIZE,
+            }),
+          ],
+        })
+      );
+
+      const scoreHeaders = ['Domain', 'Raw Score', isBayley4AB ? 'Scaled Score' : 'Standard Score', 'Descriptive Term', 'Age Equivalency', '% Delay'];
+      const headerRow = new TableRow({
+        children: scoreHeaders.map(h =>
+          tableCell(h, { bold: true, shading: 'E8E8E8', alignment: h === 'Domain' ? AlignmentType.LEFT : AlignmentType.CENTER })
+        ),
+      });
+      const dataRows = adaptiveDayc2.map(row =>
+        new TableRow({
+          children: [
+            tableCell(row.domain),
+            tableCell(String(row.rawScore), { alignment: AlignmentType.CENTER }),
+            tableCell(row.standardScore, { alignment: AlignmentType.CENTER }),
+            tableCell(row.descriptiveTerm, { alignment: AlignmentType.CENTER }),
+            tableCell(row.ageEquivalent, { alignment: AlignmentType.CENTER }),
+            tableCell(row.percentDelay, { alignment: AlignmentType.CENTER }),
+          ],
+        })
+      );
+      children.push(
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [headerRow, ...dataRows],
+        })
+      );
+    }
+
+    // Show Bayley-4 adaptive scores if available
+    const adaptiveBayley = data.bayleyScores.filter(r => r.domain.toLowerCase().includes('adaptive') || r.domain.toLowerCase().includes('self-direction') || r.domain.toLowerCase().includes('personal'));
+    if (adaptiveBayley.length > 0) {
+      children.push(
+        new Paragraph({
+          spacing: { before: 200, after: 60 },
+          children: [
+            new TextRun({ text: 'BAYLEY-4', bold: true, font: FONT, size: SMALL_SIZE }),
+          ],
+        })
+      );
+      const bHeaders = ['Domain', 'Raw Score', 'Scaled Score', 'Age Equivalent', '% Delay'];
+      const bHeaderRow = new TableRow({
+        children: bHeaders.map(h =>
+          tableCell(h, { bold: true, shading: 'E8E8E8', alignment: h === 'Domain' ? AlignmentType.LEFT : AlignmentType.CENTER })
+        ),
+      });
+      const bDataRows = adaptiveBayley.map(row =>
+        new TableRow({
+          children: [
+            tableCell(row.domain),
+            tableCell(String(row.rawScore), { alignment: AlignmentType.CENTER }),
+            tableCell(row.scaledScore != null ? String(row.scaledScore) : '\u2014', { alignment: AlignmentType.CENTER }),
+            tableCell(row.ageEquivalent, { alignment: AlignmentType.CENTER }),
+            tableCell(row.percentDelay, { alignment: AlignmentType.CENTER }),
+          ],
+        })
+      );
+      children.push(
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [bHeaderRow, ...bDataRows],
+        })
+      );
+    }
+
+    // Adaptive Behavior Skills
+    children.push(
+      new Paragraph({
+        spacing: { before: 300, after: 100 },
+        children: [
+          new TextRun({ text: 'ADAPTIVE BEHAVIOR SKILLS:', bold: true, font: FONT, size: HEADING_SIZE }),
+        ],
+      })
+    );
+
+    if (data.feedingAdaptiveItemsDemonstrated && data.feedingAdaptiveItemsDemonstrated.length > 0) {
+      children.push(
+        bodyParagraph(
+          `${data.firstName} demonstrated the following skills: ${data.feedingAdaptiveItemsDemonstrated.map(s => s.toLowerCase()).join('; ')}.`
+        )
+      );
+    }
+    if (data.feedingAdaptiveItemsNotDemonstrated && data.feedingAdaptiveItemsNotDemonstrated.length > 0) {
+      children.push(
+        bodyParagraph(
+          `${data.firstName} did not demonstrate the following: ${data.feedingAdaptiveItemsNotDemonstrated.map(s => s.toLowerCase()).join('; ')}.`
+        )
+      );
+    }
+
+    // Previous Feeding History
+    if (data.feedingPreviousHistory) {
+      children.push(heading('Previous Feeding History'));
+      children.push(bodyParagraph(data.feedingPreviousHistory));
+    }
+
+    // VI. Feeding/Oral Motor Skills
+    children.push(heading('Feeding/Oral Motor Skills', 'VI'));
+
+    // a. Oral Structures
+    children.push(
+      new Paragraph({
+        spacing: { before: 200, after: 60 },
+        children: [new TextRun({ text: 'a. Oral Structures', bold: true, font: FONT, size: FONT_SIZE })],
+      })
+    );
+    children.push(bodyParagraph(data.feedingOralStructures || ''));
+
+    // b. Feeding Behaviors
+    children.push(
+      new Paragraph({
+        spacing: { before: 200, after: 60 },
+        children: [new TextRun({ text: 'b. Feeding Behaviors', bold: true, font: FONT, size: FONT_SIZE })],
+      })
+    );
+    children.push(bodyParagraph(data.feedingBehaviors || ''));
+
+    // c. Oral Motor Coordination
+    children.push(
+      new Paragraph({
+        spacing: { before: 200, after: 60 },
+        children: [new TextRun({ text: 'c. Oral Motor Coordination', bold: true, font: FONT, size: FONT_SIZE })],
+      })
+    );
+    children.push(bodyParagraph(data.feedingOralMotorCoord || ''));
+
+    // d. Food Repertoire
+    children.push(
+      new Paragraph({
+        spacing: { before: 200, after: 60 },
+        children: [new TextRun({ text: 'd. Food Repertoire', bold: true, font: FONT, size: FONT_SIZE })],
+      })
+    );
+    children.push(bodyParagraph(data.feedingFoodRepertoire || ''));
+
+    // e. Self-Feeding Skills
+    children.push(
+      new Paragraph({
+        spacing: { before: 200, after: 60 },
+        children: [new TextRun({ text: 'e. Self-Feeding Skills', bold: true, font: FONT, size: FONT_SIZE })],
+      })
+    );
+    children.push(bodyParagraph(data.feedingSelfFeeding || ''));
+
+    // Drinking
+    if (data.feedingDrinking) {
+      children.push(heading('Drinking'));
+      children.push(bodyParagraph(data.feedingDrinking));
+    }
+
+    // VII. Sensory Processing
+    children.push(heading('Sensory Processing', 'VII'));
+
+    // a. Vestibular
+    children.push(
+      new Paragraph({
+        spacing: { before: 200, after: 60 },
+        children: [new TextRun({ text: 'a. Vestibular Processing and Modulation', bold: true, font: FONT, size: FONT_SIZE })],
+      })
+    );
+    children.push(
+      bodyParagraph(
+        'The vestibular system is located in the inner ear and has the primary function of giving the brain information about head position and movement in relation to gravity. It is responsible in part for head stability, muscle tone, postural control, balance and equilibrium reaction and the development of eye-hand coordination and bilateral integration.',
+        { italic: true }
+      )
+    );
+    children.push(bodyParagraph(data.feedingVestibular || ''));
+
+    // b. Proprioceptive
+    children.push(
+      new Paragraph({
+        spacing: { before: 200, after: 60 },
+        children: [new TextRun({ text: 'b. Proprioceptive Processing and Modulation', bold: true, font: FONT, size: FONT_SIZE })],
+      })
+    );
+    children.push(
+      bodyParagraph(
+        'The proprioceptive system is a system of receptors found in the joints and muscle tissues that gives an internal awareness of limb and body position, position relative to the environment, information about joint and muscle movement, as well as the force and speed at which the muscles are moving.',
+        { italic: true }
+      )
+    );
+    children.push(bodyParagraph(data.feedingProprioceptive || ''));
+
+    // c. Tactile
+    children.push(
+      new Paragraph({
+        spacing: { before: 200, after: 60 },
+        children: [new TextRun({ text: 'c. Tactile Processing and Modulation', bold: true, font: FONT, size: FONT_SIZE })],
+      })
+    );
+    children.push(
+      bodyParagraph(
+        'The sense of touch. The tactile system is involved with the identification and localization of touch and the discrimination of shapes, sizes, and textures of materials.',
+        { italic: true }
+      )
+    );
+    children.push(bodyParagraph(data.feedingTactile || ''));
+
+    // VIII. Neuromuscular / Musculoskeletal
+    children.push(heading('Neuromuscular / Musculoskeletal', 'VIII'));
+
+    const neuroItems = [
+      { label: 'Range of Motion', value: data.feedingROM || 'Within Functional Limits' },
+      { label: 'Muscle Strength Based on Clinical Observation During Play', value: data.feedingMuscleStrength || 'Within Functional Limits' },
+      { label: 'Muscle Tone', value: data.feedingMuscleTone || '' },
+      { label: 'Postural Stability', value: data.feedingPosturalStability || '' },
+    ];
+    for (const item of neuroItems) {
+      children.push(
+        new Paragraph({
+          spacing: { before: 80, after: 80 },
+          children: [
+            new TextRun({ text: `${item.label}: `, bold: true, font: FONT, size: FONT_SIZE }),
+            new TextRun({ text: item.value, font: FONT, size: FONT_SIZE }),
+          ],
+        })
+      );
+    }
+
+    // IX. Summary
+    children.push(heading('Summary', 'IX'));
+    children.push(bodyParagraph(data.feedingSummary || ''));
+  }
+
+  // ===== CLOSING (all templates) =====
   children.push(
     new Paragraph({
       border: { top: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC', space: 8 } },
@@ -1187,6 +1518,7 @@ export async function generateDocxReport(data: DocxReportData): Promise<void> {
 
   // ===== GENERATE AND DOWNLOAD =====
   const blob = await Packer.toBlob(doc);
-  const fileName = `${data.childName.replace(/\s+/g, '_')}_${data.template === 'developmental' ? 'OT_Dev_Intake' : 'OT_SI_Assessment'}_${data.testDate.replace(/\//g, '-')}.docx`;
+  const templateName = data.template === 'developmental' ? 'OT_Dev_Intake' : data.template === 'feeding' ? 'OT_Feeding_Eval' : 'OT_SI_Assessment';
+  const fileName = `${data.childName.replace(/\s+/g, '_')}_${templateName}_${data.testDate.replace(/\//g, '-')}.docx`;
   saveAs(blob, fileName);
 }

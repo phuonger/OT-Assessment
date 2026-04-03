@@ -34,7 +34,7 @@ import { parseLocalDate, formatDateLocal, calculateAge } from '@/lib/dateUtils';
 // Types & Constants
 // ============================================================
 
-type ReportTemplate = 'developmental' | 'sensory';
+type ReportTemplate = 'developmental' | 'sensory' | 'feeding';
 
 const REPORT_STORAGE_KEY = 'bayley4-clinical-report';
 
@@ -48,6 +48,11 @@ const TEMPLATE_INFO: Record<ReportTemplate, { label: string; title: string; desc
     label: 'OT SI Assessment',
     title: 'Occupational Therapy Sensory Integration Assessment',
     description: 'Focuses on Sensory Profile 2 quadrant and section scores with detailed sensory processing narratives.',
+  },
+  feeding: {
+    label: 'OT Feeding Evaluation',
+    title: 'Occupational Therapy Feeding Evaluation',
+    description: 'Feeding-focused evaluation using DAYC-2 or Bayley-4 Adaptive scores with oral motor, sensory, and neuromuscular sections.',
   },
 };
 
@@ -122,6 +127,23 @@ interface SavedReportState {
   siSummary: string;
   childKey: string;
   savedAt: string;
+  // Feeding-specific
+  feedingTestingConditions?: string;
+  feedingOralStructures?: string;
+  feedingBehaviors?: string;
+  feedingOralMotorCoord?: string;
+  feedingFoodRepertoire?: string;
+  feedingSelfFeeding?: string;
+  feedingPreviousHistory?: string;
+  feedingDrinking?: string;
+  feedingVestibular?: string;
+  feedingProprioceptive?: string;
+  feedingTactile?: string;
+  feedingROM?: string;
+  feedingMuscleStrength?: string;
+  feedingMuscleTone?: string;
+  feedingPosturalStability?: string;
+  feedingSummary?: string;
 }
 
 function getChildKey(childInfo: ChildInfo): string {
@@ -597,6 +619,38 @@ export default function ClinicalReportEditor() {
   const [sectionNarratives, setSectionNarratives] = useState<Record<string, string>>(() => savedReport?.sectionNarratives ?? {});
   const [siSummary, setSiSummary] = useState(() => savedReport?.siSummary ?? '');
 
+  // Feeding-specific editable sections
+  const [feedingTestingConditions, setFeedingTestingConditions] = useState(() =>
+    savedReport?.feedingTestingConditions ?? ''
+  );
+  const [feedingOralStructures, setFeedingOralStructures] = useState(() =>
+    savedReport?.feedingOralStructures ??
+    `${childName}'s facial structures are symmetrical. ${Pronoun(gender, 'possessive')} oral structures appear to be healthy and grossly intact as observed while ${pronoun(gender, 'subject')} was engaging in feeding.`
+  );
+  const [feedingBehaviors, setFeedingBehaviors] = useState(() => savedReport?.feedingBehaviors ?? '');
+  const [feedingOralMotorCoord, setFeedingOralMotorCoord] = useState(() => savedReport?.feedingOralMotorCoord ?? '');
+  const [feedingFoodRepertoire, setFeedingFoodRepertoire] = useState(() => savedReport?.feedingFoodRepertoire ?? '');
+  const [feedingSelfFeeding, setFeedingSelfFeeding] = useState(() => savedReport?.feedingSelfFeeding ?? '');
+  const [feedingPreviousHistory, setFeedingPreviousHistory] = useState(() => savedReport?.feedingPreviousHistory ?? '');
+  const [feedingDrinking, setFeedingDrinking] = useState(() => savedReport?.feedingDrinking ?? '');
+  const [feedingVestibular, setFeedingVestibular] = useState(() =>
+    savedReport?.feedingVestibular ??
+    `The vestibular system is located in the inner ear and has the primary function of giving the brain information about head position and movement in relation to gravity. Information received from this sensory system interacts with other sensory systems to give children their perception of space and position as well as orientation within that space. It is responsible in part for head stability, muscle tone, postural control, balance and equilibrium reaction and the development of eye-hand coordination and bilateral integration. It also has influence over arousal level, which affects the ability to learn and initiate tasks.\n\n${childName} demonstrated overall adequate trunk control when navigating ${pronoun(gender, 'possessive')} environment.`
+  );
+  const [feedingProprioceptive, setFeedingProprioceptive] = useState(() =>
+    savedReport?.feedingProprioceptive ??
+    `The proprioceptive system is a system of receptors found in the joints and muscle tissues that gives an internal awareness of limb and body position, position relative to the environment, information about joint and muscle movement, as well as the force and speed at which the muscles are moving.\n\n${childName} demonstrates adequate proprioceptive processing at this time.`
+  );
+  const [feedingTactile, setFeedingTactile] = useState(() =>
+    savedReport?.feedingTactile ??
+    `The sense of touch. The tactile system is involved with the identification and localization of touch and the discrimination of shapes, sizes, and textures of materials.\n\n${childName} appears to tolerate a variety of textures at this time.`
+  );
+  const [feedingROM, setFeedingROM] = useState(() => savedReport?.feedingROM ?? 'Within Functional Limits');
+  const [feedingMuscleStrength, setFeedingMuscleStrength] = useState(() => savedReport?.feedingMuscleStrength ?? 'Within Functional Limits');
+  const [feedingMuscleTone, setFeedingMuscleTone] = useState(() => savedReport?.feedingMuscleTone ?? 'Within Functional Limits');
+  const [feedingPosturalStability, setFeedingPosturalStability] = useState(() => savedReport?.feedingPosturalStability ?? 'Within Functional Limits');
+  const [feedingSummary, setFeedingSummary] = useState(() => savedReport?.feedingSummary ?? '');
+
   // Save state
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(savedReport?.savedAt ?? null);
   const [isDirty, setIsDirty] = useState(false);
@@ -608,6 +662,10 @@ export default function ClinicalReportEditor() {
       feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName,
       reportTitle, domainOverrides, scoreOverrides, testingConditions, validityStatement,
       quadrantNarratives, sectionNarratives, siSummary, childKey,
+      feedingTestingConditions, feedingOralStructures, feedingBehaviors, feedingOralMotorCoord,
+      feedingFoodRepertoire, feedingSelfFeeding, feedingPreviousHistory, feedingDrinking,
+      feedingVestibular, feedingProprioceptive, feedingTactile, feedingROM,
+      feedingMuscleStrength, feedingMuscleTone, feedingPosturalStability, feedingSummary,
       savedAt: new Date().toISOString(),
     };
     try {
@@ -615,9 +673,9 @@ export default function ClinicalReportEditor() {
       setLastSavedAt(reportState.savedAt);
       setIsDirty(false);
     } catch { /* localStorage full */ }
-  }, [template, referralInfo, medicalHistory, parentConcerns, clinicalObservation, feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName, reportTitle, domainOverrides, scoreOverrides, testingConditions, validityStatement, quadrantNarratives, sectionNarratives, siSummary, childKey]);
+  }, [template, referralInfo, medicalHistory, parentConcerns, clinicalObservation, feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName, reportTitle, domainOverrides, scoreOverrides, testingConditions, validityStatement, quadrantNarratives, sectionNarratives, siSummary, childKey, feedingTestingConditions, feedingOralStructures, feedingBehaviors, feedingOralMotorCoord, feedingFoodRepertoire, feedingSelfFeeding, feedingPreviousHistory, feedingDrinking, feedingVestibular, feedingProprioceptive, feedingTactile, feedingROM, feedingMuscleStrength, feedingMuscleTone, feedingPosturalStability, feedingSummary]);
 
-  useEffect(() => { setIsDirty(true); }, [template, referralInfo, medicalHistory, parentConcerns, clinicalObservation, feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName, reportTitle, domainOverrides, scoreOverrides, testingConditions, validityStatement, quadrantNarratives, sectionNarratives, siSummary]);
+  useEffect(() => { setIsDirty(true); }, [template, referralInfo, medicalHistory, parentConcerns, clinicalObservation, feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName, reportTitle, domainOverrides, scoreOverrides, testingConditions, validityStatement, quadrantNarratives, sectionNarratives, siSummary, feedingTestingConditions, feedingOralStructures, feedingBehaviors, feedingOralMotorCoord, feedingFoodRepertoire, feedingSelfFeeding, feedingPreviousHistory, feedingDrinking, feedingVestibular, feedingProprioceptive, feedingTactile, feedingROM, feedingMuscleStrength, feedingMuscleTone, feedingPosturalStability, feedingSummary]);
 
   useEffect(() => {
     if (!isDirty) return;
@@ -1024,6 +1082,58 @@ export default function ClinicalReportEditor() {
     return tools;
   }, [formSelections]);
 
+  // Feeding: Adaptive behavior items demonstrated / not demonstrated
+  const feedingAdaptiveItems = useMemo(() => {
+    const demonstrated: string[] = [];
+    const notDemonstrated: string[] = [];
+
+    // Try DAYC-2 adaptive domain first
+    const dayc2Fs = formSelections.find(f => f.formId === 'dayc2' || f.formId === 'dayc2sp');
+    if (dayc2Fs && dayc2Fs.selectedDomainIds.includes('adaptivebahavior')) {
+      const formState = formStates[dayc2Fs.formId];
+      const form = getFormById(dayc2Fs.formId);
+      if (formState && form) {
+        const adaptiveDomain = form.domains.find(d => d.localId === 'adaptivebahavior');
+        const ds = formState.domains['adaptivebahavior'];
+        if (adaptiveDomain && ds) {
+          for (const item of adaptiveDomain.items) {
+            const score = ds.scores[item.number];
+            if (score === 1) demonstrated.push(item.description);
+            else if (score === 0) notDemonstrated.push(item.description);
+          }
+        }
+      }
+    }
+
+    // Try Bayley-4 adaptive domain if no DAYC-2
+    if (demonstrated.length === 0 && notDemonstrated.length === 0) {
+      const bayleyFs = formSelections.find(f => f.formId === 'bayley4');
+      if (bayleyFs) {
+        // Check for adaptive-related domains in Bayley-4
+        const formState = formStates['bayley4'];
+        const form = getFormById('bayley4');
+        if (formState && form) {
+          for (const domainId of bayleyFs.selectedDomainIds) {
+            const domain = form.domains.find(d => d.localId === domainId);
+            if (!domain) continue;
+            // Only include adaptive-related domains
+            const name = domain.name.toLowerCase();
+            if (!name.includes('adaptive') && !name.includes('self-care') && !name.includes('daily')) continue;
+            const ds = formState.domains[domainId];
+            if (!ds) continue;
+            for (const item of domain.items) {
+              const score = ds.scores[item.number];
+              if (score && score > 0) demonstrated.push(item.description);
+              else if (score === 0) notDemonstrated.push(item.description);
+            }
+          }
+        }
+      }
+    }
+
+    return { demonstrated, notDemonstrated };
+  }, [formSelections, formStates]);
+
   // Ref for PDF capture
   const reportContentRef = useRef<HTMLDivElement>(null);
 
@@ -1172,6 +1282,26 @@ export default function ClinicalReportEditor() {
         sp2Sections: sp2Scores.sections,
         quadrantNarratives,
         sectionNarratives,
+
+        // Feeding template
+        feedingTestingConditions,
+        feedingOralStructures,
+        feedingBehaviors,
+        feedingOralMotorCoord,
+        feedingFoodRepertoire,
+        feedingSelfFeeding,
+        feedingPreviousHistory,
+        feedingDrinking,
+        feedingVestibular,
+        feedingProprioceptive,
+        feedingTactile,
+        feedingROM,
+        feedingMuscleStrength,
+        feedingMuscleTone,
+        feedingPosturalStability,
+        feedingSummary,
+        feedingAdaptiveItemsDemonstrated: feedingAdaptiveItems.demonstrated,
+        feedingAdaptiveItemsNotDemonstrated: feedingAdaptiveItems.notDemonstrated,
       };
 
       await generateDocxReport(data);
@@ -1187,6 +1317,10 @@ export default function ClinicalReportEditor() {
     bayleyMotorComposite, dayc2Scores, reel3Scores, domainNarratives, domainOverrides,
     gender, feedingOralMotor, sensoryNarrative, summaryOfDevelopment, testingConditions,
     validityStatement, sp2Scores, quadrantNarratives, sectionNarratives, scoreOverrides,
+    feedingTestingConditions, feedingOralStructures, feedingBehaviors, feedingOralMotorCoord,
+    feedingFoodRepertoire, feedingSelfFeeding, feedingPreviousHistory, feedingDrinking,
+    feedingVestibular, feedingProprioceptive, feedingTactile, feedingROM,
+    feedingMuscleStrength, feedingMuscleTone, feedingPosturalStability, feedingSummary,
   ]);
 
   // Switch template
@@ -2011,6 +2145,264 @@ export default function ClinicalReportEditor() {
                       </div>
                     )}
                     <EditableSection label="" value={recommendations} onChange={setRecommendations} placeholder="Enter summary and recommendations..." rows={10} />
+                  </>
+                )}
+              </>
+            )}
+
+            {/* ============================================================ */}
+            {/* TEMPLATE: OT FEEDING EVALUATION                              */}
+            {/* ============================================================ */}
+            {template === 'feeding' && (
+              <>
+                <SectionHeader title="Referral Information" sectionKey="fd_referral" collapsed={collapsedSections} toggle={toggleSection} number="I" />
+                {!collapsedSections.fd_referral && (
+                  <EditableSection label="" value={referralInfo} onChange={setReferralInfo} placeholder={`${firstName} was referred to the regional center due to concerns regarding ${pronoun(gender, 'possessive')} overall development. A developmental assessment is being completed to obtain present levels of performance and to determine eligibility for early intervention services.`} rows={4} />
+                )}
+
+                <SectionHeader title="Birth/Medical History" sectionKey="fd_medical" collapsed={collapsedSections} toggle={toggleSection} number="II" />
+                {!collapsedSections.fd_medical && (
+                  <EditableSection label="" value={medicalHistory} onChange={setMedicalHistory} placeholder={`${firstName} was born full term via vaginal delivery at [Hospital], in [City], CA.\n\nFamily History: None reported.\nMedical History/Hospitalizations: \nMedications: N/A\nAllergies: None reported.\nMedical/Adaptive Equipment: N/A\nVision: There are no concerns reported at this time.\nHearing: Passed newborn hearing test`} rows={10} />
+                )}
+
+                <SectionHeader title="Testing Conditions and Behavior During Evaluation" sectionKey="fd_testing" collapsed={collapsedSections} toggle={toggleSection} number="III" />
+                {!collapsedSections.fd_testing && (
+                  <EditableSection label="" value={feedingTestingConditions} onChange={setFeedingTestingConditions} placeholder={`${firstName} was seen at home with ${pronoun(gender, 'possessive')} caregiver present during the evaluation. ${Pronoun(gender, 'subject')} transitioned easily to a high chair for the meal. Behavior and performance observed during the assessment is reported to be typical. Therefore, this assessment is believed to be valid and reliable in regard to present levels of function in all areas.`} rows={6} />
+                )}
+
+                <SectionHeader title="Assessment Tools" sectionKey="fd_tools" collapsed={collapsedSections} toggle={toggleSection} number="IV" />
+                {!collapsedSections.fd_tools && (
+                  <div className="mb-4">
+                    <ul className="list-disc list-inside text-sm font-serif text-slate-800 space-y-1 ml-4 mb-3">
+                      <li>Clinical Observations</li>
+                      <li>Parent Interview</li>
+                      <li>Oral Motor Assessment</li>
+                      {assessmentTools.filter(t => !['Clinical Observation', 'Parent/Caregiver Interview'].includes(t)).map((tool, i) => <li key={i}>{tool}</li>)}
+                    </ul>
+                    {formSelections.some(f => f.formId === 'dayc2' || f.formId === 'dayc2sp') && (
+                      <div className="bg-slate-50 border border-slate-200 rounded-md p-3 text-xs font-serif text-slate-700 leading-relaxed">
+                        <p><strong>Developmental Assessment of Young Children-Second Edition (DAYC-2):</strong> The DAYC-2 is a battery of five subtests that measures different but interrelated developmental abilities (cognitive, communication, social-emotional development, physical development, and adaptive behavior). This battery is designed for children from birth to 5 years, 11 months. For the purpose of this evaluation, the adaptive domain was utilized.</p>
+                      </div>
+                    )}
+                    {formSelections.some(f => f.formId === 'bayley4') && (
+                      <div className="bg-slate-50 border border-slate-200 rounded-md p-3 text-xs font-serif text-slate-700 leading-relaxed mt-2">
+                        <p><strong>Bayley Scales of Infant and Toddler Development, Fourth Edition (Bayley-4):</strong> The Bayley-4 is a comprehensive developmental assessment for children ages 1-42 months. For the purpose of this evaluation, the adaptive behavior domain was utilized.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <SectionHeader title="Testing Results" sectionKey="fd_results" collapsed={collapsedSections} toggle={toggleSection} number="V" />
+                {!collapsedSections.fd_results && (
+                  <div className="space-y-6 mb-6">
+                    {/* Show only adaptive behavior scores */}
+                    {dayc2Scores.filter(r => r.domain.toLowerCase().includes('adaptive')).length > 0 && (
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                          {dayc2ScoringMethod === 'bayley4ab' ? 'DAYC-2 (Bayley-4 Adaptive Behavior Scoring)' : 'DAYC-2'}
+                        </h4>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs border-collapse border border-slate-400">
+                            <thead>
+                              <tr className="bg-slate-100">
+                                <th className="border border-slate-400 px-3 py-2 text-left font-bold">Domain</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">Raw Score</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">{dayc2ScoringMethod === 'bayley4ab' ? 'Scaled Score' : 'Standard Score'}</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">Descriptive Term</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">Age Equivalency</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">% Delay</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {dayc2Scores.filter(r => r.domain.toLowerCase().includes('adaptive')).map((row, i) => (
+                                <tr key={i}>
+                                  <td className="border border-slate-400 px-3 py-2 font-medium">{row.domain}</td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center font-mono">{row.rawScore}</td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center font-mono">{row.standardScore}</td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.descriptiveTerm}</td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.ageEquivalent}</td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.percentDelay}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {bayleyScores.length > 0 && (
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Bayley-4</h4>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs border-collapse border border-slate-400">
+                            <thead>
+                              <tr className="bg-slate-100">
+                                <th className="border border-slate-400 px-3 py-2 text-left font-bold">Domain</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">Raw Score</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">Scaled Score</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">Age Equivalent</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">% Delay</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {bayleyScores.map((row, i) => (
+                                <tr key={i}>
+                                  <td className="border border-slate-400 px-3 py-2 font-medium">{row.domain}</td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center font-mono">{row.rawScore}</td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center font-mono">{row.scaledScore ?? '\u2014'}</td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.ageEquivalent}</td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.percentDelay}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Adaptive Behavior Skills */}
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Adaptive Behavior Skills</h4>
+                      {feedingAdaptiveItems.demonstrated.length > 0 && (
+                        <div className="mb-3">
+                          <p className="text-sm font-serif text-slate-800">
+                            <strong>{firstName}</strong> demonstrated the following skills: {feedingAdaptiveItems.demonstrated.map(s => s.toLowerCase()).join('; ')}.
+                          </p>
+                        </div>
+                      )}
+                      {feedingAdaptiveItems.notDemonstrated.length > 0 && (
+                        <div className="mb-3">
+                          <p className="text-sm font-serif text-slate-800">
+                            <strong>{firstName}</strong> did not demonstrate the following: {feedingAdaptiveItems.notDemonstrated.map(s => s.toLowerCase()).join('; ')}.
+                          </p>
+                        </div>
+                      )}
+                      {feedingAdaptiveItems.demonstrated.length === 0 && feedingAdaptiveItems.notDemonstrated.length === 0 && (
+                        <p className="text-sm font-serif text-slate-400 italic">No adaptive behavior items scored yet. Complete the DAYC-2 or Bayley-4 adaptive domain to auto-populate this section.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <SectionHeader title="Previous Feeding History" sectionKey="fd_prevhistory" collapsed={collapsedSections} toggle={toggleSection} number="" />
+                {!collapsedSections.fd_prevhistory && (
+                  <EditableSection label="" value={feedingPreviousHistory} onChange={setFeedingPreviousHistory} placeholder={`Describe ${firstName}'s previous feeding history, including when solid foods were introduced, any history of breastfeeding/bottle feeding, feeding difficulties, tube feeding, etc.`} rows={5} />
+                )}
+
+                <SectionHeader title="Feeding/Oral Motor Skills" sectionKey="fd_oralmotor" collapsed={collapsedSections} toggle={toggleSection} number="VI" />
+                {!collapsedSections.fd_oralmotor && (
+                  <div className="space-y-5 mb-6">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-700 mb-1">a. Oral Structures</h4>
+                      <EditableSection label="" value={feedingOralStructures} onChange={setFeedingOralStructures} placeholder={`${firstName}'s facial structures are symmetrical. ${Pronoun(gender, 'possessive')} oral structures appear to be healthy and grossly intact as observed while ${pronoun(gender, 'subject')} was engaging in feeding.`} rows={4} />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-700 mb-1">b. Feeding Behaviors</h4>
+                      <EditableSection label="" value={feedingBehaviors} onChange={setFeedingBehaviors} placeholder={`${firstName} demonstrates adequate readiness with feeding activity. Describe feeding behaviors observed during the evaluation (drooling, posture, ability to stay seated, finger feeding, etc.).`} rows={4} />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-700 mb-1">c. Oral Motor Coordination</h4>
+                      <EditableSection label="" value={feedingOralMotorCoord} onChange={setFeedingOralMotorCoord} placeholder={`During the feeding evaluation, ${firstName} was provided with [foods]. Per clinical observation, describe tongue lateralization, chewing endurance, jaw strength, compensatory techniques, etc.`} rows={5} />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-700 mb-1">d. Food Repertoire</h4>
+                      <EditableSection label="" value={feedingFoodRepertoire} onChange={setFeedingFoodRepertoire} placeholder={`${firstName} was introduced to solid foods around [age]. Per caregiver report, ${pronoun(gender, 'subject')} began with purees and is now eating [describe current foods]. Describe food preferences, textures accepted/refused, etc.`} rows={5} />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-700 mb-1">e. Self-Feeding Skills</h4>
+                      <EditableSection label="" value={feedingSelfFeeding} onChange={setFeedingSelfFeeding} placeholder={`${firstName} is able to finger feed ${pronoun(gender, 'object')}self independently. Describe hand-eye coordination, utensil use, cup drinking ability, etc.`} rows={4} />
+                    </div>
+                  </div>
+                )}
+
+                <SectionHeader title="Drinking" sectionKey="fd_drinking" collapsed={collapsedSections} toggle={toggleSection} number="" />
+                {!collapsedSections.fd_drinking && (
+                  <EditableSection label="" value={feedingDrinking} onChange={setFeedingDrinking} placeholder={`Describe ${firstName}'s drinking skills, including bottle use, sippy cup, straw cup, open cup, liquid preferences, and any difficulties with drinking.`} rows={5} />
+                )}
+
+                <SectionHeader title="Sensory Processing" sectionKey="fd_sensory" collapsed={collapsedSections} toggle={toggleSection} number="VII" />
+                {!collapsedSections.fd_sensory && (
+                  <div className="space-y-5 mb-6">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-700 mb-1">a. Vestibular Processing and Modulation</h4>
+                      <div className="bg-slate-50 border border-slate-200 rounded-md p-3 text-xs font-serif text-slate-600 mb-2 leading-relaxed">
+                        The vestibular system is located in the inner ear and has the primary function of giving the brain information about head position and movement in relation to gravity. It is responsible in part for head stability, muscle tone, postural control, balance and equilibrium reaction and the development of eye-hand coordination and bilateral integration.
+                      </div>
+                      <EditableSection label="" value={feedingVestibular} onChange={setFeedingVestibular} placeholder={`${firstName} demonstrated [describe vestibular processing observations, trunk control, balance, etc.].`} rows={3} />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-700 mb-1">b. Proprioceptive Processing and Modulation</h4>
+                      <div className="bg-slate-50 border border-slate-200 rounded-md p-3 text-xs font-serif text-slate-600 mb-2 leading-relaxed">
+                        The proprioceptive system is a system of receptors found in the joints and muscle tissues that gives an internal awareness of limb and body position, position relative to the environment, information about joint and muscle movement, as well as the force and speed at which the muscles are moving.
+                      </div>
+                      <EditableSection label="" value={feedingProprioceptive} onChange={setFeedingProprioceptive} placeholder={`${firstName} demonstrates [describe proprioceptive processing, grading of force, body awareness, impact on feeding].`} rows={3} />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-700 mb-1">c. Tactile Processing and Modulation</h4>
+                      <div className="bg-slate-50 border border-slate-200 rounded-md p-3 text-xs font-serif text-slate-600 mb-2 leading-relaxed">
+                        The sense of touch. The tactile system is involved with the identification and localization of touch and the discrimination of shapes, sizes, and textures of materials.
+                      </div>
+                      <EditableSection label="" value={feedingTactile} onChange={setFeedingTactile} placeholder={`Per caregiver report, ${firstName} [describe tactile processing, messy play tolerance, texture sensitivity, etc.].`} rows={3} />
+                    </div>
+                  </div>
+                )}
+
+                <SectionHeader title="Neuromuscular / Musculoskeletal" sectionKey="fd_neuro" collapsed={collapsedSections} toggle={toggleSection} number="VIII" />
+                {!collapsedSections.fd_neuro && (
+                  <div className="space-y-3 mb-6">
+                    <div className="grid grid-cols-[180px_1fr] gap-2 text-sm font-serif">
+                      <span className="font-bold text-slate-700">Range of Motion:</span>
+                      <EditableSection label="" value={feedingROM} onChange={setFeedingROM} rows={1} />
+                    </div>
+                    <div className="grid grid-cols-[180px_1fr] gap-2 text-sm font-serif">
+                      <span className="font-bold text-slate-700">Muscle Strength:</span>
+                      <EditableSection label="" value={feedingMuscleStrength} onChange={setFeedingMuscleStrength} rows={1} />
+                    </div>
+                    <div className="grid grid-cols-[180px_1fr] gap-2 text-sm font-serif">
+                      <span className="font-bold text-slate-700">Muscle Tone:</span>
+                      <EditableSection label="" value={feedingMuscleTone} onChange={setFeedingMuscleTone} rows={1} />
+                    </div>
+                    <div className="grid grid-cols-[180px_1fr] gap-2 text-sm font-serif">
+                      <span className="font-bold text-slate-700">Postural Stability:</span>
+                      <EditableSection label="" value={feedingPosturalStability} onChange={setFeedingPosturalStability} rows={1} />
+                    </div>
+                  </div>
+                )}
+
+                <SectionHeader title="Summary" sectionKey="fd_summary" collapsed={collapsedSections} toggle={toggleSection} number="IX" />
+                {!collapsedSections.fd_summary && (
+                  <>
+                    {appSettings.recommendationTemplates.length > 0 && (
+                      <div className="mb-2 relative no-print">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowRecTemplatePicker(!showRecTemplatePicker)}
+                          className="gap-1.5 text-xs"
+                        >
+                          <BookmarkPlus className="w-3.5 h-3.5" />
+                          Insert Template
+                        </Button>
+                        {showRecTemplatePicker && (
+                          <div className="absolute top-9 left-0 z-50 bg-white border border-slate-200 rounded-lg shadow-lg w-80 max-h-64 overflow-y-auto">
+                            <div className="p-2 border-b border-slate-100">
+                              <p className="text-xs font-medium text-slate-500 px-2">Click to append to summary</p>
+                            </div>
+                            {appSettings.recommendationTemplates.map(tpl => (
+                              <button
+                                key={tpl.id}
+                                onClick={() => { setFeedingSummary(prev => prev ? prev + '\n\n' + tpl.text : tpl.text); setShowRecTemplatePicker(false); }}
+                                className="w-full text-left px-3 py-2.5 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors"
+                              >
+                                <p className="text-sm font-medium text-slate-800 truncate">{tpl.title}</p>
+                                <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{tpl.text}</p>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <EditableSection label="" value={feedingSummary} onChange={setFeedingSummary} placeholder={`${firstName} is a [age] old [boy/girl] who was referred for difficulty with feeding development and feeding skills. Describe key findings and recommendations...\n\nIt is recommended that the IFSP team consider the following and make the final determination of eligibility and services:\n\n1. Occupational therapy feeding is recommended to address delays in oral motor skills impacting age-appropriate feeding.\n2. Occupational Therapy is recommended to work on fine motor skills and body awareness to support overall participation in adaptive skills, specifically feeding.`} rows={12} />
                   </>
                 )}
               </>
