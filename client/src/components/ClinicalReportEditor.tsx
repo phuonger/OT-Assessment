@@ -112,6 +112,7 @@ interface SavedReportState {
   practiceName: string;
   reportTitle: string;
   domainOverrides: Record<string, string>;
+  scoreOverrides?: Record<string, string>; // e.g. "bayley4_cognitive_scaledScore" → "8"
   // SI-specific
   testingConditions: string;
   validityStatement: string;
@@ -183,6 +184,79 @@ function EditableSection({
         </div>
       )}
     </div>
+  );
+}
+
+// ============================================================
+// EditableCell — inline-editable table cell for score overrides
+// ============================================================
+
+function EditableCell({
+  value, overrideKey, overrides, setOverrides, className = '',
+}: {
+  value: string | number | null;
+  overrideKey: string;
+  overrides: Record<string, string>;
+  setOverrides: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  className?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const hasOverride = overrideKey in overrides;
+  const displayValue = hasOverride ? overrides[overrideKey] : (value ?? '—');
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  if (editing) {
+    return (
+      <td className={`border border-slate-400 px-1 py-1 text-center ${className}`}>
+        <input
+          ref={inputRef}
+          type="text"
+          defaultValue={String(displayValue)}
+          onBlur={(e) => {
+            const v = e.target.value.trim();
+            if (v === '' || v === String(value ?? '—')) {
+              // Remove override if matches original
+              setOverrides(prev => { const next = { ...prev }; delete next[overrideKey]; return next; });
+            } else {
+              setOverrides(prev => ({ ...prev, [overrideKey]: v }));
+            }
+            setEditing(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+            if (e.key === 'Escape') setEditing(false);
+          }}
+          className="w-full text-center text-xs border border-blue-400 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+        />
+      </td>
+    );
+  }
+
+  return (
+    <td
+      className={`border border-slate-400 px-3 py-2 text-center cursor-pointer group/cell relative hover:bg-blue-50 ${hasOverride ? 'bg-amber-50 font-semibold' : ''} ${className}`}
+      onClick={() => setEditing(true)}
+      title="Click to edit"
+    >
+      {String(displayValue)}
+      {hasOverride && (
+        <button
+          onClick={(e) => { e.stopPropagation(); setOverrides(prev => { const next = { ...prev }; delete next[overrideKey]; return next; }); }}
+          className="absolute top-0 right-0 p-0.5 text-amber-500 hover:text-red-500 opacity-0 group-hover/cell:opacity-100 print:hidden"
+          title="Reset to auto-calculated value"
+        >
+          <RotateCcw className="w-3 h-3" />
+        </button>
+      )}
+      <Pencil className="w-2.5 h-2.5 absolute bottom-0.5 right-0.5 text-slate-300 opacity-0 group-hover/cell:opacity-100 print:hidden" />
+    </td>
   );
 }
 
@@ -507,6 +581,7 @@ export default function ClinicalReportEditor() {
   const [practiceName, setPracticeName] = useState(() => savedReport?.practiceName ?? (appSettings.practiceName || examinerInfo.agency || 'Practice Name'));
   const [reportTitle, setReportTitle] = useState(() => savedReport?.reportTitle ?? TEMPLATE_INFO[template].title);
   const [domainOverrides, setDomainOverrides] = useState<Record<string, string>>(() => savedReport?.domainOverrides ?? {});
+  const [scoreOverrides, setScoreOverrides] = useState<Record<string, string>>(() => savedReport?.scoreOverrides ?? {});
 
   // SI-specific editable sections
   const [testingConditions, setTestingConditions] = useState(() =>
@@ -530,7 +605,7 @@ export default function ClinicalReportEditor() {
     const reportState: SavedReportState = {
       template, referralInfo, medicalHistory, parentConcerns, clinicalObservation,
       feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName,
-      reportTitle, domainOverrides, testingConditions, validityStatement,
+      reportTitle, domainOverrides, scoreOverrides, testingConditions, validityStatement,
       quadrantNarratives, sectionNarratives, siSummary, childKey,
       savedAt: new Date().toISOString(),
     };
@@ -539,9 +614,9 @@ export default function ClinicalReportEditor() {
       setLastSavedAt(reportState.savedAt);
       setIsDirty(false);
     } catch { /* localStorage full */ }
-  }, [template, referralInfo, medicalHistory, parentConcerns, clinicalObservation, feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName, reportTitle, domainOverrides, testingConditions, validityStatement, quadrantNarratives, sectionNarratives, siSummary, childKey]);
+  }, [template, referralInfo, medicalHistory, parentConcerns, clinicalObservation, feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName, reportTitle, domainOverrides, scoreOverrides, testingConditions, validityStatement, quadrantNarratives, sectionNarratives, siSummary, childKey]);
 
-  useEffect(() => { setIsDirty(true); }, [template, referralInfo, medicalHistory, parentConcerns, clinicalObservation, feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName, reportTitle, domainOverrides, testingConditions, validityStatement, quadrantNarratives, sectionNarratives, siSummary]);
+  useEffect(() => { setIsDirty(true); }, [template, referralInfo, medicalHistory, parentConcerns, clinicalObservation, feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName, reportTitle, domainOverrides, scoreOverrides, testingConditions, validityStatement, quadrantNarratives, sectionNarratives, siSummary]);
 
   useEffect(() => {
     if (!isDirty) return;
@@ -743,11 +818,22 @@ export default function ClinicalReportEditor() {
   // Summary of development
   const summaryOfDevelopment = useMemo(() => {
     const rows: { domain: string; ageEquivalent: string }[] = [];
-    for (const row of bayleyScores) rows.push({ domain: row.domain, ageEquivalent: row.ageEquivalent });
-    for (const row of dayc2Scores) rows.push({ domain: row.domain, ageEquivalent: row.ageEquivalent });
-    for (const row of reel3Scores) rows.push({ domain: row.domain, ageEquivalent: row.ageEquivalent });
+    for (const row of bayleyScores) {
+      const aeOverride = scoreOverrides[`bayley4_${row.domainLocalId}_ageEquivalent`];
+      rows.push({ domain: row.domain, ageEquivalent: aeOverride ?? row.ageEquivalent });
+    }
+    for (const row of dayc2Scores) {
+      const domKey = row.domain.toLowerCase().replace(/[^a-z]/g, '');
+      const aeOverride = scoreOverrides[`dayc2_${domKey}_ageEquivalent`];
+      rows.push({ domain: row.domain, ageEquivalent: aeOverride ?? row.ageEquivalent });
+    }
+    for (const row of reel3Scores) {
+      const domKey = row.domain.toLowerCase().replace(/[^a-z]/g, '');
+      const aeOverride = scoreOverrides[`reel3_${domKey}_ageEquivalent`];
+      rows.push({ domain: row.domain, ageEquivalent: aeOverride ?? row.ageEquivalent });
+    }
     return rows;
-  }, [bayleyScores, dayc2Scores, reel3Scores]);
+  }, [bayleyScores, dayc2Scores, reel3Scores, scoreOverrides]);
 
   // Auto-generate recommendations
   useEffect(() => {
@@ -886,24 +972,43 @@ export default function ClinicalReportEditor() {
         bayleyScores: bayleyScores.map(r => ({
           domain: r.domain,
           rawScore: r.rawScore,
-          scaledScore: r.scaledScore,
-          ageEquivalent: r.ageEquivalent,
-          percentDelay: r.percentDelay,
+          scaledScore: scoreOverrides[`bayley4_${r.domainLocalId}_scaledScore`] != null ? Number(scoreOverrides[`bayley4_${r.domainLocalId}_scaledScore`]) || r.scaledScore : r.scaledScore,
+          ageEquivalent: scoreOverrides[`bayley4_${r.domainLocalId}_ageEquivalent`] ?? r.ageEquivalent,
+          percentDelay: scoreOverrides[`bayley4_${r.domainLocalId}_percentDelay`] ?? r.percentDelay,
         })),
         cogComposite: bayleyCogComposite ? {
           label: 'Cognitive Composite',
-          scaledScore: bayleyCogComposite.scaledScore,
-          standardScore: bayleyCogComposite.standardScore,
-          percentile: bayleyCogComposite.percentile,
+          scaledScore: scoreOverrides['bayley4_cogComposite_scaledScore'] != null ? Number(scoreOverrides['bayley4_cogComposite_scaledScore']) || bayleyCogComposite.scaledScore : bayleyCogComposite.scaledScore,
+          standardScore: scoreOverrides['bayley4_cogComposite_standardScore'] != null ? Number(scoreOverrides['bayley4_cogComposite_standardScore']) || bayleyCogComposite.standardScore : bayleyCogComposite.standardScore,
+          percentile: scoreOverrides['bayley4_cogComposite_percentile'] ?? String(bayleyCogComposite.percentile),
         } : null,
         motorComposite: bayleyMotorComposite ? {
           label: 'Motor Composite',
-          scaledScore: bayleyMotorComposite.sumScaled,
-          standardScore: bayleyMotorComposite.standardScore,
-          percentile: bayleyMotorComposite.percentile,
+          scaledScore: scoreOverrides['bayley4_motorComposite_scaledScore'] != null ? Number(scoreOverrides['bayley4_motorComposite_scaledScore']) || bayleyMotorComposite.sumScaled : bayleyMotorComposite.sumScaled,
+          standardScore: scoreOverrides['bayley4_motorComposite_standardScore'] != null ? Number(scoreOverrides['bayley4_motorComposite_standardScore']) || bayleyMotorComposite.standardScore : bayleyMotorComposite.standardScore,
+          percentile: scoreOverrides['bayley4_motorComposite_percentile'] ?? String(bayleyMotorComposite.percentile),
         } : null,
-        dayc2Scores,
-        reel3Scores,
+        dayc2Scores: dayc2Scores.map(r => {
+          const domKey = r.domain.toLowerCase().replace(/[^a-z]/g, '');
+          return {
+            ...r,
+            standardScore: scoreOverrides[`dayc2_${domKey}_standardScore`] ?? r.standardScore,
+            descriptiveTerm: scoreOverrides[`dayc2_${domKey}_descriptiveTerm`] ?? r.descriptiveTerm,
+            ageEquivalent: scoreOverrides[`dayc2_${domKey}_ageEquivalent`] ?? r.ageEquivalent,
+            percentDelay: scoreOverrides[`dayc2_${domKey}_percentDelay`] ?? r.percentDelay,
+          };
+        }),
+        reel3Scores: reel3Scores.map(r => {
+          const domKey = r.domain.toLowerCase().replace(/[^a-z]/g, '');
+          return {
+            ...r,
+            abilityScore: scoreOverrides[`reel3_${domKey}_abilityScore`] != null ? Number(scoreOverrides[`reel3_${domKey}_abilityScore`]) || r.abilityScore : r.abilityScore,
+            percentileRank: scoreOverrides[`reel3_${domKey}_percentileRank`] ?? r.percentileRank,
+            descriptiveTerm: scoreOverrides[`reel3_${domKey}_descriptiveTerm`] ?? r.descriptiveTerm,
+            ageEquivalent: scoreOverrides[`reel3_${domKey}_ageEquivalent`] ?? r.ageEquivalent,
+            percentDelay: scoreOverrides[`reel3_${domKey}_percentDelay`] ?? r.percentDelay,
+          };
+        }),
         domainNarratives: docxNarratives,
         feedingOralMotor,
         sensoryNarrative,
@@ -929,7 +1034,7 @@ export default function ClinicalReportEditor() {
     closingNote, recommendations, clinicalObservation, bayleyScores, bayleyCogComposite,
     bayleyMotorComposite, dayc2Scores, reel3Scores, domainNarratives, domainOverrides,
     gender, feedingOralMotor, sensoryNarrative, summaryOfDevelopment, testingConditions,
-    validityStatement, sp2Scores, quadrantNarratives, sectionNarratives,
+    validityStatement, sp2Scores, quadrantNarratives, sectionNarratives, scoreOverrides,
   ]);
 
   // Switch template
@@ -1134,27 +1239,27 @@ export default function ClinicalReportEditor() {
                                 <tr key={i}>
                                   <td className="border border-slate-400 px-3 py-2 font-medium">{row.domain}</td>
                                   <td className="border border-slate-400 px-3 py-2 text-center">{row.rawScore}</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.scaledScore ?? '—'}</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.ageEquivalent}</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.percentDelay || '—'}</td>
+                                  <EditableCell value={row.scaledScore} overrideKey={`bayley4_${row.domainLocalId}_scaledScore`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
+                                  <EditableCell value={row.ageEquivalent} overrideKey={`bayley4_${row.domainLocalId}_ageEquivalent`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
+                                  <EditableCell value={row.percentDelay || '—'} overrideKey={`bayley4_${row.domainLocalId}_percentDelay`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
                                 </tr>
                               ))}
                               {bayleyCogComposite && (
                                 <tr className="bg-blue-50 font-semibold">
                                   <td className="border border-slate-400 px-3 py-2">Cognitive Composite</td>
                                   <td className="border border-slate-400 px-3 py-2 text-center">—</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">{bayleyCogComposite.scaledScore}</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">SS: {bayleyCogComposite.standardScore}</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">PR: {bayleyCogComposite.percentile}</td>
+                                  <EditableCell value={bayleyCogComposite.scaledScore} overrideKey="bayley4_cogComposite_scaledScore" overrides={scoreOverrides} setOverrides={setScoreOverrides} />
+                                  <EditableCell value={`SS: ${bayleyCogComposite.standardScore}`} overrideKey="bayley4_cogComposite_standardScore" overrides={scoreOverrides} setOverrides={setScoreOverrides} />
+                                  <EditableCell value={`PR: ${bayleyCogComposite.percentile}`} overrideKey="bayley4_cogComposite_percentile" overrides={scoreOverrides} setOverrides={setScoreOverrides} />
                                 </tr>
                               )}
                               {bayleyMotorComposite && (
                                 <tr className="bg-green-50 font-semibold">
                                   <td className="border border-slate-400 px-3 py-2">Motor Composite</td>
                                   <td className="border border-slate-400 px-3 py-2 text-center">—</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">{bayleyMotorComposite.sumScaled}</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">SS: {bayleyMotorComposite.standardScore}</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">PR: {bayleyMotorComposite.percentile}</td>
+                                  <EditableCell value={bayleyMotorComposite.sumScaled} overrideKey="bayley4_motorComposite_scaledScore" overrides={scoreOverrides} setOverrides={setScoreOverrides} />
+                                  <EditableCell value={`SS: ${bayleyMotorComposite.standardScore}`} overrideKey="bayley4_motorComposite_standardScore" overrides={scoreOverrides} setOverrides={setScoreOverrides} />
+                                  <EditableCell value={`PR: ${bayleyMotorComposite.percentile}`} overrideKey="bayley4_motorComposite_percentile" overrides={scoreOverrides} setOverrides={setScoreOverrides} />
                                 </tr>
                               )}
                             </tbody>
@@ -1179,16 +1284,19 @@ export default function ClinicalReportEditor() {
                               </tr>
                             </thead>
                             <tbody>
-                              {dayc2Scores.map((row, i) => (
-                                <tr key={i}>
-                                  <td className="border border-slate-400 px-3 py-2 font-medium">{row.domain}</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.rawScore}</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.standardScore}</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.descriptiveTerm}</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.ageEquivalent}</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.percentDelay}</td>
-                                </tr>
-                              ))}
+                              {dayc2Scores.map((row, i) => {
+                                const domKey = row.domain.toLowerCase().replace(/[^a-z]/g, '');
+                                return (
+                                  <tr key={i}>
+                                    <td className="border border-slate-400 px-3 py-2 font-medium">{row.domain}</td>
+                                    <td className="border border-slate-400 px-3 py-2 text-center">{row.rawScore}</td>
+                                    <EditableCell value={row.standardScore} overrideKey={`dayc2_${domKey}_standardScore`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
+                                    <EditableCell value={row.descriptiveTerm} overrideKey={`dayc2_${domKey}_descriptiveTerm`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
+                                    <EditableCell value={row.ageEquivalent} overrideKey={`dayc2_${domKey}_ageEquivalent`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
+                                    <EditableCell value={row.percentDelay} overrideKey={`dayc2_${domKey}_percentDelay`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
@@ -1212,17 +1320,20 @@ export default function ClinicalReportEditor() {
                               </tr>
                             </thead>
                             <tbody>
-                              {reel3Scores.map((row, i) => (
-                                <tr key={i}>
-                                  <td className="border border-slate-400 px-3 py-2 font-medium">{row.domain}</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.rawScore}</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.abilityScore ?? '—'}</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.percentileRank}</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.descriptiveTerm}</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.ageEquivalent}</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.percentDelay || '—'}</td>
-                                </tr>
-                              ))}
+                              {reel3Scores.map((row, i) => {
+                                const domKey = row.domain.toLowerCase().replace(/[^a-z]/g, '');
+                                return (
+                                  <tr key={i}>
+                                    <td className="border border-slate-400 px-3 py-2 font-medium">{row.domain}</td>
+                                    <td className="border border-slate-400 px-3 py-2 text-center">{row.rawScore}</td>
+                                    <EditableCell value={row.abilityScore} overrideKey={`reel3_${domKey}_abilityScore`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
+                                    <EditableCell value={row.percentileRank} overrideKey={`reel3_${domKey}_percentileRank`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
+                                    <EditableCell value={row.descriptiveTerm} overrideKey={`reel3_${domKey}_descriptiveTerm`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
+                                    <EditableCell value={row.ageEquivalent} overrideKey={`reel3_${domKey}_ageEquivalent`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
+                                    <EditableCell value={row.percentDelay || '—'} overrideKey={`reel3_${domKey}_percentDelay`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
