@@ -648,6 +648,34 @@ export default function MultiStepSetup() {
                       </div>
                     )}
 
+                    {/* Scoring Method Toggle for DAYC-2 */}
+                    {(form.id === 'dayc2' || form.id === 'dayc2sp') && (
+                      <div>
+                        <Label className="text-sm font-medium">Scoring Calculation Method</Label>
+                        <Select
+                          value={fs.scoringMethod || 'native'}
+                          onValueChange={(v: 'native' | 'bayley4ab') => {
+                            setFormSelections(prev => prev.map(sel =>
+                              sel.formId === fs.formId ? { ...sel, scoringMethod: v } : sel
+                            ));
+                          }}
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Select scoring method" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="native">DAYC-2 Standard Scoring</SelectItem>
+                            <SelectItem value="bayley4ab">Bayley-4 Adaptive Behavior Scales</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-[#8B8B8B] mt-1">
+                          {(fs.scoringMethod || 'native') === 'native'
+                            ? 'Uses DAYC-2 standard scores, percentile ranks, and descriptive terms.'
+                            : 'Uses Bayley-4 Adaptive Behavior subscale scaled scores instead of DAYC-2 standard scores.'}
+                        </p>
+                      </div>
+                    )}
+
                     {/* Domain checkboxes (not for SP2 which auto-selects) */}
                     {form.id !== 'sp2' && (
                       <div>

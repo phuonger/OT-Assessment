@@ -35,6 +35,7 @@ export interface FormSelection {
   formId: string;
   selectedDomainIds: string[];  // localId within the form
   ageRangeLabel: string;        // selected age range for start point
+  scoringMethod?: 'native' | 'bayley4ab';  // DAYC-2 only: native DAYC-2 scoring or Bayley-4 Adaptive Behavior
 }
 
 export interface DomainState {

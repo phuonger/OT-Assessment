@@ -46,6 +46,7 @@ export interface Dayc2ScoreRow {
   descriptiveTerm: string;
   ageEquivalent: string;
   percentDelay: string;
+  scoringMethod?: 'native' | 'bayley4ab';
 }
 
 export interface Reel3ScoreRow {
@@ -368,12 +369,14 @@ function createBayleyTable(scores: BayleyScoreRow[], cogComposite: CompositeScor
 function createDayc2Table(scores: Dayc2ScoreRow[]): (Paragraph | Table)[] {
   if (scores.length === 0) return [];
 
+  const useBayley4AB = scores[0]?.scoringMethod === 'bayley4ab';
+
   const headerRow = new TableRow({
     children: [
       tableCell('Subtest', { bold: true, shading: 'F1F5F9' }),
       tableCell('Raw Score', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
-      tableCell('Standard Score', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
-      tableCell('Descriptive Term', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
+      tableCell(useBayley4AB ? 'Scaled Score' : 'Standard Score', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
+      tableCell(useBayley4AB ? 'Bayley-4 Subscale' : 'Descriptive Term', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
       tableCell('Age Equivalence', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
       tableCell('% Delay', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
     ],
@@ -393,23 +396,49 @@ function createDayc2Table(scores: Dayc2ScoreRow[]): (Paragraph | Table)[] {
       })
   );
 
-  return [
+  const titleText = useBayley4AB
+    ? 'DAYC-2 ITEMS SCORED WITH BAYLEY-4 ADAPTIVE BEHAVIOR SCALES'
+    : 'DAYC-2 DEVELOPMENTAL ASSESSMENT OF YOUNG CHILDREN, 2ND EDITION';
+
+  const elements: (Paragraph | Table)[] = [
     new Paragraph({
       spacing: { before: 200, after: 80 },
       children: [
         new TextRun({
-          text: 'DAYC-2 DEVELOPMENTAL ASSESSMENT OF YOUNG CHILDREN, 2ND EDITION',
+          text: titleText,
           bold: true,
           font: FONT,
           size: SMALL_SIZE,
         }),
       ],
     }),
+  ];
+
+  if (useBayley4AB) {
+    elements.push(
+      new Paragraph({
+        spacing: { before: 0, after: 60 },
+        children: [
+          new TextRun({
+            text: 'Scoring method: Bayley-4 Adaptive Behavior norms applied to DAYC-2 raw scores',
+            italics: true,
+            font: FONT,
+            size: SMALL_SIZE - 2,
+            color: 'B45309',
+          }),
+        ],
+      })
+    );
+  }
+
+  elements.push(
     new Table({
       width: { size: 100, type: WidthType.PERCENTAGE },
       rows: [headerRow, ...dataRows],
-    }),
-  ];
+    })
+  );
+
+  return elements;
 }
 
 function createReel3Table(scores: Reel3ScoreRow[]): (Paragraph | Table)[] {

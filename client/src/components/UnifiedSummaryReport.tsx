@@ -14,6 +14,7 @@ import { getFormById, type FormDefinition, type UnifiedDomain } from '@/lib/form
 import { lookupScaledScore, lookupAgeEquivalent, lookupGrowthScaleValue, lookupStandardScore } from '@/lib/scoringTables';
 import { REEL3_AGE_EQUIVALENT, REEL3_ABILITY_TO_PERCENTILE, REEL3_DESCRIPTIVE_TERMS, REEL3_LANGUAGE_ABILITY } from '@/lib/reel3Data';
 import { lookupDAYC2StandardScore, lookupDAYC2AgeEquivalent, lookupDAYC2PercentileRank, lookupDAYC2DescriptiveTerm } from '@/lib/dayc2ScoringTables';
+import { lookupDAYC2WithBayley4AB } from '@/lib/bayley4AdaptiveSE';
 import { lookupREEL3AbilityScore, lookupREEL3PercentileRank, lookupREEL3DescriptiveTerm } from '@/lib/reel3ScoringTables';
 import { SP2_BIRTH6MO_CUTOFFS, SP2_ENGLISH_CUTOFFS, SP2_QUADRANT_MAP, getSP2Description } from '@/lib/sensoryProfileData';
 import { Button } from '@/components/ui/button';
@@ -266,6 +267,7 @@ export default function UnifiedSummaryReport() {
               ageInDays={ageInDays}
               getRawScore={getRawScore}
               getDomainProgress={getDomainProgress}
+              scoringMethod={fs.scoringMethod}
             />
           );
         })}
@@ -325,15 +327,16 @@ interface FormReportProps {
   ageInDays: number | null;
   getRawScore: (formId: string, domainLocalId: string) => number;
   getDomainProgress: (formId: string, domainLocalId: string) => { scored: number; total: number };
+  scoringMethod?: 'native' | 'bayley4ab';
 }
 
-function FormReport({ form, formState, selectedDomainIds, ageInDays, getRawScore, getDomainProgress }: FormReportProps) {
+function FormReport({ form, formState, selectedDomainIds, ageInDays, getRawScore, getDomainProgress, scoringMethod }: FormReportProps) {
   switch (form.id) {
     case 'bayley4':
       return <Bayley4Report form={form} formState={formState} selectedDomainIds={selectedDomainIds} ageInDays={ageInDays} getRawScore={getRawScore} getDomainProgress={getDomainProgress} />;
     case 'dayc2':
     case 'dayc2sp':
-      return <Dayc2Report form={form} formState={formState} selectedDomainIds={selectedDomainIds} ageInDays={ageInDays} getRawScore={getRawScore} getDomainProgress={getDomainProgress} />;
+      return <Dayc2Report form={form} formState={formState} selectedDomainIds={selectedDomainIds} ageInDays={ageInDays} getRawScore={getRawScore} getDomainProgress={getDomainProgress} scoringMethod={scoringMethod} />;
     case 'reel3':
       return <Reel3Report form={form} formState={formState} selectedDomainIds={selectedDomainIds} ageInDays={ageInDays} getRawScore={getRawScore} getDomainProgress={getDomainProgress} />;
     case 'sp2':
@@ -528,8 +531,9 @@ function Bayley4Report({ form, formState, selectedDomainIds, ageInDays, getRawSc
 // DAYC-2 Report
 // ============================================================
 
-function Dayc2Report({ form, formState, selectedDomainIds, ageInDays, getRawScore, getDomainProgress }: FormReportProps) {
+function Dayc2Report({ form, formState, selectedDomainIds, ageInDays, getRawScore, getDomainProgress, scoringMethod }: FormReportProps) {
   const ageMonths = ageInDays !== null ? Math.floor(ageInDays / 30.44) : 0;
+  const useBayley4AB = scoringMethod === 'bayley4ab';
 
   const domainKeyMap: Record<string, 'social' | 'adaptive' | 'receptive' | 'expressive'> = {
     'socialemotional': 'social',
@@ -548,33 +552,57 @@ function Dayc2Report({ form, formState, selectedDomainIds, ageInDays, getRawScor
       const discontinued = formState?.domains[dId]?.discontinued || false;
       const scoringKey = domainKeyMap[dId];
 
-      let standardScore: number | null = null;
+      let standardScore: number | string | null = null;
       let descriptiveTerm = '\u2014';
       let percentileRank = '\u2014';
       let ageEquivalent = '\u2014';
       let percentDelay = '\u2014';
+      let bayley4Label = '\u2014';
 
-      if (scoringKey) {
-        standardScore = lookupDAYC2StandardScore(rawScore, ageMonths, scoringKey);
-        if (standardScore !== null) {
-          descriptiveTerm = lookupDAYC2DescriptiveTerm(standardScore);
-          const pr = lookupDAYC2PercentileRank(standardScore);
-          if (pr) percentileRank = pr;
+      if (useBayley4AB) {
+        // Bayley-4 Adaptive Behavior scoring
+        const result = lookupDAYC2WithBayley4AB(rawScore, ageMonths, dId);
+        if (result.scaledScore !== null) {
+          standardScore = result.scaledScore;
         }
-        const aeMonths = lookupDAYC2AgeEquivalent(rawScore, scoringKey);
-        if (aeMonths !== null) {
-          ageEquivalent = `${aeMonths} mo`;
-          if (ageMonths > 0 && aeMonths < ageMonths) {
-            percentDelay = `${Math.round(((ageMonths - aeMonths) / ageMonths) * 100)}%`;
-          } else if (aeMonths >= ageMonths) {
-            percentDelay = '0%';
+        bayley4Label = result.label;
+        // Still use DAYC-2 age equivalents for reference
+        if (scoringKey) {
+          const aeMonths = lookupDAYC2AgeEquivalent(rawScore, scoringKey);
+          if (aeMonths !== null) {
+            ageEquivalent = `${aeMonths} mo`;
+            if (ageMonths > 0 && aeMonths < ageMonths) {
+              percentDelay = `${Math.round(((ageMonths - aeMonths) / ageMonths) * 100)}%`;
+            } else if (aeMonths >= ageMonths) {
+              percentDelay = '0%';
+            }
+          }
+        }
+      } else {
+        // Native DAYC-2 scoring
+        if (scoringKey) {
+          const stdScore = lookupDAYC2StandardScore(rawScore, ageMonths, scoringKey);
+          if (stdScore !== null) {
+            standardScore = stdScore;
+            descriptiveTerm = lookupDAYC2DescriptiveTerm(stdScore);
+            const pr = lookupDAYC2PercentileRank(stdScore);
+            if (pr) percentileRank = pr;
+          }
+          const aeMonths = lookupDAYC2AgeEquivalent(rawScore, scoringKey);
+          if (aeMonths !== null) {
+            ageEquivalent = `${aeMonths} mo`;
+            if (ageMonths > 0 && aeMonths < ageMonths) {
+              percentDelay = `${Math.round(((ageMonths - aeMonths) / ageMonths) * 100)}%`;
+            } else if (aeMonths >= ageMonths) {
+              percentDelay = '0%';
+            }
           }
         }
       }
 
-      return { domain, rawScore, progress, timer, discontinued, standardScore, descriptiveTerm, percentileRank, ageEquivalent, percentDelay };
+      return { domain, rawScore, progress, timer, discontinued, standardScore, descriptiveTerm, percentileRank, ageEquivalent, percentDelay, bayley4Label };
     }).filter(Boolean);
-  }, [selectedDomainIds, form, formState, ageMonths]);
+  }, [selectedDomainIds, form, formState, ageMonths, useBayley4AB]);
 
   return (
     <div className="bg-white rounded-lg border-2 overflow-hidden" style={{ borderColor: form.color + '40' }}>
@@ -585,6 +613,9 @@ function Dayc2Report({ form, formState, selectedDomainIds, ageInDays, getRawScor
         <div>
           <h3 className="font-semibold text-[#2C2C2C]">{form.shortName}</h3>
           <p className="text-xs text-[#6B6B6B]">{form.name}</p>
+          {useBayley4AB && (
+            <p className="text-[10px] text-amber-600 font-medium">Scoring: Bayley-4 Adaptive Behavior Scales</p>
+          )}
         </div>
       </div>
 
@@ -594,9 +625,9 @@ function Dayc2Report({ form, formState, selectedDomainIds, ageInDays, getRawScor
             <tr className="border-b-2" style={{ borderColor: form.color + '30' }}>
               <th className="text-left py-2 pr-4 font-semibold text-[#2C2C2C]">Domain</th>
               <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Raw Score</th>
-              <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Std Score</th>
-              <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Percentile</th>
-              <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Term</th>
+              <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">{useBayley4AB ? 'Scaled Score' : 'Std Score'}</th>
+              {!useBayley4AB && <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Percentile</th>}
+              <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">{useBayley4AB ? 'Bayley-4 Subscale' : 'Term'}</th>
               <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Age Eq.</th>
               <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">% Delay</th>
               <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Status</th>
@@ -608,8 +639,8 @@ function Dayc2Report({ form, formState, selectedDomainIds, ageInDays, getRawScor
                 <td className="py-2 pr-4 font-medium" style={{ color: form.color }}>{d.domain.name}</td>
                 <td className="text-center py-2 px-2 font-mono">{d.rawScore}</td>
                 <td className="text-center py-2 px-2 font-mono">{d.standardScore ?? '\u2014'}</td>
-                <td className="text-center py-2 px-2">{d.percentileRank}</td>
-                <td className="text-center py-2 px-2 text-xs">{d.descriptiveTerm}</td>
+                {!useBayley4AB && <td className="text-center py-2 px-2">{d.percentileRank}</td>}
+                <td className="text-center py-2 px-2 text-xs">{useBayley4AB ? d.bayley4Label : d.descriptiveTerm}</td>
                 <td className="text-center py-2 px-2">{d.ageEquivalent}</td>
                 <td className="text-center py-2 px-2">{d.percentDelay}</td>
                 <td className="text-center py-2 px-2">

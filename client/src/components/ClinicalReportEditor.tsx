@@ -18,6 +18,7 @@ import { getFormById, type FormDefinition, type UnifiedDomain } from '@/lib/form
 import { lookupScaledScore, lookupAgeEquivalent, lookupGrowthScaleValue, lookupStandardScore } from '@/lib/scoringTables';
 import { REEL3_AGE_EQUIVALENT } from '@/lib/reel3Data';
 import { lookupDAYC2StandardScore, lookupDAYC2AgeEquivalent, lookupDAYC2PercentileRank, lookupDAYC2DescriptiveTerm } from '@/lib/dayc2ScoringTables';
+import { lookupDAYC2WithBayley4AB } from '@/lib/bayley4AdaptiveSE';
 import { lookupREEL3AbilityScore, lookupREEL3PercentileRank, lookupREEL3DescriptiveTerm } from '@/lib/reel3ScoringTables';
 import { SP2_ENGLISH_CUTOFFS, SP2_BIRTH6MO_CUTOFFS, SP2_QUADRANT_MAP, getSP2Description } from '@/lib/sensoryProfileData';
 import { Button } from '@/components/ui/button';
@@ -638,7 +639,7 @@ export default function ClinicalReportEditor() {
   // ============================================================
 
   interface BayleyScoreRow { domain: string; domainLocalId: string; rawScore: number; scaledScore: number | null; ageEquivalent: string; gsv: number | null; percentDelay: string; }
-  interface Dayc2ScoreRow { domain: string; rawScore: number; standardScore: string; descriptiveTerm: string; ageEquivalent: string; percentDelay: string; }
+  interface Dayc2ScoreRow { domain: string; rawScore: number; standardScore: string; descriptiveTerm: string; ageEquivalent: string; percentDelay: string; scoringMethod?: 'native' | 'bayley4ab'; }
   interface Reel3ScoreRow { domain: string; rawScore: number; ageEquivalent: string; percentDelay: string; abilityScore: number | null; percentileRank: string; descriptiveTerm: string; }
 
   const bayleyScores = useMemo((): BayleyScoreRow[] => {
@@ -732,6 +733,11 @@ export default function ClinicalReportEditor() {
     }).filter(Boolean) as Reel3ScoreRow[];
   }, [formSelections, formStates, childInfo, premWeeks]);
 
+  const dayc2ScoringMethod = useMemo(() => {
+    const fs = formSelections.find(f => f.formId === 'dayc2' || f.formId === 'dayc2sp');
+    return fs?.scoringMethod || 'native';
+  }, [formSelections]);
+
   const dayc2Scores = useMemo((): Dayc2ScoreRow[] => {
     const fs = formSelections.find(f => f.formId === 'dayc2' || f.formId === 'dayc2sp');
     if (!fs) return [];
@@ -740,6 +746,7 @@ export default function ClinicalReportEditor() {
     const form = getFormById(fs.formId);
     if (!form) return [];
     const ageMonthsVal = ageInMonths(childInfo.dob, childInfo.testDate, premWeeks);
+    const useBayley4AB = (fs.scoringMethod || 'native') === 'bayley4ab';
 
     // Map domain localIds to DAYC-2 scoring table domain keys
     const domainKeyMap: Record<string, 'social' | 'adaptive' | 'receptive' | 'expressive'> = {
@@ -757,36 +764,57 @@ export default function ClinicalReportEditor() {
       const rawScore = Object.values(ds.scores).reduce((sum: number, s) => sum + (s || 0), 0);
       const scoringKey = domainKeyMap[domainLocalId];
 
-      // Standard score lookup
-      let standardScore = '—';
-      let descriptiveTerm = '—';
-      let percentDelay = '—';
-      if (scoringKey) {
-        const stdScore = lookupDAYC2StandardScore(rawScore, ageMonthsVal, scoringKey);
-        if (stdScore !== null) {
-          standardScore = String(stdScore);
-          descriptiveTerm = lookupDAYC2DescriptiveTerm(stdScore);
-          const pctRank = lookupDAYC2PercentileRank(stdScore);
-          if (pctRank) descriptiveTerm += ` (PR: ${pctRank})`;
-        }
-      }
+      let standardScore = '\u2014';
+      let descriptiveTerm = '\u2014';
+      let percentDelay = '\u2014';
+      let ageEquivalent = '\u2014';
 
-      // Age equivalent lookup
-      let ageEquivalent = '—';
-      if (scoringKey) {
-        const aeMonths = lookupDAYC2AgeEquivalent(rawScore, scoringKey);
-        if (aeMonths !== null) {
-          ageEquivalent = `${aeMonths} months`;
-          // Percent delay calculation
-          if (ageMonthsVal > 0 && aeMonths < ageMonthsVal) {
-            percentDelay = `${Math.round(((ageMonthsVal - aeMonths) / ageMonthsVal) * 100)}%`;
-          } else if (aeMonths >= ageMonthsVal) {
-            percentDelay = '0%';
+      if (useBayley4AB) {
+        // Bayley-4 Adaptive Behavior scoring
+        const result = lookupDAYC2WithBayley4AB(rawScore, ageMonthsVal, domainLocalId);
+        if (result.scaledScore !== null) {
+          standardScore = String(result.scaledScore);
+          descriptiveTerm = result.label;
+        } else {
+          descriptiveTerm = result.label + ' (no match)';
+        }
+        // Still use DAYC-2 age equivalents for reference
+        if (scoringKey) {
+          const aeMonths = lookupDAYC2AgeEquivalent(rawScore, scoringKey);
+          if (aeMonths !== null) {
+            ageEquivalent = `${aeMonths} months`;
+            if (ageMonthsVal > 0 && aeMonths < ageMonthsVal) {
+              percentDelay = `${Math.round(((ageMonthsVal - aeMonths) / ageMonthsVal) * 100)}%`;
+            } else if (aeMonths >= ageMonthsVal) {
+              percentDelay = '0%';
+            }
+          }
+        }
+      } else {
+        // Native DAYC-2 scoring
+        if (scoringKey) {
+          const stdScore = lookupDAYC2StandardScore(rawScore, ageMonthsVal, scoringKey);
+          if (stdScore !== null) {
+            standardScore = String(stdScore);
+            descriptiveTerm = lookupDAYC2DescriptiveTerm(stdScore);
+            const pctRank = lookupDAYC2PercentileRank(stdScore);
+            if (pctRank) descriptiveTerm += ` (PR: ${pctRank})`;
+          }
+        }
+        if (scoringKey) {
+          const aeMonths = lookupDAYC2AgeEquivalent(rawScore, scoringKey);
+          if (aeMonths !== null) {
+            ageEquivalent = `${aeMonths} months`;
+            if (ageMonthsVal > 0 && aeMonths < ageMonthsVal) {
+              percentDelay = `${Math.round(((ageMonthsVal - aeMonths) / ageMonthsVal) * 100)}%`;
+            } else if (aeMonths >= ageMonthsVal) {
+              percentDelay = '0%';
+            }
           }
         }
       }
 
-      return { domain: domain.name, rawScore, standardScore, descriptiveTerm, ageEquivalent, percentDelay };
+      return { domain: domain.name, rawScore, standardScore, descriptiveTerm, ageEquivalent, percentDelay, scoringMethod: useBayley4AB ? 'bayley4ab' : 'native' };
     }).filter(Boolean) as Dayc2ScoreRow[];
   }, [formSelections, formStates, childInfo, premWeeks]);
 
@@ -1270,15 +1298,26 @@ export default function ClinicalReportEditor() {
 
                     {dayc2Scores.length > 0 && (
                       <div>
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">DAYC-2 Developmental Assessment of Young Children, 2nd Edition</h4>
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                          {dayc2ScoringMethod === 'bayley4ab'
+                            ? 'DAYC-2 Items Scored with Bayley-4 Adaptive Behavior Scales'
+                            : 'DAYC-2 Developmental Assessment of Young Children, 2nd Edition'}
+                        </h4>
+                        {dayc2ScoringMethod === 'bayley4ab' && (
+                          <p className="text-[10px] text-amber-600 mb-1 italic">Scoring method: Bayley-4 Adaptive Behavior norms applied to DAYC-2 raw scores</p>
+                        )}
                         <div className="overflow-x-auto">
                           <table className="w-full text-xs border-collapse border border-slate-400">
                             <thead>
                               <tr className="bg-slate-100">
                                 <th className="border border-slate-400 px-3 py-2 text-left font-bold">Subtest</th>
                                 <th className="border border-slate-400 px-3 py-2 text-center font-bold">Raw Score</th>
-                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">Standard Score</th>
-                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">Descriptive Term</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">
+                                  {dayc2ScoringMethod === 'bayley4ab' ? 'Scaled Score' : 'Standard Score'}
+                                </th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">
+                                  {dayc2ScoringMethod === 'bayley4ab' ? 'Bayley-4 Subscale' : 'Descriptive Term'}
+                                </th>
                                 <th className="border border-slate-400 px-3 py-2 text-center font-bold">Age Equivalence</th>
                                 <th className="border border-slate-400 px-3 py-2 text-center font-bold">% Delay</th>
                               </tr>
