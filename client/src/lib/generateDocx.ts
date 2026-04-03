@@ -174,6 +174,68 @@ export interface DocxReportData {
   feedingSummary?: string;
   feedingAdaptiveItemsDemonstrated?: string[];
   feedingAdaptiveItemsNotDemonstrated?: string[];
+  feedingChecklistData?: FeedingChecklistExportData;
+}
+
+/** Structured checklist data from Feeders & Growers evaluation tool */
+export interface FeedingChecklistExportData {
+  // Oral Sensory
+  oralSeeking: string;
+  extraOralSensitivity: string;
+  intraOralSensitivity: string;
+  foodsDuringAssessment: string;
+  // Jaw
+  jawStrength: string;
+  jawCupDrinking: string;
+  jawBitingThrough: string;
+  jawChewingEndurance: string;
+  jawWideExcursions: string;
+  jawLossOfFood: string;
+  jawChewingPattern: string;
+  jawClosedAtRest: string;
+  jawAnticipatoryOpening: string;
+  // Lips
+  lipsStrength: string;
+  lipsDrinking: string;
+  lipsDrinkingDetail: string;
+  lipsChewing: string;
+  lipsEndurance: string;
+  lipsDrooling: string;
+  lipsLossOfFood: string;
+  // Tongue
+  tongueStrength: string;
+  tongueDrinking: string;
+  tongueChewingLat: string;
+  tongueChewingKeep: string;
+  tongueChewingEndurance: string;
+  tongueLossSeal: string;
+  tongueLossFood: string;
+  tongueLateralizesTo: string;
+  tonguePrefers: string;
+  tongueTransfersMidline: string;
+  tongueTipElevation: string;
+  tongueCleanLips: string;
+  tongueProtrusionSwallow: string;
+  // Soft Palate
+  softPalate: string;
+  softPalateDescribe: string;
+  // Food Residue & Compensatory
+  foodResidue: string;
+  foodResidueReasons: string;
+  compensatoryStrategies: string;
+  // Overall
+  overallQuality: string;
+  swallowCoordinated: string;
+  swallowDescribe: string;
+  // Aspiration
+  aspirationThinLiquids: string;
+  aspirationThickenedLiquids: string;
+  aspirationSolids: string;
+  aspirationSignsPositive: string;
+  // Refusal & Self-feeding
+  refusalBehaviors: string;
+  selfFeeding: string;
+  selfFeedingDesc: string;
 }
 
 // ============================================================
@@ -1434,6 +1496,133 @@ export async function generateDocxReport(data: DocxReportData): Promise<void> {
     // IX. Summary
     children.push(heading('Summary', 'IX'));
     children.push(bodyParagraph(data.feedingSummary || ''));
+
+    // Appendix: Feeding Evaluation Checklist Data
+    if (data.feedingChecklistData) {
+      const cl = data.feedingChecklistData;
+      const hasAnyData = Object.values(cl).some(v => v && v !== '');
+      if (hasAnyData) {
+        children.push(heading('Feeding Evaluation Checklist Data', 'Appendix'));
+        children.push(
+          bodyParagraph('Structured clinical observations recorded using the Feeders & Growers OT Feeding Evaluation Tool.', { italic: true })
+        );
+
+        const hdrCell = (text: string) => tableCell(text, { bold: true, shading: 'E8F5E9' });
+        const valCell = (text: string) => tableCell(text || '—');
+
+        // Helper to build a 2-column row
+        const row2 = (label: string, value: string) =>
+          new TableRow({ children: [hdrCell(label), valCell(value)] });
+
+        // Oral Sensory & Feeding Performance
+        children.push(
+          bodyParagraph('Oral Sensory & Feeding Performance', { bold: true, spacing: { before: 200, after: 60 } })
+        );
+        children.push(
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              new TableRow({ children: [hdrCell('Assessment Item'), hdrCell('Finding')] }),
+              row2('Foods During Assessment', cl.foodsDuringAssessment),
+              row2('Oral Seeking Behavior', cl.oralSeeking),
+              row2('Extra-Oral Sensitivity', cl.extraOralSensitivity),
+              row2('Intra-Oral Sensitivity', cl.intraOralSensitivity),
+            ],
+          })
+        );
+
+        // Jaw
+        children.push(
+          bodyParagraph('Jaw Assessment', { bold: true, spacing: { before: 200, after: 60 } })
+        );
+        children.push(
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              new TableRow({ children: [hdrCell('Assessment Item'), hdrCell('Finding')] }),
+              row2('Strength', cl.jawStrength),
+              row2('Cup Drinking', cl.jawCupDrinking),
+              row2('Biting Through Food', cl.jawBitingThrough),
+              row2('Chewing Endurance', cl.jawChewingEndurance),
+              row2('Wide Jaw Excursions', cl.jawWideExcursions),
+              row2('Loss of Food While Chewing', cl.jawLossOfFood),
+              row2('Chewing Pattern', cl.jawChewingPattern),
+              row2('Closed at Rest', cl.jawClosedAtRest),
+              row2('Anticipatory Mouth Opening', cl.jawAnticipatoryOpening),
+            ],
+          })
+        );
+
+        // Lips
+        children.push(
+          bodyParagraph('Lips Assessment', { bold: true, spacing: { before: 200, after: 60 } })
+        );
+        children.push(
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              new TableRow({ children: [hdrCell('Assessment Item'), hdrCell('Finding')] }),
+              row2('Strength', cl.lipsStrength),
+              row2('Drinking Seal', cl.lipsDrinking + (cl.lipsDrinkingDetail ? ` (${cl.lipsDrinkingDetail})` : '')),
+              row2('Chewing Closure', cl.lipsChewing),
+              row2('Lip Seal Endurance', cl.lipsEndurance),
+              row2('Drooling', cl.lipsDrooling),
+              row2('Loss of Liquid/Food', cl.lipsLossOfFood),
+            ],
+          })
+        );
+
+        // Tongue
+        children.push(
+          bodyParagraph('Tongue Assessment', { bold: true, spacing: { before: 200, after: 60 } })
+        );
+        children.push(
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              new TableRow({ children: [hdrCell('Assessment Item'), hdrCell('Finding')] }),
+              row2('Strength', cl.tongueStrength),
+              row2('Drinking (Cupping)', cl.tongueDrinking),
+              row2('Lateralizing to Molar Ridge', cl.tongueChewingLat),
+              row2('Keeping Food on Molar Ridge', cl.tongueChewingKeep),
+              row2('Chewing Endurance', cl.tongueChewingEndurance),
+              row2('Loss of Seal on Breast/Bottle', cl.tongueLossSeal),
+              row2('Loss of Food w/ Chewing', cl.tongueLossFood),
+              row2('Lateralizes To', cl.tongueLateralizesTo),
+              row2('Prefers', cl.tonguePrefers),
+              row2('Transfers Across Midline', cl.tongueTransfersMidline),
+              row2('Tongue Tip Elevation', cl.tongueTipElevation),
+              row2('Cleans Lips with Tongue', cl.tongueCleanLips),
+              row2('Tongue Protrusion with Swallow', cl.tongueProtrusionSwallow),
+            ],
+          })
+        );
+
+        // Soft Palate, Overall, Aspiration, etc.
+        children.push(
+          bodyParagraph('Additional Observations', { bold: true, spacing: { before: 200, after: 60 } })
+        );
+        children.push(
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              new TableRow({ children: [hdrCell('Assessment Item'), hdrCell('Finding')] }),
+              row2('Soft Palate Elevation', cl.softPalate + (cl.softPalateDescribe ? ` — ${cl.softPalateDescribe}` : '')),
+              row2('Food Residue', cl.foodResidue + (cl.foodResidueReasons ? ` (${cl.foodResidueReasons})` : '')),
+              row2('Compensatory Strategies', cl.compensatoryStrategies),
+              row2('Overall Quality of Oral Motor Skills', cl.overallQuality),
+              row2('Coordinated Swallow', cl.swallowCoordinated + (cl.swallowDescribe ? ` — ${cl.swallowDescribe}` : '')),
+              row2('Aspiration Signs — Thin Liquids', cl.aspirationThinLiquids),
+              row2('Aspiration Signs — Thickened Liquids', cl.aspirationThickenedLiquids),
+              row2('Aspiration Signs — Solids', cl.aspirationSolids),
+              row2('Positive Aspiration Signs', cl.aspirationSignsPositive || 'None'),
+              row2('Refusal Behaviors', cl.refusalBehaviors),
+              row2('Self-Feeding', cl.selfFeeding + (cl.selfFeedingDesc ? ` — ${cl.selfFeedingDesc}` : '')),
+            ],
+          })
+        );
+      }
+    }
   }
 
   // ===== CLOSING (all templates) =====

@@ -28,7 +28,11 @@ import { generatePdfReport } from '@/lib/generateReportPdf';
 import { loadAppSettings, type RecommendationTemplate } from '@/components/SettingsPreferences';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
-import { FeedingPerformanceChecklist } from '@/components/FeedingPerformanceChecklist';
+import { FeedingPerformanceChecklist, ASPIRATION_SIGN_LABELS } from '@/components/FeedingPerformanceChecklist';
+import type { FeedingChecklistDataType } from '@/components/FeedingPerformanceChecklist';
+import type { FeedingChecklistExportData } from '@/lib/generateDocx';
+import { FeedingBehaviorsChecklist } from '@/components/FeedingBehaviorsChecklist';
+import { SelfFeedingChecklist } from '@/components/SelfFeedingChecklist';
 import { parseLocalDate, formatDateLocal, calculateAge } from '@/lib/dateUtils';
 
 // ============================================================
@@ -1194,6 +1198,69 @@ export default function ClinicalReportEditor() {
           };
         });
 
+      // Load feeding checklist data from localStorage for export
+      let feedingChecklistExport: FeedingChecklistExportData | undefined;
+      if (template === 'feeding') {
+        try {
+          const clRaw = localStorage.getItem(`feeding-checklist-${childKey}`);
+          if (clRaw) {
+            const cl: FeedingChecklistDataType = JSON.parse(clRaw);
+            const enduranceStr = (wfl: string, rating: string) => wfl === 'WFL' ? 'WFL' : wfl === 'Impaired' ? `Impaired - ${rating || 'N/A'}` : '';
+            const positiveAsp = ASPIRATION_SIGN_LABELS.filter(s => cl.aspirationSigns?.[s] === 'Y');
+            feedingChecklistExport = {
+              oralSeeking: cl.oralSeeking || '',
+              extraOralSensitivity: cl.extraOralSensitivity || '',
+              intraOralSensitivity: cl.intraOralSensitivity || '',
+              foodsDuringAssessment: cl.foodsDuringAssessment || '',
+              jawStrength: cl.jawStrength || '',
+              jawCupDrinking: cl.jawCupDrinking || '',
+              jawBitingThrough: cl.jawBitingThrough || '',
+              jawChewingEndurance: enduranceStr(cl.jawChewingEndurance, cl.jawChewingEnduranceRating),
+              jawWideExcursions: cl.jawWideExcursions || '',
+              jawLossOfFood: cl.jawLossOfFood || '',
+              jawChewingPattern: cl.jawChewingPattern || '',
+              jawClosedAtRest: cl.jawClosedAtRest || '',
+              jawAnticipatoryOpening: cl.jawAnticipatoryOpening || '',
+              lipsStrength: cl.lipsStrength || '',
+              lipsDrinking: cl.lipsDrinking || '',
+              lipsDrinkingDetail: cl.lipsDrinkingDetail || '',
+              lipsChewing: cl.lipsChewing || '',
+              lipsEndurance: enduranceStr(cl.lipsEndurance, cl.lipsEnduranceRating),
+              lipsDrooling: cl.lipsDrooling || '',
+              lipsLossOfFood: cl.lipsLossOfFood || '',
+              tongueStrength: cl.tongueStrength || '',
+              tongueDrinking: cl.tongueDrinking || '',
+              tongueChewingLat: cl.tongueChewingLat || '',
+              tongueChewingKeep: cl.tongueChewingKeep || '',
+              tongueChewingEndurance: enduranceStr(cl.tongueChewingEndurance, cl.tongueChewingEnduranceRating),
+              tongueLossSeal: cl.tongueLossSeal || '',
+              tongueLossFood: cl.tongueLossFood || '',
+              tongueLateralizesTo: cl.tongueLateralizesTo || '',
+              tonguePrefers: cl.tonguePrefers || '',
+              tongueTransfersMidline: cl.tongueTransfersMidline || '',
+              tongueTipElevation: cl.tongueTipElevation || '',
+              tongueCleanLips: cl.tongueCleanLips || '',
+              tongueProtrusionSwallow: cl.tongueProtrusionSwallow || '',
+              softPalate: cl.softPalate || '',
+              softPalateDescribe: cl.softPalateDescribe || '',
+              foodResidue: cl.foodResidue || '',
+              foodResidueReasons: (cl.foodResidueReasons || []).join('; '),
+              compensatoryStrategies: (cl.compensatoryStrategies || []).join('; '),
+              overallQuality: cl.overallQuality || '',
+              swallowCoordinated: cl.swallowCoordinated || '',
+              swallowDescribe: cl.swallowDescribe || '',
+              aspirationThinLiquids: cl.aspirationThinLiquids || '',
+              aspirationThickenedLiquids: cl.aspirationThickenedLiquids ? `${cl.aspirationThickenedLiquids}${cl.aspirationThickenedLevel ? ` (${cl.aspirationThickenedLevel})` : ''}` : '',
+              aspirationSolids: cl.aspirationSolids ? `${cl.aspirationSolids}${cl.aspirationSolidsType ? ` (${cl.aspirationSolidsType})` : ''}` : '',
+              aspirationSignsPositive: positiveAsp.length > 0 ? positiveAsp.join(', ') : '',
+              refusalBehaviors: cl.refusalBehaviors ? `${cl.refusalBehaviors}${cl.refusalParentResponse ? ` — ${cl.refusalParentResponse}` : ''}` : '',
+              selfFeeding: cl.selfFeeding || '',
+              selfFeedingDesc: cl.selfFeedingDesc || '',
+            };
+          }
+        } catch { /* ignore parse errors */ }
+      }
+
       const data: DocxReportData = {
         template,
         practiceName,
@@ -1303,6 +1370,7 @@ export default function ClinicalReportEditor() {
         feedingSummary,
         feedingAdaptiveItemsDemonstrated: feedingAdaptiveItems.demonstrated,
         feedingAdaptiveItemsNotDemonstrated: feedingAdaptiveItems.notDemonstrated,
+        feedingChecklistData: feedingChecklistExport,
       };
 
       await generateDocxReport(data);
@@ -2299,6 +2367,23 @@ export default function ClinicalReportEditor() {
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-slate-700 mb-1">b. Feeding Behaviors</h4>
+                      <FeedingBehaviorsChecklist
+                        childName={firstName}
+                        storageKey={childKey}
+                        hasExistingContent={!!feedingBehaviors.trim()}
+                        onInsertNarrative={(narrative, mode) => {
+                          if (mode === 'replace') {
+                            setFeedingBehaviors(narrative);
+                            toast.success('Narrative replaced in Feeding Behaviors section');
+                          } else {
+                            setFeedingBehaviors(prev => {
+                              const updated = prev ? prev + '\n\n' + narrative : narrative;
+                              return updated;
+                            });
+                            toast.success('Narrative appended to Feeding Behaviors section');
+                          }
+                        }}
+                      />
                       <EditableSection label="" value={feedingBehaviors} onChange={setFeedingBehaviors} placeholder={`${firstName} demonstrates adequate readiness with feeding activity. Describe feeding behaviors observed during the evaluation (drooling, posture, ability to stay seated, finger feeding, etc.).`} rows={4} />
                     </div>
                     <div>
@@ -2328,6 +2413,23 @@ export default function ClinicalReportEditor() {
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-slate-700 mb-1">e. Self-Feeding Skills</h4>
+                      <SelfFeedingChecklist
+                        childName={firstName}
+                        storageKey={childKey}
+                        hasExistingContent={!!feedingSelfFeeding.trim()}
+                        onInsertNarrative={(narrative, mode) => {
+                          if (mode === 'replace') {
+                            setFeedingSelfFeeding(narrative);
+                            toast.success('Narrative replaced in Self-Feeding Skills section');
+                          } else {
+                            setFeedingSelfFeeding(prev => {
+                              const updated = prev ? prev + '\n\n' + narrative : narrative;
+                              return updated;
+                            });
+                            toast.success('Narrative appended to Self-Feeding Skills section');
+                          }
+                        }}
+                      />
                       <EditableSection label="" value={feedingSelfFeeding} onChange={setFeedingSelfFeeding} placeholder={`${firstName} is able to finger feed ${pronoun(gender, 'object')}self independently. Describe hand-eye coordination, utensil use, cup drinking ability, etc.`} rows={4} />
                     </div>
                   </div>

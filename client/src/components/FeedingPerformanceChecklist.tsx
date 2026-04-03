@@ -722,5 +722,5 @@ export function FeedingPerformanceChecklist({ childName, onInsertNarrative, stor
   );
 }
 
-export { generateNarrative, DEFAULT_DATA };
+export { generateNarrative, DEFAULT_DATA, ASPIRATION_SIGN_LABELS };
 export type { FeedingChecklistData as FeedingChecklistDataType };
