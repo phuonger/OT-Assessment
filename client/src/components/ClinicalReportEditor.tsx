@@ -2392,6 +2392,8 @@ export default function ClinicalReportEditor() {
                         childName={firstName}
                         storageKey={childKey}
                         hasExistingContent={!!feedingOralMotorCoord.trim()}
+                        dateOfEval={formatDate(childInfo.testDate)}
+                        examinerName={examinerInfo.name}
                         onInsertNarrative={(narrative, mode) => {
                           if (mode === 'replace') {
                             setFeedingOralMotorCoord(narrative);

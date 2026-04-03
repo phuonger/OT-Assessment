@@ -17,8 +17,9 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Wand2, RotateCcw, RefreshCw, AlertTriangle } from 'lucide-react';
+import { ChevronDown, ChevronUp, Wand2, RotateCcw, RefreshCw, AlertTriangle, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { generateChecklistPdf } from '@/lib/generateChecklistPdf';
 
 // ============================================================
 // Types
@@ -365,9 +366,11 @@ interface FeedingPerformanceChecklistProps {
   onInsertNarrative: (narrative: string, mode: 'append' | 'replace') => void;
   storageKey: string;
   hasExistingContent?: boolean;
+  dateOfEval?: string;
+  examinerName?: string;
 }
 
-export function FeedingPerformanceChecklist({ childName, onInsertNarrative, storageKey, hasExistingContent }: FeedingPerformanceChecklistProps) {
+export function FeedingPerformanceChecklist({ childName, onInsertNarrative, storageKey, hasExistingContent, dateOfEval, examinerName }: FeedingPerformanceChecklistProps) {
   const STORAGE_KEY = `feeding-checklist-${storageKey}`;
   const [data, setData] = useState<FeedingChecklistData>(() => {
     try {
@@ -399,6 +402,15 @@ export function FeedingPerformanceChecklist({ childName, onInsertNarrative, stor
     setData({ ...DEFAULT_DATA });
     try { localStorage.removeItem(STORAGE_KEY); } catch { /* */ }
   }, [STORAGE_KEY]);
+
+  const handlePrintChecklist = useCallback(() => {
+    generateChecklistPdf({
+      childName,
+      dateOfEval,
+      examinerName,
+      data,
+    });
+  }, [childName, dateOfEval, examinerName, data]);
 
   return (
     <div className="mb-4 print:hidden">
@@ -670,6 +682,15 @@ export function FeedingPerformanceChecklist({ childName, onInsertNarrative, stor
             >
               <RefreshCw className="w-3.5 h-3.5" />
               Clear & Re-generate
+            </Button>
+            <Button
+              onClick={handlePrintChecklist}
+              variant="outline"
+              size="sm"
+              className="text-xs gap-1.5 text-slate-600 border-teal-300 hover:bg-teal-50"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              Print Checklist
             </Button>
             <Button
               onClick={handleReset}
