@@ -18,7 +18,7 @@ import { getFormById, type FormDefinition, type UnifiedDomain } from '@/lib/form
 import { lookupScaledScore, lookupAgeEquivalent, lookupGrowthScaleValue, lookupStandardScore } from '@/lib/scoringTables';
 import { REEL3_AGE_EQUIVALENT } from '@/lib/reel3Data';
 import { lookupDAYC2StandardScore, lookupDAYC2AgeEquivalent, lookupDAYC2PercentileRank, lookupDAYC2DescriptiveTerm } from '@/lib/dayc2ScoringTables';
-import { lookupDAYC2WithBayley4AB, computeDAYC2BayleyComposites, type CompositeResult } from '@/lib/bayley4AdaptiveSE';
+import { lookupDAYC2WithBayley4AB, computeDAYC2BayleyComposites, getScaledScoreClassification, getCompositeClassification, type CompositeResult } from '@/lib/bayley4AdaptiveSE';
 import { lookupREEL3AbilityScore, lookupREEL3PercentileRank, lookupREEL3DescriptiveTerm } from '@/lib/reel3ScoringTables';
 import { SP2_ENGLISH_CUTOFFS, SP2_BIRTH6MO_CUTOFFS, SP2_QUADRANT_MAP, getSP2Description } from '@/lib/sensoryProfileData';
 import { Button } from '@/components/ui/button';

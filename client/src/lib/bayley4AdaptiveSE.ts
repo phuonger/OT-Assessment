@@ -1407,3 +1407,35 @@ export function computeDAYC2BayleyComposites(
 
   return results;
 }
+
+
+// ============================================================
+// Descriptive Classification Labels
+// ============================================================
+
+/**
+ * Bayley-4 Composite Standard Score classifications (mean=100, SD=15)
+ * Based on Bayley-4 SEAB Score Report descriptive classifications
+ */
+export function getCompositeClassification(standardScore: number): string {
+  if (standardScore >= 130) return 'Extremely High';
+  if (standardScore >= 120) return 'Very High';
+  if (standardScore >= 110) return 'High Average';
+  if (standardScore >= 90) return 'Average';
+  if (standardScore >= 80) return 'Low Average';
+  if (standardScore >= 70) return 'Borderline';
+  if (standardScore >= 60) return 'Very Low';
+  return 'Extremely Low';
+}
+
+/**
+ * Bayley-4 Subscale Scaled Score classifications (mean=10, SD=3, range 1-19)
+ * Based on standard qualitative descriptors for scaled scores
+ */
+export function getScaledScoreClassification(scaledScore: number): string {
+  if (scaledScore >= 16) return 'Very Superior';
+  if (scaledScore >= 13) return 'Above Average';
+  if (scaledScore >= 8) return 'Average';
+  if (scaledScore >= 5) return 'Below Average';
+  return 'Well Below Average';
+}
