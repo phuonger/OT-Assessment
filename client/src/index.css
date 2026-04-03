@@ -146,23 +146,38 @@
   body {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    background: white !important;
+    font-size: 10pt !important;
   }
-  
+
   /* Hide non-print elements */
   .print\:hidden,
   [data-sonner-toaster],
   nav,
-  header {
+  header,
+  footer,
+  .sticky,
+  button,
+  [role="button"],
+  input,
+  textarea,
+  select {
     display: none !important;
   }
-  
+
+  /* Show the report content area */
+  [data-report-content],
+  .print\:block {
+    display: block !important;
+  }
+
   /* Reset page margins */
   @page {
-    margin: 0.75in;
+    margin: 0.6in 0.75in;
     size: letter;
   }
-  
-  /* Report container */
+
+  /* Report container resets */
   .print\:shadow-none {
     box-shadow: none !important;
   }
@@ -183,31 +198,87 @@
   .print\:p-12 {
     padding: 0 !important;
   }
-  
-  /* Ensure text is readable */
-  * {
-    color: black !important;
+  .print\:bg-white {
+    background: white !important;
   }
-  
-  /* Table styling for print */
+
+  /* Default text to black, but allow overrides for colored elements */
+  body, p, span, div, li, td {
+    color: #1a1a1a !important;
+  }
+
+  /* Preserve heading colors for section titles */
+  h1, h2, h3, h4, h5, h6 {
+    color: #1a1a1a !important;
+  }
+
+  /* Table styling for print — preserve header backgrounds */
   table {
     border-collapse: collapse !important;
+    width: 100% !important;
+    page-break-inside: auto;
+  }
+  tr {
+    page-break-inside: avoid;
   }
   th, td {
     border: 1px solid #999 !important;
     padding: 4px 8px !important;
+    font-size: 9pt !important;
   }
   th {
-    background-color: #f0f0f0 !important;
+    background-color: #e8e8e8 !important;
+    font-weight: bold !important;
+    color: #1a1a1a !important;
   }
-  
+  /* Preserve colored table headers (Bayley teal, DAYC blue, etc.) */
+  thead th[style],
+  tr.bg-slate-100 th {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Status badges */
+  .bg-emerald-50, .bg-amber-50 {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
   /* Prevent page breaks inside sections */
-  .border-l-2 {
+  .border-l-2,
+  .rounded-xl,
+  .rounded-lg {
     page-break-inside: avoid;
   }
-  
-  /* Section headers */
+
+  /* Section headers should not be orphaned */
   h2, h3, h4 {
     page-break-after: avoid;
+  }
+
+  /* Remove decorative backgrounds */
+  .bg-slate-50,
+  .bg-\[\#FAF9F6\],
+  .bg-\[\#faf8f5\],
+  .min-h-screen {
+    background: white !important;
+    min-height: auto !important;
+  }
+
+  /* Remove shadows and borders from cards */
+  .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl {
+    box-shadow: none !important;
+  }
+
+  /* Links should show as text */
+  a {
+    color: #1a1a1a !important;
+    text-decoration: none !important;
+  }
+
+  /* Ensure images print */
+  img {
+    max-width: 100% !important;
+    page-break-inside: avoid;
   }
 }
