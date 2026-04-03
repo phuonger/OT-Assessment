@@ -26,20 +26,39 @@ export async function generatePdfReport(options: PdfExportOptions): Promise<void
   if (onBeforeCapture) onBeforeCapture();
 
   // Small delay to let React re-render expanded sections
-  await new Promise(resolve => setTimeout(resolve, 200));
+  await new Promise(resolve => setTimeout(resolve, 300));
 
   // Clone the element so we can modify it without affecting the live DOM
   const clone = element.cloneNode(true) as HTMLElement;
 
-  // Remove all print:hidden and interactive elements from the clone
+  // Remove all print:hidden elements (Tailwind class with colon)
+  // Tailwind 4 may compile the class differently, so check multiple patterns
   clone.querySelectorAll('.print\\:hidden, [class*="print:hidden"]').forEach(el => el.remove());
-  // Remove edit buttons, toggle buttons
-  clone.querySelectorAll('button').forEach(btn => {
-    const text = btn.textContent?.trim().toLowerCase() || '';
-    if (['edit', 'done', 'show', 'hide', 'insert template'].some(t => text.includes(t))) {
-      btn.remove();
+
+  // Remove all no-print elements (the Print All Checklists button, etc.)
+  clone.querySelectorAll('.no-print, [class*="no-print"]').forEach(el => el.remove());
+
+  // Remove all checklist guide components by their data attributes or distinctive classes
+  // These are interactive-only components not meant for PDF output
+  clone.querySelectorAll('[data-checklist-guide]').forEach(el => el.remove());
+
+  // Remove any remaining elements with checklist-related patterns
+  // (collapsible guides with radio buttons, checkboxes for clinical assessment)
+  clone.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(el => {
+    // Walk up to find the closest guide container and remove it
+    // But only if it's inside a guide wrapper, not a regular form element
+    const wrapper = el.closest('[class*="border-teal"], [class*="border-blue"], [class*="border-violet"], [class*="border-cyan"], [class*="border-amber"]');
+    if (wrapper && wrapper.querySelector('input[type="radio"]')) {
+      wrapper.remove();
     }
   });
+
+  // Remove all buttons
+  clone.querySelectorAll('button').forEach(btn => btn.remove());
+
+  // Remove all remaining interactive inputs (selects, etc.)
+  clone.querySelectorAll('select').forEach(el => el.remove());
+
   // Remove textareas — replace with their text content in a styled div
   clone.querySelectorAll('textarea').forEach(ta => {
     const div = document.createElement('div');
@@ -50,6 +69,14 @@ export async function generatePdfReport(options: PdfExportOptions): Promise<void
     div.style.color = '#1e293b';
     div.textContent = (ta as HTMLTextAreaElement).value;
     ta.parentNode?.replaceChild(div, ta);
+  });
+
+  // Remove any empty containers left after stripping interactive elements
+  clone.querySelectorAll('div:empty').forEach(el => {
+    // Only remove if it has no meaningful styling (not a spacer/divider)
+    if (!el.className.includes('border-') && !el.className.includes('bg-')) {
+      el.remove();
+    }
   });
 
   // Style the clone for PDF output
@@ -72,15 +99,17 @@ export async function generatePdfReport(options: PdfExportOptions): Promise<void
 
   try {
     const opt = {
-      margin: [0.5, 0.6, 0.5, 0.6] as [number, number, number, number], // top, right, bottom, left in inches
+      margin: [0.5, 0.6, 0.5, 0.6] as [number, number, number, number],
       filename: filename,
-      image: { type: 'jpeg' as const, quality: 0.98 },
+      image: { type: 'jpeg' as const, quality: 0.92 },
       html2canvas: {
-        scale: 2,
+        scale: 1.5,
         useCORS: true,
         letterRendering: true,
         logging: false,
         backgroundColor: '#ffffff',
+        // Limit canvas size to prevent memory issues
+        windowWidth: 816, // 8.5in * 96dpi
       },
       jsPDF: {
         unit: 'in',
@@ -90,10 +119,18 @@ export async function generatePdfReport(options: PdfExportOptions): Promise<void
       pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
     };
 
-    await html2pdf().set(opt).from(clone).save();
+    // Add a timeout to prevent infinite hangs
+    const pdfPromise = html2pdf().set(opt).from(clone).save();
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('PDF generation timed out after 60 seconds')), 60000)
+    );
+
+    await Promise.race([pdfPromise, timeoutPromise]);
   } finally {
     // Clean up
-    document.body.removeChild(container);
+    if (document.body.contains(container)) {
+      document.body.removeChild(container);
+    }
     // Restore sections
     if (onAfterCapture) onAfterCapture();
   }

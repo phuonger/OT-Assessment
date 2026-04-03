@@ -413,7 +413,7 @@ export function FeedingPerformanceChecklist({ childName, onInsertNarrative, stor
   }, [childName, dateOfEval, examinerName, data]);
 
   return (
-    <div className="mb-4 print:hidden">
+    <div className="mb-4 print:hidden no-print" data-checklist-guide>
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-200 rounded-lg hover:from-teal-100 hover:to-emerald-100 transition-colors"

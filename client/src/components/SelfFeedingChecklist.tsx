@@ -213,7 +213,7 @@ export function SelfFeedingChecklist({ childName, onInsertNarrative, storageKey,
   }, [data, childName, dateOfEval, examinerName]);
 
   return (
-    <div className="mb-4 print:hidden">
+    <div className="mb-4 print:hidden no-print" data-checklist-guide>
       <button onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-lg hover:from-violet-100 hover:to-purple-100 transition-colors">
         <div className="flex items-center gap-2">
