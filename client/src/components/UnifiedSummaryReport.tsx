@@ -14,7 +14,7 @@ import { getFormById, type FormDefinition, type UnifiedDomain } from '@/lib/form
 import { lookupScaledScore, lookupAgeEquivalent, lookupGrowthScaleValue, lookupStandardScore } from '@/lib/scoringTables';
 import { REEL3_AGE_EQUIVALENT, REEL3_ABILITY_TO_PERCENTILE, REEL3_DESCRIPTIVE_TERMS, REEL3_LANGUAGE_ABILITY } from '@/lib/reel3Data';
 import { lookupDAYC2StandardScore, lookupDAYC2AgeEquivalent, lookupDAYC2PercentileRank, lookupDAYC2DescriptiveTerm } from '@/lib/dayc2ScoringTables';
-import { lookupDAYC2WithBayley4AB, computeDAYC2BayleyComposites, type CompositeResult } from '@/lib/bayley4AdaptiveSE';
+import { lookupDAYC2WithBayley4AB, computeDAYC2BayleyComposites, getScaledScoreClassification, getCompositeClassification, type CompositeResult } from '@/lib/bayley4AdaptiveSE';
 import { lookupREEL3AbilityScore, lookupREEL3PercentileRank, lookupREEL3DescriptiveTerm } from '@/lib/reel3ScoringTables';
 import { SP2_BIRTH6MO_CUTOFFS, SP2_ENGLISH_CUTOFFS, SP2_QUADRANT_MAP, getSP2Description } from '@/lib/sensoryProfileData';
 import { Button } from '@/components/ui/button';
@@ -628,6 +628,7 @@ function Dayc2Report({ form, formState, selectedDomainIds, ageInDays, getRawScor
               <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">{useBayley4AB ? 'Scaled Score' : 'Std Score'}</th>
               {!useBayley4AB && <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Percentile</th>}
               <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">{useBayley4AB ? 'Bayley-4 Subscale' : 'Term'}</th>
+              {useBayley4AB && <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Classification</th>}
               <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Age Eq.</th>
               <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">% Delay</th>
               <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Status</th>
@@ -641,6 +642,19 @@ function Dayc2Report({ form, formState, selectedDomainIds, ageInDays, getRawScor
                 <td className="text-center py-2 px-2 font-mono">{d.standardScore ?? '\u2014'}</td>
                 {!useBayley4AB && <td className="text-center py-2 px-2">{d.percentileRank}</td>}
                 <td className="text-center py-2 px-2 text-xs">{useBayley4AB ? d.bayley4Label : d.descriptiveTerm}</td>
+                {useBayley4AB && (
+                  <td className="text-center py-2 px-2">
+                    {d.standardScore !== null ? (
+                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                        getScaledScoreClassification(d.standardScore as number) === 'Average' ? 'bg-green-100 text-green-700' :
+                        getScaledScoreClassification(d.standardScore as number) === 'Above Average' || getScaledScoreClassification(d.standardScore as number) === 'Very Superior' ? 'bg-blue-100 text-blue-700' :
+                        getScaledScoreClassification(d.standardScore as number) === 'Below Average' ? 'bg-amber-100 text-amber-700' :
+                        getScaledScoreClassification(d.standardScore as number) === 'Well Below Average' ? 'bg-red-100 text-red-700' :
+                        'bg-slate-100 text-slate-600'
+                      }`}>{getScaledScoreClassification(d.standardScore as number)}</span>
+                    ) : '\u2014'}
+                  </td>
+                )}
                 <td className="text-center py-2 px-2">{d.ageEquivalent}</td>
                 <td className="text-center py-2 px-2">{d.percentDelay}</td>
                 <td className="text-center py-2 px-2">
@@ -679,6 +693,7 @@ function Dayc2Report({ form, formState, selectedDomainIds, ageInDays, getRawScor
                   <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Sum of SS</th>
                   <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Standard Score</th>
                   <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Percentile</th>
+                  <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Classification</th>
                   <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">90% CI</th>
                   <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">95% CI</th>
                 </tr>
@@ -693,6 +708,17 @@ function Dayc2Report({ form, formState, selectedDomainIds, ageInDays, getRawScor
                     <td className="text-center py-2 px-2 font-mono">{comp.available ? comp.sumOfScaledScores : '\u2014'}</td>
                     <td className="text-center py-2 px-2 font-mono">{comp.standardScore ?? '\u2014'}</td>
                     <td className="text-center py-2 px-2">{comp.percentileRank ?? '\u2014'}</td>
+                    <td className="text-center py-2 px-2">
+                      {comp.standardScore !== null ? (
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                          getCompositeClassification(comp.standardScore) === 'Average' ? 'bg-green-100 text-green-700' :
+                          getCompositeClassification(comp.standardScore) === 'High Average' || getCompositeClassification(comp.standardScore) === 'Very High' || getCompositeClassification(comp.standardScore) === 'Extremely High' ? 'bg-blue-100 text-blue-700' :
+                          getCompositeClassification(comp.standardScore) === 'Low Average' ? 'bg-amber-100 text-amber-700' :
+                          getCompositeClassification(comp.standardScore) === 'Borderline' || getCompositeClassification(comp.standardScore) === 'Very Low' || getCompositeClassification(comp.standardScore) === 'Extremely Low' ? 'bg-red-100 text-red-700' :
+                          'bg-slate-100 text-slate-600'
+                        }`}>{getCompositeClassification(comp.standardScore)}</span>
+                      ) : '\u2014'}
+                    </td>
                     <td className="text-center py-2 px-2 text-xs">{comp.confidence90}</td>
                     <td className="text-center py-2 px-2 text-xs">{comp.confidence95}</td>
                   </tr>

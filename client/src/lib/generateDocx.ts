@@ -47,6 +47,7 @@ export interface Dayc2ScoreRow {
   ageEquivalent: string;
   percentDelay: string;
   scoringMethod?: 'native' | 'bayley4ab';
+  classification?: string;
 }
 
 export interface Bayley4ABCompositeRow {
@@ -384,29 +385,39 @@ function createDayc2Table(scores: Dayc2ScoreRow[]): (Paragraph | Table)[] {
 
   const useBayley4AB = scores[0]?.scoringMethod === 'bayley4ab';
 
-  const headerRow = new TableRow({
-    children: [
-      tableCell('Subtest', { bold: true, shading: 'F1F5F9' }),
-      tableCell('Raw Score', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
-      tableCell(useBayley4AB ? 'Scaled Score' : 'Standard Score', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
-      tableCell(useBayley4AB ? 'Bayley-4 Subscale' : 'Descriptive Term', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
-      tableCell('Age Equivalence', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
-      tableCell('% Delay', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
-    ],
-  });
+  const headerCells = [
+    tableCell('Subtest', { bold: true, shading: 'F1F5F9' }),
+    tableCell('Raw Score', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
+    tableCell(useBayley4AB ? 'Scaled Score' : 'Standard Score', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
+    tableCell(useBayley4AB ? 'Bayley-4 Subscale' : 'Descriptive Term', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
+  ];
+  if (useBayley4AB) {
+    headerCells.push(tableCell('Classification', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }));
+  }
+  headerCells.push(
+    tableCell('Age Equivalence', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
+    tableCell('% Delay', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
+  );
+
+  const headerRow = new TableRow({ children: headerCells });
 
   const dataRows = scores.map(
-    (row) =>
-      new TableRow({
-        children: [
-          tableCell(row.domain, { bold: true }),
-          tableCell(String(row.rawScore), { alignment: AlignmentType.CENTER }),
-          tableCell(row.standardScore, { alignment: AlignmentType.CENTER }),
-          tableCell(row.descriptiveTerm, { alignment: AlignmentType.CENTER }),
-          tableCell(row.ageEquivalent, { alignment: AlignmentType.CENTER }),
-          tableCell(row.percentDelay, { alignment: AlignmentType.CENTER }),
-        ],
-      })
+    (row) => {
+      const cells = [
+        tableCell(row.domain, { bold: true }),
+        tableCell(String(row.rawScore), { alignment: AlignmentType.CENTER }),
+        tableCell(row.standardScore, { alignment: AlignmentType.CENTER }),
+        tableCell(row.descriptiveTerm, { alignment: AlignmentType.CENTER }),
+      ];
+      if (useBayley4AB) {
+        cells.push(tableCell(row.classification || '\u2014', { alignment: AlignmentType.CENTER }));
+      }
+      cells.push(
+        tableCell(row.ageEquivalent, { alignment: AlignmentType.CENTER }),
+        tableCell(row.percentDelay, { alignment: AlignmentType.CENTER }),
+      );
+      return new TableRow({ children: cells });
+    }
   );
 
   const titleText = useBayley4AB
@@ -463,23 +474,38 @@ function createBayley4ABCompositeTable(composites: Bayley4ABCompositeRow[]): (Pa
       tableCell('Sum of SS', { bold: true, shading: 'FEF3C7', alignment: AlignmentType.CENTER }),
       tableCell('Standard Score', { bold: true, shading: 'FEF3C7', alignment: AlignmentType.CENTER }),
       tableCell('Percentile Rank', { bold: true, shading: 'FEF3C7', alignment: AlignmentType.CENTER }),
+      tableCell('Classification', { bold: true, shading: 'FEF3C7', alignment: AlignmentType.CENTER }),
       tableCell('90% CI', { bold: true, shading: 'FEF3C7', alignment: AlignmentType.CENTER }),
       tableCell('95% CI', { bold: true, shading: 'FEF3C7', alignment: AlignmentType.CENTER }),
     ],
   });
 
   const dataRows = composites.map(
-    (comp) =>
-      new TableRow({
+    (comp) => {
+      // Compute classification for composite standard scores
+      let classification = '\u2014';
+      if (comp.standardScore !== null) {
+        const ss = comp.standardScore;
+        if (ss >= 130) classification = 'Extremely High';
+        else if (ss >= 120) classification = 'Very High';
+        else if (ss >= 110) classification = 'High Average';
+        else if (ss >= 90) classification = 'Average';
+        else if (ss >= 80) classification = 'Low Average';
+        else if (ss >= 70) classification = 'Borderline';
+        else classification = 'Extremely Low';
+      }
+      return new TableRow({
         children: [
           tableCell(comp.fullName + (comp.note ? ` (${comp.note})` : ''), { bold: true }),
           tableCell(comp.available ? String(comp.sumOfScaledScores) : '\u2014', { alignment: AlignmentType.CENTER }),
           tableCell(comp.standardScore !== null ? String(comp.standardScore) : '\u2014', { alignment: AlignmentType.CENTER }),
           tableCell(comp.percentileRank !== null ? String(comp.percentileRank) : '\u2014', { alignment: AlignmentType.CENTER }),
+          tableCell(classification, { alignment: AlignmentType.CENTER }),
           tableCell(comp.confidence90, { alignment: AlignmentType.CENTER }),
           tableCell(comp.confidence95, { alignment: AlignmentType.CENTER }),
         ],
-      })
+      });
+    }
   );
 
   return [

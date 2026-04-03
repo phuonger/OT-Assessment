@@ -644,7 +644,7 @@ export default function ClinicalReportEditor() {
   // ============================================================
 
   interface BayleyScoreRow { domain: string; domainLocalId: string; rawScore: number; scaledScore: number | null; ageEquivalent: string; gsv: number | null; percentDelay: string; }
-  interface Dayc2ScoreRow { domain: string; rawScore: number; standardScore: string; descriptiveTerm: string; ageEquivalent: string; percentDelay: string; scoringMethod?: 'native' | 'bayley4ab'; }
+  interface Dayc2ScoreRow { domain: string; rawScore: number; standardScore: string; descriptiveTerm: string; ageEquivalent: string; percentDelay: string; scoringMethod?: 'native' | 'bayley4ab'; classification?: string; }
   interface Reel3ScoreRow { domain: string; rawScore: number; ageEquivalent: string; percentDelay: string; abilityScore: number | null; percentileRank: string; descriptiveTerm: string; }
 
   const bayleyScores = useMemo((): BayleyScoreRow[] => {
@@ -822,7 +822,13 @@ export default function ClinicalReportEditor() {
         }
       }
 
-      return { domain: domain.name, rawScore, standardScore, descriptiveTerm, ageEquivalent, percentDelay, scoringMethod: useBayley4AB ? 'bayley4ab' : 'native' };
+      // Add classification label
+      let classification: string | undefined;
+      if (useBayley4AB && standardScore !== '\u2014') {
+        classification = getScaledScoreClassification(parseInt(standardScore));
+      }
+
+      return { domain: domain.name, rawScore, standardScore, descriptiveTerm, ageEquivalent, percentDelay, scoringMethod: useBayley4AB ? 'bayley4ab' : 'native', classification };
     }).filter(Boolean) as Dayc2ScoreRow[];
   }, [formSelections, formStates, childInfo, premWeeks, dayc2ScoringMethod]);
 
@@ -914,7 +920,12 @@ export default function ClinicalReportEditor() {
         }
       }
 
-      return { domain: domain.name, rawScore, standardScore, descriptiveTerm, ageEquivalent, percentDelay, scoringMethod: alternateMethod };
+      let classification: string | undefined;
+      if (useAltBayley4AB && standardScore !== '\u2014') {
+        classification = getScaledScoreClassification(parseInt(standardScore));
+      }
+
+      return { domain: domain.name, rawScore, standardScore, descriptiveTerm, ageEquivalent, percentDelay, scoringMethod: alternateMethod, classification };
     }).filter(Boolean) as Dayc2ScoreRow[];
   }, [showScoringComparison, dayc2ScoringMethod, formSelections, formStates, childInfo, premWeeks]);
 
@@ -1474,6 +1485,9 @@ export default function ClinicalReportEditor() {
                                 <th className="border border-slate-400 px-3 py-2 text-center font-bold">
                                   {dayc2ScoringMethod === 'bayley4ab' ? 'Bayley-4 Subscale' : 'Descriptive Term'}
                                 </th>
+                                {dayc2ScoringMethod === 'bayley4ab' && (
+                                  <th className="border border-slate-400 px-3 py-2 text-center font-bold">Classification</th>
+                                )}
                                 <th className="border border-slate-400 px-3 py-2 text-center font-bold">Age Equivalence</th>
                                 <th className="border border-slate-400 px-3 py-2 text-center font-bold">% Delay</th>
                               </tr>
@@ -1487,6 +1501,17 @@ export default function ClinicalReportEditor() {
                                     <td className="border border-slate-400 px-3 py-2 text-center">{row.rawScore}</td>
                                     <EditableCell value={row.standardScore} overrideKey={`dayc2_${domKey}_standardScore`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
                                     <EditableCell value={row.descriptiveTerm} overrideKey={`dayc2_${domKey}_descriptiveTerm`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
+                                    {dayc2ScoringMethod === 'bayley4ab' && (
+                                      <td className="border border-slate-400 px-3 py-2 text-center">
+                                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                          row.classification === 'Average' ? 'bg-green-100 text-green-700' :
+                                          row.classification === 'Above Average' || row.classification === 'Very Superior' ? 'bg-blue-100 text-blue-700' :
+                                          row.classification === 'Below Average' ? 'bg-amber-100 text-amber-700' :
+                                          row.classification === 'Well Below Average' ? 'bg-red-100 text-red-700' :
+                                          'bg-slate-100 text-slate-600'
+                                        }`}>{row.classification || '\u2014'}</span>
+                                      </td>
+                                    )}
                                     <EditableCell value={row.ageEquivalent} overrideKey={`dayc2_${domKey}_ageEquivalent`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
                                     <EditableCell value={row.percentDelay} overrideKey={`dayc2_${domKey}_percentDelay`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
                                   </tr>
@@ -1498,7 +1523,7 @@ export default function ClinicalReportEditor() {
 
                         {/* Comparison table: alternate scoring method side by side */}
                         {showScoringComparison && dayc2ComparisonScores.length > 0 && (
-                          <div className="mt-3">
+                          <div className="mt-3 print-comparison-section">
                             <h4 className="text-xs font-bold uppercase tracking-wider text-amber-600 mb-2">
                               Comparison: {dayc2ScoringMethod === 'bayley4ab' ? 'DAYC-2 Standard Scoring' : 'Bayley-4 AB Scoring'}
                             </h4>
@@ -1514,6 +1539,9 @@ export default function ClinicalReportEditor() {
                                     <th className="border border-amber-300 px-3 py-2 text-center font-bold">
                                       {dayc2ScoringMethod === 'bayley4ab' ? 'Descriptive Term' : 'Bayley-4 Subscale'}
                                     </th>
+                                    {dayc2ScoringMethod !== 'bayley4ab' && (
+                                      <th className="border border-amber-300 px-3 py-2 text-center font-bold">Classification</th>
+                                    )}
                                     <th className="border border-amber-300 px-3 py-2 text-center font-bold">Age Equivalence</th>
                                     <th className="border border-amber-300 px-3 py-2 text-center font-bold">% Delay</th>
                                   </tr>
@@ -1525,6 +1553,17 @@ export default function ClinicalReportEditor() {
                                       <td className="border border-amber-300 px-3 py-2 text-center">{row.rawScore}</td>
                                       <td className="border border-amber-300 px-3 py-2 text-center">{row.standardScore}</td>
                                       <td className="border border-amber-300 px-3 py-2 text-center">{row.descriptiveTerm}</td>
+                                      {dayc2ScoringMethod !== 'bayley4ab' && (
+                                        <td className="border border-amber-300 px-3 py-2 text-center">
+                                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                            row.classification === 'Average' ? 'bg-green-100 text-green-700' :
+                                            row.classification === 'Above Average' || row.classification === 'Very Superior' ? 'bg-blue-100 text-blue-700' :
+                                            row.classification === 'Below Average' ? 'bg-amber-100 text-amber-700' :
+                                            row.classification === 'Well Below Average' ? 'bg-red-100 text-red-700' :
+                                            'bg-slate-100 text-slate-600'
+                                          }`}>{row.classification || '\u2014'}</span>
+                                        </td>
+                                      )}
                                       <td className="border border-amber-300 px-3 py-2 text-center">{row.ageEquivalent}</td>
                                       <td className="border border-amber-300 px-3 py-2 text-center">{row.percentDelay}</td>
                                     </tr>
@@ -1548,12 +1587,15 @@ export default function ClinicalReportEditor() {
                                 <th className="border border-slate-400 px-3 py-2 text-center font-bold">Sum of Scaled Scores</th>
                                 <th className="border border-slate-400 px-3 py-2 text-center font-bold">Standard Score</th>
                                 <th className="border border-slate-400 px-3 py-2 text-center font-bold">Percentile Rank</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">Classification</th>
                                 <th className="border border-slate-400 px-3 py-2 text-center font-bold">90% CI</th>
                                 <th className="border border-slate-400 px-3 py-2 text-center font-bold">95% CI</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {dayc2BayleyComposites.map((comp, i) => (
+                              {dayc2BayleyComposites.map((comp, i) => {
+                                const compClassification = comp.standardScore !== null ? getCompositeClassification(comp.standardScore) : null;
+                                return (
                                 <tr key={i} className={!comp.available ? 'opacity-50' : ''}>
                                   <td className="border border-slate-400 px-3 py-2 font-medium">
                                     {comp.fullName}
@@ -1571,10 +1613,22 @@ export default function ClinicalReportEditor() {
                                   <td className="border border-slate-400 px-3 py-2 text-center">
                                     {comp.percentileRank !== null ? comp.percentileRank : '\u2014'}
                                   </td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center">
+                                    {compClassification ? (
+                                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                        compClassification === 'Average' ? 'bg-green-100 text-green-700' :
+                                        compClassification === 'High Average' || compClassification === 'Very High' || compClassification === 'Extremely High' ? 'bg-blue-100 text-blue-700' :
+                                        compClassification === 'Low Average' ? 'bg-amber-100 text-amber-700' :
+                                        compClassification === 'Borderline' || compClassification === 'Very Low' || compClassification === 'Extremely Low' ? 'bg-red-100 text-red-700' :
+                                        'bg-slate-100 text-slate-600'
+                                      }`}>{compClassification}</span>
+                                    ) : '\u2014'}
+                                  </td>
                                   <td className="border border-slate-400 px-3 py-2 text-center text-[10px]">{comp.confidence90}</td>
                                   <td className="border border-slate-400 px-3 py-2 text-center text-[10px]">{comp.confidence95}</td>
                                 </tr>
-                              ))}
+                              );
+                              })}
                             </tbody>
                           </table>
                         </div>

@@ -282,4 +282,45 @@
     max-width: 100% !important;
     page-break-inside: avoid;
   }
+
+  /* Show print-only elements */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Preserve classification badge colors in print */
+  .bg-green-100,
+  .bg-blue-100,
+  .bg-amber-100,
+  .bg-red-100,
+  .bg-slate-100 {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .text-green-700,
+  .text-blue-700,
+  .text-amber-700,
+  .text-red-700,
+  .text-slate-600 {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Preserve comparison table amber borders in print */
+  .border-amber-300 {
+    border-color: #fcd34d !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .bg-amber-50 {
+    background-color: #fffbeb !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Print comparison section styling */
+  .print-comparison-section {
+    page-break-before: auto;
+    page-break-inside: avoid;
+  }
 }
