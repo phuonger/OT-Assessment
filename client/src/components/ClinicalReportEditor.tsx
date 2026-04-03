@@ -2306,6 +2306,7 @@ export default function ClinicalReportEditor() {
                       <FeedingPerformanceChecklist
                         childName={firstName}
                         storageKey={childKey}
+                        hasExistingContent={!!feedingOralMotorCoord.trim()}
                         onInsertNarrative={(narrative, mode) => {
                           if (mode === 'replace') {
                             setFeedingOralMotorCoord(narrative);

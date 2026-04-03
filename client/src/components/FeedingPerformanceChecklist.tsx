@@ -17,7 +17,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Wand2, RotateCcw, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronUp, Wand2, RotateCcw, RefreshCw, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 // ============================================================
@@ -364,9 +364,10 @@ interface FeedingPerformanceChecklistProps {
   childName: string;
   onInsertNarrative: (narrative: string, mode: 'append' | 'replace') => void;
   storageKey: string;
+  hasExistingContent?: boolean;
 }
 
-export function FeedingPerformanceChecklist({ childName, onInsertNarrative, storageKey }: FeedingPerformanceChecklistProps) {
+export function FeedingPerformanceChecklist({ childName, onInsertNarrative, storageKey, hasExistingContent }: FeedingPerformanceChecklistProps) {
   const STORAGE_KEY = `feeding-checklist-${storageKey}`;
   const [data, setData] = useState<FeedingChecklistData>(() => {
     try {
@@ -375,6 +376,7 @@ export function FeedingPerformanceChecklist({ childName, onInsertNarrative, stor
     } catch { return { ...DEFAULT_DATA }; }
   });
   const [expanded, setExpanded] = useState(false);
+  const [showReplaceConfirm, setShowReplaceConfirm] = useState(false);
 
   // Auto-save
   useEffect(() => {
@@ -656,7 +658,13 @@ export function FeedingPerformanceChecklist({ childName, onInsertNarrative, stor
               Generate & Append
             </Button>
             <Button
-              onClick={() => handleGenerateNarrative('replace')}
+              onClick={() => {
+                if (hasExistingContent) {
+                  setShowReplaceConfirm(true);
+                } else {
+                  handleGenerateNarrative('replace');
+                }
+              }}
               size="sm"
               className="bg-amber-600 hover:bg-amber-700 text-white text-xs gap-1.5"
             >
@@ -674,6 +682,40 @@ export function FeedingPerformanceChecklist({ childName, onInsertNarrative, stor
             </Button>
             <span className="text-[10px] text-slate-400 ml-auto">Selections auto-save to browser</span>
           </div>
+
+          {/* Replace Confirmation Dialog */}
+          {showReplaceConfirm && (
+            <div className="mt-3 border border-amber-300 bg-amber-50 rounded-lg p-3">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-amber-800">Replace existing text?</p>
+                  <p className="text-[11px] text-amber-700 mt-0.5">This will clear the current Oral Motor Coordination narrative and replace it with newly generated text from the checklist. This cannot be undone.</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Button
+                      onClick={() => {
+                        handleGenerateNarrative('replace');
+                        setShowReplaceConfirm(false);
+                      }}
+                      size="sm"
+                      className="bg-amber-600 hover:bg-amber-700 text-white text-xs gap-1"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Yes, Replace
+                    </Button>
+                    <Button
+                      onClick={() => setShowReplaceConfirm(false)}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
