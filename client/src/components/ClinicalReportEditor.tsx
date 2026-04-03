@@ -28,6 +28,7 @@ import { generatePdfReport } from '@/lib/generateReportPdf';
 import { loadAppSettings, type RecommendationTemplate } from '@/components/SettingsPreferences';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
+import { FeedingPerformanceChecklist } from '@/components/FeedingPerformanceChecklist';
 import { parseLocalDate, formatDateLocal, calculateAge } from '@/lib/dateUtils';
 
 // ============================================================
@@ -2302,6 +2303,17 @@ export default function ClinicalReportEditor() {
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-slate-700 mb-1">c. Oral Motor Coordination</h4>
+                      <FeedingPerformanceChecklist
+                        childName={firstName}
+                        storageKey={childKey}
+                        onInsertNarrative={(narrative) => {
+                          setFeedingOralMotorCoord(prev => {
+                            const updated = prev ? prev + '\n\n' + narrative : narrative;
+                            toast.success('Narrative generated and inserted into Oral Motor Coordination section');
+                            return updated;
+                          });
+                        }}
+                      />
                       <EditableSection label="" value={feedingOralMotorCoord} onChange={setFeedingOralMotorCoord} placeholder={`During the feeding evaluation, ${firstName} was provided with [foods]. Per clinical observation, describe tongue lateralization, chewing endurance, jaw strength, compensatory techniques, etc.`} rows={5} />
                     </div>
                     <div>
