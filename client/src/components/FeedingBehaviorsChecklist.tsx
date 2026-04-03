@@ -7,8 +7,10 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Wand2, RotateCcw, RefreshCw, AlertTriangle } from 'lucide-react';
+import { ChevronDown, ChevronUp, Wand2, RotateCcw, RefreshCw, AlertTriangle, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 type YN = 'Y' | 'N' | '';
 type Rating = 'Poor' | 'Fair' | 'Good' | '';
@@ -114,14 +116,66 @@ function generateBehaviorsNarrative(data: FeedingBehaviorsData, childName: strin
   return parts.join(' ');
 }
 
+function ynStr(v: string): string { return v === 'Y' ? 'Yes' : v === 'N' ? 'No' : '—'; }
+function valStr(v: string): string { return v || '—'; }
+
+function generateBehaviorsPdf(data: FeedingBehaviorsData, childName: string, dateOfEval?: string, examinerName?: string) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('OT Feeding Evaluation – Feeding Behaviors Checklist', pageWidth / 2, 12, { align: 'center' });
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  const hdr: string[] = [];
+  if (childName) hdr.push(`Child: ${childName}`);
+  if (dateOfEval) hdr.push(`Date: ${dateOfEval}`);
+  if (examinerName) hdr.push(`Examiner: ${examinerName}`);
+  if (hdr.length) doc.text(hdr.join('   |   '), pageWidth / 2, 17, { align: 'center' });
+
+  autoTable(doc, {
+    startY: 20,
+    head: [['Feeding Behavior', 'Finding']],
+    body: [
+      ['Feeding Readiness', valStr(data.readiness)],
+      ['Posture During Feeding', valStr(data.posture)],
+      ['Seated Tolerance', valStr(data.seatedTolerance) + (data.seatedToleranceDesc ? ` — ${data.seatedToleranceDesc}` : '')],
+      ['Drooling', ynStr(data.drooling) + (data.droolingDesc ? ` — ${data.droolingDesc}` : '')],
+      ['Finger Feeding', ynStr(data.fingerFeeding) + (data.fingerFeedingDesc ? ` — ${data.fingerFeedingDesc}` : '')],
+      ['Food Acceptance', valStr(data.foodAcceptance) + (data.foodAcceptanceDesc ? ` — ${data.foodAcceptanceDesc}` : '')],
+      ['Gagging Observed', ynStr(data.gagging) + (data.gaggingDesc ? ` — ${data.gaggingDesc}` : '')],
+      ['Refusal Behaviors', ynStr(data.refusalBehaviors) + (data.refusalDesc ? ` — ${data.refusalDesc}` : '')],
+      ['Sensory Response to Food', valStr(data.sensoryResponse)],
+      ['Typical Meal Duration', valStr(data.mealDuration)],
+      ['Additional Observations', valStr(data.additionalObs)],
+    ],
+    theme: 'grid',
+    styles: { fontSize: 7.5, cellPadding: 1.5, lineWidth: 0.1, lineColor: [160, 160, 160] },
+    headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+    columnStyles: { 0: { cellWidth: 55, fontStyle: 'bold' } },
+    margin: { left: 8, right: 8 },
+  });
+
+  doc.setFontSize(6);
+  doc.setTextColor(150);
+  doc.text('Generated from OT Feeding Evaluation Tool', pageWidth / 2, doc.internal.pageSize.getHeight() - 5, { align: 'center' });
+
+  const safeName = childName.replace(/\s+/g, '_') || 'Child';
+  doc.save(`${safeName}_Feeding_Behaviors_Checklist.pdf`);
+}
+
 interface Props {
   childName: string;
   onInsertNarrative: (narrative: string, mode: 'append' | 'replace') => void;
   storageKey: string;
   hasExistingContent?: boolean;
+  dateOfEval?: string;
+  examinerName?: string;
 }
 
-export function FeedingBehaviorsChecklist({ childName, onInsertNarrative, storageKey, hasExistingContent }: Props) {
+export function FeedingBehaviorsChecklist({ childName, onInsertNarrative, storageKey, hasExistingContent, dateOfEval, examinerName }: Props) {
   const STORAGE_KEY = `feeding-behaviors-${storageKey}`;
   const [data, setData] = useState<FeedingBehaviorsData>(() => {
     try {
@@ -150,6 +204,10 @@ export function FeedingBehaviorsChecklist({ childName, onInsertNarrative, storag
     setData({ ...DEFAULT });
     try { localStorage.removeItem(STORAGE_KEY); } catch { /* */ }
   }, [STORAGE_KEY]);
+
+  const handlePrint = useCallback(() => {
+    generateBehaviorsPdf(data, childName, dateOfEval, examinerName);
+  }, [data, childName, dateOfEval, examinerName]);
 
   return (
     <div className="mb-4 print:hidden">
@@ -230,6 +288,9 @@ export function FeedingBehaviorsChecklist({ childName, onInsertNarrative, storag
             <Button onClick={() => { if (hasExistingContent) { setShowReplaceConfirm(true); } else { handleGenerate('replace'); } }}
               size="sm" className="bg-amber-600 hover:bg-amber-700 text-white text-xs gap-1.5">
               <RefreshCw className="w-3.5 h-3.5" /> Clear & Re-generate
+            </Button>
+            <Button onClick={handlePrint} variant="outline" size="sm" className="text-xs gap-1.5 text-slate-600 border-blue-300 hover:bg-blue-50">
+              <Printer className="w-3.5 h-3.5" /> Print Checklist
             </Button>
             <Button onClick={handleReset} variant="outline" size="sm" className="text-xs gap-1.5 text-slate-600">
               <RotateCcw className="w-3.5 h-3.5" /> Reset All

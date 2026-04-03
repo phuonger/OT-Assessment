@@ -7,8 +7,10 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Wand2, RotateCcw, RefreshCw, AlertTriangle } from 'lucide-react';
+import { ChevronDown, ChevronUp, Wand2, RotateCcw, RefreshCw, AlertTriangle, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 type YN = 'Y' | 'N' | '';
 type Rating = 'Poor' | 'Fair' | 'Good' | '';
@@ -104,14 +106,79 @@ function generateSelfFeedingNarrative(data: SelfFeedingData, childName: string):
   return parts.join(' ');
 }
 
+function ynStr(v: string): string { return v === 'Y' ? 'Yes' : v === 'N' ? 'No' : '—'; }
+function valStr(v: string): string { return v || '—'; }
+
+function generateSelfFeedingPdf(data: SelfFeedingData, childName: string, dateOfEval?: string, examinerName?: string) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('OT Feeding Evaluation – Self-Feeding Skills Checklist', pageWidth / 2, 12, { align: 'center' });
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  const hdr: string[] = [];
+  if (childName) hdr.push(`Child: ${childName}`);
+  if (dateOfEval) hdr.push(`Date: ${dateOfEval}`);
+  if (examinerName) hdr.push(`Examiner: ${examinerName}`);
+  if (hdr.length) doc.text(hdr.join('   |   '), pageWidth / 2, 17, { align: 'center' });
+
+  let startY = 20;
+  const drawSection = (title: string, rows: [string, string][], y: number): number => {
+    autoTable(doc, {
+      startY: y, head: [[title, 'Finding']], body: rows, theme: 'grid',
+      styles: { fontSize: 7.5, cellPadding: 1.5, lineWidth: 0.1, lineColor: [160, 160, 160] },
+      headStyles: { fillColor: [124, 58, 237], textColor: 255, fontStyle: 'bold', fontSize: 8 },
+      columnStyles: { 0: { cellWidth: 55, fontStyle: 'bold' } },
+      margin: { left: 8, right: 8 },
+    });
+    return (doc as any).lastAutoTable.finalY + 2;
+  };
+
+  startY = drawSection('Finger Feeding & Utensils', [
+    ['Finger Feeds Independently', ynStr(data.fingerFeeds) + (data.fingerFeedsDesc ? ` — ${data.fingerFeedsDesc}` : '')],
+    ['Spoon Use', valStr(data.spoonUse)],
+    ['Spoon Grasp Pattern', valStr(data.spoonGrasp)],
+    ['Spoon Accuracy', valStr(data.spoonAccuracy)],
+    ['Fork Use', valStr(data.forkUse)],
+    ['Fork Stabbing Ability', valStr(data.forkStabbing)],
+  ], startY);
+
+  startY = drawSection('Cup Drinking (Self-Feeding)', [
+    ['Cup Drinking Level', valStr(data.cupDrinking)],
+    ['Cup Type', valStr(data.cupType)],
+    ['Spillage', ynStr(data.cupSpilling)],
+  ], startY);
+
+  startY = drawSection('Motor Coordination & Independence', [
+    ['Hand-Eye Coordination', valStr(data.handEyeCoord)],
+    ['Bilateral Coordination', valStr(data.bilateralCoord)],
+    ['Grasp & Release', valStr(data.graspRelease)],
+    ['Messiness', valStr(data.messiness)],
+    ['Overall Independence', valStr(data.independence)],
+    ['Additional Observations', valStr(data.additionalObs)],
+  ], startY);
+
+  doc.setFontSize(6);
+  doc.setTextColor(150);
+  doc.text('Generated from OT Feeding Evaluation Tool', pageWidth / 2, doc.internal.pageSize.getHeight() - 5, { align: 'center' });
+
+  const safeName = childName.replace(/\s+/g, '_') || 'Child';
+  doc.save(`${safeName}_Self_Feeding_Checklist.pdf`);
+}
+
 interface Props {
   childName: string;
   onInsertNarrative: (narrative: string, mode: 'append' | 'replace') => void;
   storageKey: string;
   hasExistingContent?: boolean;
+  dateOfEval?: string;
+  examinerName?: string;
 }
 
-export function SelfFeedingChecklist({ childName, onInsertNarrative, storageKey, hasExistingContent }: Props) {
+export function SelfFeedingChecklist({ childName, onInsertNarrative, storageKey, hasExistingContent, dateOfEval, examinerName }: Props) {
   const STORAGE_KEY = `self-feeding-${storageKey}`;
   const [data, setData] = useState<SelfFeedingData>(() => {
     try {
@@ -140,6 +207,10 @@ export function SelfFeedingChecklist({ childName, onInsertNarrative, storageKey,
     setData({ ...DEFAULT });
     try { localStorage.removeItem(STORAGE_KEY); } catch { /* */ }
   }, [STORAGE_KEY]);
+
+  const handlePrint = useCallback(() => {
+    generateSelfFeedingPdf(data, childName, dateOfEval, examinerName);
+  }, [data, childName, dateOfEval, examinerName]);
 
   return (
     <div className="mb-4 print:hidden">
@@ -220,6 +291,9 @@ export function SelfFeedingChecklist({ childName, onInsertNarrative, storageKey,
             <Button onClick={() => { if (hasExistingContent) { setShowReplaceConfirm(true); } else { handleGenerate('replace'); } }}
               size="sm" className="bg-amber-600 hover:bg-amber-700 text-white text-xs gap-1.5">
               <RefreshCw className="w-3.5 h-3.5" /> Clear & Re-generate
+            </Button>
+            <Button onClick={handlePrint} variant="outline" size="sm" className="text-xs gap-1.5 text-slate-600 border-violet-300 hover:bg-violet-50">
+              <Printer className="w-3.5 h-3.5" /> Print Checklist
             </Button>
             <Button onClick={handleReset} variant="outline" size="sm" className="text-xs gap-1.5 text-slate-600">
               <RotateCcw className="w-3.5 h-3.5" /> Reset All

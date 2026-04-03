@@ -33,6 +33,7 @@ import type { FeedingChecklistDataType } from '@/components/FeedingPerformanceCh
 import type { FeedingChecklistExportData } from '@/lib/generateDocx';
 import { FeedingBehaviorsChecklist } from '@/components/FeedingBehaviorsChecklist';
 import { SelfFeedingChecklist } from '@/components/SelfFeedingChecklist';
+import { DrinkingChecklist } from '@/components/DrinkingChecklist';
 import { parseLocalDate, formatDateLocal, calculateAge } from '@/lib/dateUtils';
 
 // ============================================================
@@ -2371,6 +2372,8 @@ export default function ClinicalReportEditor() {
                         childName={firstName}
                         storageKey={childKey}
                         hasExistingContent={!!feedingBehaviors.trim()}
+                        dateOfEval={formatDate(childInfo.testDate)}
+                        examinerName={examinerInfo.name}
                         onInsertNarrative={(narrative, mode) => {
                           if (mode === 'replace') {
                             setFeedingBehaviors(narrative);
@@ -2419,6 +2422,8 @@ export default function ClinicalReportEditor() {
                         childName={firstName}
                         storageKey={childKey}
                         hasExistingContent={!!feedingSelfFeeding.trim()}
+                        dateOfEval={formatDate(childInfo.testDate)}
+                        examinerName={examinerInfo.name}
                         onInsertNarrative={(narrative, mode) => {
                           if (mode === 'replace') {
                             setFeedingSelfFeeding(narrative);
@@ -2439,7 +2444,28 @@ export default function ClinicalReportEditor() {
 
                 <SectionHeader title="Drinking" sectionKey="fd_drinking" collapsed={collapsedSections} toggle={toggleSection} number="" />
                 {!collapsedSections.fd_drinking && (
-                  <EditableSection label="" value={feedingDrinking} onChange={setFeedingDrinking} placeholder={`Describe ${firstName}'s drinking skills, including bottle use, sippy cup, straw cup, open cup, liquid preferences, and any difficulties with drinking.`} rows={5} />
+                  <div>
+                    <DrinkingChecklist
+                      childName={firstName}
+                      storageKey={childKey}
+                      hasExistingContent={!!feedingDrinking.trim()}
+                      dateOfEval={formatDate(childInfo.testDate)}
+                      examinerName={examinerInfo.name}
+                      onInsertNarrative={(narrative, mode) => {
+                        if (mode === 'replace') {
+                          setFeedingDrinking(narrative);
+                          toast.success('Narrative replaced in Drinking section');
+                        } else {
+                          setFeedingDrinking(prev => {
+                            const updated = prev ? prev + '\n\n' + narrative : narrative;
+                            return updated;
+                          });
+                          toast.success('Narrative appended to Drinking section');
+                        }
+                      }}
+                    />
+                    <EditableSection label="" value={feedingDrinking} onChange={setFeedingDrinking} placeholder={`Describe ${firstName}'s drinking skills, including bottle use, sippy cup, straw cup, open cup, liquid preferences, and any difficulties with drinking.`} rows={5} />
+                  </div>
                 )}
 
                 <SectionHeader title="Sensory Processing" sectionKey="fd_sensory" collapsed={collapsedSections} toggle={toggleSection} number="VII" />
