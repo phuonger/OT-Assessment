@@ -34,6 +34,10 @@ import type { FeedingChecklistExportData } from '@/lib/generateDocx';
 import { FeedingBehaviorsChecklist } from '@/components/FeedingBehaviorsChecklist';
 import { SelfFeedingChecklist } from '@/components/SelfFeedingChecklist';
 import { DrinkingChecklist } from '@/components/DrinkingChecklist';
+import type { FeedingBehaviorsData } from '@/components/FeedingBehaviorsChecklist';
+import type { SelfFeedingData } from '@/components/SelfFeedingChecklist';
+import type { DrinkingData } from '@/components/DrinkingChecklist';
+import { generateAllChecklistsPdf } from '@/lib/generateAllChecklistsPdf';
 import { parseLocalDate, formatDateLocal, calculateAge } from '@/lib/dateUtils';
 
 // ============================================================
@@ -2553,6 +2557,54 @@ export default function ClinicalReportEditor() {
                     <EditableSection label="" value={feedingSummary} onChange={setFeedingSummary} placeholder={`${firstName} is a [age] old [boy/girl] who was referred for difficulty with feeding development and feeding skills. Describe key findings and recommendations...\n\nIt is recommended that the IFSP team consider the following and make the final determination of eligibility and services:\n\n1. Occupational therapy feeding is recommended to address delays in oral motor skills impacting age-appropriate feeding.\n2. Occupational Therapy is recommended to work on fine motor skills and body awareness to support overall participation in adaptive skills, specifically feeding.`} rows={12} />
                   </>
                 )}
+
+                {/* Print All Checklists master button */}
+                <div className="mt-6 pt-4 border-t border-dashed border-slate-300 no-print">
+                  <Button
+                    onClick={() => {
+                      // Load all four checklist datasets from localStorage
+                      let oralMotorData: FeedingChecklistDataType | null = null;
+                      let feedingBehaviorsDataLocal: FeedingBehaviorsData | null = null;
+                      let selfFeedingDataLocal: SelfFeedingData | null = null;
+                      let drinkingDataLocal: DrinkingData | null = null;
+                      try {
+                        const om = localStorage.getItem(`feeding-checklist-${childKey}`);
+                        if (om) oralMotorData = JSON.parse(om);
+                      } catch { /* */ }
+                      try {
+                        const fb = localStorage.getItem(`feeding-behaviors-${childKey}`);
+                        if (fb) feedingBehaviorsDataLocal = JSON.parse(fb);
+                      } catch { /* */ }
+                      try {
+                        const sf = localStorage.getItem(`self-feeding-${childKey}`);
+                        if (sf) selfFeedingDataLocal = JSON.parse(sf);
+                      } catch { /* */ }
+                      try {
+                        const dk = localStorage.getItem(`drinking-checklist-${childKey}`);
+                        if (dk) drinkingDataLocal = JSON.parse(dk);
+                      } catch { /* */ }
+                      if (!oralMotorData && !feedingBehaviorsDataLocal && !selfFeedingDataLocal && !drinkingDataLocal) {
+                        toast.error('No checklist data found. Please fill out at least one checklist first.');
+                        return;
+                      }
+                      generateAllChecklistsPdf({
+                        childName: firstName,
+                        dateOfEval: formatDate(childInfo.testDate),
+                        examinerName: examinerInfo.name,
+                        oralMotorData,
+                        feedingBehaviorsData: feedingBehaviorsDataLocal,
+                        selfFeedingData: selfFeedingDataLocal,
+                        drinkingData: drinkingDataLocal,
+                      });
+                      toast.success('All checklists exported as a combined PDF');
+                    }}
+                    className="bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white gap-2"
+                  >
+                    <Printer className="w-4 h-4" />
+                    Print All Checklists (Combined PDF)
+                  </Button>
+                  <p className="text-[10px] text-slate-400 mt-1.5">Exports Oral Motor, Feeding Behaviors, Self-Feeding, and Drinking checklists into a single multi-page PDF.</p>
+                </div>
               </>
             )}
 
