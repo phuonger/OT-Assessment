@@ -79,6 +79,7 @@ jobs:
 
       - name: Sync version from git tag
         working-directory: desktop
+        shell: bash
         run: |
           VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
           echo "Setting desktop version to $VERSION"
