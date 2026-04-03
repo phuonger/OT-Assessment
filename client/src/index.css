@@ -151,6 +151,7 @@
   }
 
   /* Hide non-print elements */
+  .no-print,
   .print\:hidden,
   [data-sonner-toaster],
   nav,

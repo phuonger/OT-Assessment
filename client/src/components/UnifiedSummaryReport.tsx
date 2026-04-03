@@ -14,7 +14,7 @@ import { getFormById, type FormDefinition, type UnifiedDomain } from '@/lib/form
 import { lookupScaledScore, lookupAgeEquivalent, lookupGrowthScaleValue, lookupStandardScore } from '@/lib/scoringTables';
 import { REEL3_AGE_EQUIVALENT, REEL3_ABILITY_TO_PERCENTILE, REEL3_DESCRIPTIVE_TERMS, REEL3_LANGUAGE_ABILITY } from '@/lib/reel3Data';
 import { lookupDAYC2StandardScore, lookupDAYC2AgeEquivalent, lookupDAYC2PercentileRank, lookupDAYC2DescriptiveTerm } from '@/lib/dayc2ScoringTables';
-import { lookupDAYC2WithBayley4AB } from '@/lib/bayley4AdaptiveSE';
+import { lookupDAYC2WithBayley4AB, computeDAYC2BayleyComposites, type CompositeResult } from '@/lib/bayley4AdaptiveSE';
 import { lookupREEL3AbilityScore, lookupREEL3PercentileRank, lookupREEL3DescriptiveTerm } from '@/lib/reel3ScoringTables';
 import { SP2_BIRTH6MO_CUTOFFS, SP2_ENGLISH_CUTOFFS, SP2_QUADRANT_MAP, getSP2Description } from '@/lib/sensoryProfileData';
 import { Button } from '@/components/ui/button';
@@ -657,6 +657,51 @@ function Dayc2Report({ form, formState, selectedDomainIds, ageInDays, getRawScor
           </tbody>
         </table>
       </div>
+
+      {/* Bayley-4 AB Composite Scores */}
+      {useBayley4AB && (() => {
+        const domainScaledScores: Record<string, number | null> = {};
+        for (const dId of selectedDomainIds) {
+          const rawScore = getRawScore(form.id, dId);
+          const result = lookupDAYC2WithBayley4AB(rawScore, ageMonths, dId);
+          domainScaledScores[dId] = result.scaledScore;
+        }
+        const composites = computeDAYC2BayleyComposites(domainScaledScores);
+        const availableComposites = composites.filter(c => c.available);
+        if (availableComposites.length === 0) return null;
+        return (
+          <div className="px-6 pb-6">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-amber-600 mb-2">Bayley-4 AB Composite Scores</h4>
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="border-b-2 border-amber-200">
+                  <th className="text-left py-2 pr-4 font-semibold text-[#2C2C2C]">Composite</th>
+                  <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Sum of SS</th>
+                  <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Standard Score</th>
+                  <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Percentile</th>
+                  <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">90% CI</th>
+                  <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">95% CI</th>
+                </tr>
+              </thead>
+              <tbody>
+                {composites.map((comp, i) => (
+                  <tr key={i} className={`border-b border-gray-100 ${!comp.available ? 'opacity-40' : ''}`}>
+                    <td className="py-2 pr-4 font-medium text-amber-700">
+                      {comp.fullName}
+                      {comp.note && <span className="block text-[9px] text-slate-400 italic">{comp.note}</span>}
+                    </td>
+                    <td className="text-center py-2 px-2 font-mono">{comp.available ? comp.sumOfScaledScores : '\u2014'}</td>
+                    <td className="text-center py-2 px-2 font-mono">{comp.standardScore ?? '\u2014'}</td>
+                    <td className="text-center py-2 px-2">{comp.percentileRank ?? '\u2014'}</td>
+                    <td className="text-center py-2 px-2 text-xs">{comp.confidence90}</td>
+                    <td className="text-center py-2 px-2 text-xs">{comp.confidence95}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
     </div>
   );
 }

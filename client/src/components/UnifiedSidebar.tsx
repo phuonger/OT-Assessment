@@ -108,6 +108,9 @@ export default function UnifiedSidebar() {
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-foreground truncate">{form.shortName}</p>
                   <p className="text-[10px] text-muted-foreground">{formPct}% complete</p>
+                  {(fs.formId === 'dayc2' || fs.formId === 'dayc2sp') && fs.scoringMethod === 'bayley4ab' && (
+                    <p className="text-[9px] text-amber-600 font-medium truncate">Bayley-4 AB Scoring</p>
+                  )}
                 </div>
               </button>
 

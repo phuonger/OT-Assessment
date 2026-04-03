@@ -12,7 +12,7 @@ import { useMultiAssessment } from '@/contexts/MultiAssessmentContext';
 import { getFormById, type UnifiedDomain } from '@/lib/formRegistry';
 import UnifiedScoringItem from './UnifiedScoringItem';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertTriangle, MapPin, Clock, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, MapPin, Clock, ArrowRight, CheckCircle2, FlaskConical } from 'lucide-react';
 import { useMemo, useRef, useEffect, useCallback } from 'react';
 
 function formatTime(seconds: number): string {
@@ -132,6 +132,10 @@ export default function UnifiedAssessmentPanel() {
   const rawScore = getRawScore(form.id, domain.localId);
   const timerSeconds = domainState.timerSeconds;
 
+  // Check if this is a DAYC-2 form using Bayley-4 AB scoring
+  const currentFormSelection = state.formSelections.find(fs => fs.formId === form.id);
+  const isDayc2Bayley4AB = (form.id === 'dayc2' || form.id === 'dayc2sp') && currentFormSelection?.scoringMethod === 'bayley4ab';
+
   const handleAgeRangeChange = (newLabel: string) => {
     dispatch({ type: 'ADJUST_START_POINT', formId: form.id, newAgeRangeLabel: newLabel });
   };
@@ -152,6 +156,12 @@ export default function UnifiedAssessmentPanel() {
                 <p className="text-xs text-muted-foreground">
                   {form.shortName} • {progress.scored}/{progress.total} items scored • Raw Score: {rawScore}
                 </p>
+                {isDayc2Bayley4AB && (
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <FlaskConical className="w-3 h-3 text-amber-600" />
+                    <span className="text-[10px] font-medium text-amber-600">Scoring: Bayley-4 Adaptive Behavior Scales</span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-4">

@@ -1280,3 +1280,130 @@ export function lookupDAYC2WithBayley4AB(
 
   return { scaledScore: null, label: mapping.label };
 }
+
+
+/**
+ * Compute all Bayley-4 Adaptive Behavior composite scores from DAYC-2 domain raw scores.
+ * 
+ * Composites:
+ *   COM = Communication (REC + EXP scaled scores)
+ *   DLS = Daily Living Skills (PER scaled score only)
+ *   SOC = Socialization (IPR + PLA scaled scores) — not available from DAYC-2 domains
+ *   ADBE = Adaptive Behavior (sum of all 5 subscale scaled scores) — partial from DAYC-2
+ *
+ * Since DAYC-2 only maps to REC, EXP, and PER subscales, we can compute:
+ *   - COM composite (REC + EXP)
+ *   - DLS composite (PER only)
+ *   - Partial ADBE (REC + EXP + PER, without IPR and PLA)
+ *   - SOC is NOT available from DAYC-2 domains
+ */
+export interface CompositeResult {
+  composite: string;
+  fullName: string;
+  sumOfScaledScores: number;
+  standardScore: number | null;
+  percentileRank: number | null;
+  confidence90: string;
+  confidence95: string;
+  available: boolean;
+  note?: string;
+}
+
+export function computeDAYC2BayleyComposites(
+  domainScaledScores: Record<string, number | null>,
+  // domainScaledScores keys: 'receptivecomm', 'expressivecomm', 'adaptivebahavior'
+): CompositeResult[] {
+  const recScaled = domainScaledScores['receptivecomm'];
+  const expScaled = domainScaledScores['expressivecomm'];
+  const perScaled = domainScaledScores['adaptivebahavior']; // maps to PER
+
+  const results: CompositeResult[] = [];
+
+  // COM = Communication (REC + EXP)
+  if (recScaled !== null && recScaled !== undefined && expScaled !== null && expScaled !== undefined) {
+    const comSum = recScaled + expScaled;
+    const comResult = lookupABCompositeScore(comSum, 'COM');
+    results.push({
+      composite: 'COM',
+      fullName: 'Communication',
+      sumOfScaledScores: comSum,
+      standardScore: comResult?.standardScore ?? null,
+      percentileRank: comResult?.percentileRank ?? null,
+      confidence90: comResult ? `${comResult.standardScore - AB_COMPOSITE_CONFIDENCE['90%'].COM}–${comResult.standardScore + AB_COMPOSITE_CONFIDENCE['90%'].COM}` : '—',
+      confidence95: comResult ? `${comResult.standardScore - AB_COMPOSITE_CONFIDENCE['95%'].COM}–${comResult.standardScore + AB_COMPOSITE_CONFIDENCE['95%'].COM}` : '—',
+      available: true,
+    });
+  } else {
+    results.push({
+      composite: 'COM',
+      fullName: 'Communication',
+      sumOfScaledScores: 0,
+      standardScore: null,
+      percentileRank: null,
+      confidence90: '—',
+      confidence95: '—',
+      available: false,
+      note: 'Requires both Receptive and Expressive Communication domains',
+    });
+  }
+
+  // DLS = Daily Living Skills (PER only)
+  if (perScaled !== null && perScaled !== undefined) {
+    const dlsSum = perScaled;
+    const dlsResult = lookupABCompositeScore(dlsSum, 'DLS');
+    results.push({
+      composite: 'DLS',
+      fullName: 'Daily Living Skills',
+      sumOfScaledScores: dlsSum,
+      standardScore: dlsResult?.standardScore ?? null,
+      percentileRank: dlsResult?.percentileRank ?? null,
+      confidence90: dlsResult ? `${dlsResult.standardScore - AB_COMPOSITE_CONFIDENCE['90%'].DLS}–${dlsResult.standardScore + AB_COMPOSITE_CONFIDENCE['90%'].DLS}` : '—',
+      confidence95: dlsResult ? `${dlsResult.standardScore - AB_COMPOSITE_CONFIDENCE['95%'].DLS}–${dlsResult.standardScore + AB_COMPOSITE_CONFIDENCE['95%'].DLS}` : '—',
+      available: true,
+    });
+  } else {
+    results.push({
+      composite: 'DLS',
+      fullName: 'Daily Living Skills',
+      sumOfScaledScores: 0,
+      standardScore: null,
+      percentileRank: null,
+      confidence90: '—',
+      confidence95: '—',
+      available: false,
+      note: 'Requires Adaptive Behavior domain',
+    });
+  }
+
+  // SOC = Socialization (IPR + PLA) — NOT available from DAYC-2
+  results.push({
+    composite: 'SOC',
+    fullName: 'Socialization',
+    sumOfScaledScores: 0,
+    standardScore: null,
+    percentileRank: null,
+    confidence90: '—',
+    confidence95: '—',
+    available: false,
+    note: 'Requires IPR & PLA subscales (not available from DAYC-2)',
+  });
+
+  // ADBE = Adaptive Behavior (all 5 subscales) — partial from DAYC-2
+  const availableScores = [recScaled, expScaled, perScaled].filter((s): s is number => s !== null && s !== undefined);
+  if (availableScores.length === 3) {
+    const partialSum = availableScores.reduce((a, b) => a + b, 0);
+    results.push({
+      composite: 'ADBE',
+      fullName: 'Adaptive Behavior (Partial)',
+      sumOfScaledScores: partialSum,
+      standardScore: null,
+      percentileRank: null,
+      confidence90: '—',
+      confidence95: '—',
+      available: false,
+      note: `Partial: REC+EXP+PER = ${partialSum}. Full ADBE requires IPR & PLA subscales.`,
+    });
+  }
+
+  return results;
+}

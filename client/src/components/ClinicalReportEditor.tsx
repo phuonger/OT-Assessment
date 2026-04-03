@@ -18,7 +18,7 @@ import { getFormById, type FormDefinition, type UnifiedDomain } from '@/lib/form
 import { lookupScaledScore, lookupAgeEquivalent, lookupGrowthScaleValue, lookupStandardScore } from '@/lib/scoringTables';
 import { REEL3_AGE_EQUIVALENT } from '@/lib/reel3Data';
 import { lookupDAYC2StandardScore, lookupDAYC2AgeEquivalent, lookupDAYC2PercentileRank, lookupDAYC2DescriptiveTerm } from '@/lib/dayc2ScoringTables';
-import { lookupDAYC2WithBayley4AB } from '@/lib/bayley4AdaptiveSE';
+import { lookupDAYC2WithBayley4AB, computeDAYC2BayleyComposites, type CompositeResult } from '@/lib/bayley4AdaptiveSE';
 import { lookupREEL3AbilityScore, lookupREEL3PercentileRank, lookupREEL3DescriptiveTerm } from '@/lib/reel3ScoringTables';
 import { SP2_ENGLISH_CUTOFFS, SP2_BIRTH6MO_CUTOFFS, SP2_QUADRANT_MAP, getSP2Description } from '@/lib/sensoryProfileData';
 import { Button } from '@/components/ui/button';
@@ -630,6 +630,11 @@ export default function ClinicalReportEditor() {
   const [showNotDemonstrated, setShowNotDemonstrated] = useState<Record<string, boolean>>({});
   const toggleNotDemonstrated = (key: string) => setShowNotDemonstrated(prev => ({ ...prev, [key]: !prev[key] }));
 
+  // Report-level DAYC-2 scoring method override (allows switching in report view)
+  const [reportScoringOverride, setReportScoringOverride] = useState<'native' | 'bayley4ab' | null>(null);
+  // Show comparison mode (both scoring methods side by side)
+  const [showScoringComparison, setShowScoringComparison] = useState(false);
+
   // Collapsible sections
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const toggleSection = (key: string) => setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
@@ -733,10 +738,13 @@ export default function ClinicalReportEditor() {
     }).filter(Boolean) as Reel3ScoreRow[];
   }, [formSelections, formStates, childInfo, premWeeks]);
 
-  const dayc2ScoringMethod = useMemo(() => {
+  const dayc2OriginalScoringMethod = useMemo(() => {
     const fs = formSelections.find(f => f.formId === 'dayc2' || f.formId === 'dayc2sp');
     return fs?.scoringMethod || 'native';
   }, [formSelections]);
+
+  // Effective scoring method: report override takes precedence
+  const dayc2ScoringMethod = reportScoringOverride ?? dayc2OriginalScoringMethod;
 
   const dayc2Scores = useMemo((): Dayc2ScoreRow[] => {
     const fs = formSelections.find(f => f.formId === 'dayc2' || f.formId === 'dayc2sp');
@@ -746,7 +754,7 @@ export default function ClinicalReportEditor() {
     const form = getFormById(fs.formId);
     if (!form) return [];
     const ageMonthsVal = ageInMonths(childInfo.dob, childInfo.testDate, premWeeks);
-    const useBayley4AB = (fs.scoringMethod || 'native') === 'bayley4ab';
+    const useBayley4AB = dayc2ScoringMethod === 'bayley4ab';
 
     // Map domain localIds to DAYC-2 scoring table domain keys
     const domainKeyMap: Record<string, 'social' | 'adaptive' | 'receptive' | 'expressive'> = {
@@ -816,7 +824,99 @@ export default function ClinicalReportEditor() {
 
       return { domain: domain.name, rawScore, standardScore, descriptiveTerm, ageEquivalent, percentDelay, scoringMethod: useBayley4AB ? 'bayley4ab' : 'native' };
     }).filter(Boolean) as Dayc2ScoreRow[];
-  }, [formSelections, formStates, childInfo, premWeeks]);
+  }, [formSelections, formStates, childInfo, premWeeks, dayc2ScoringMethod]);
+
+  // Bayley-4 AB Composite scores (when using Bayley-4 AB scoring for DAYC-2)
+  const dayc2BayleyComposites = useMemo((): CompositeResult[] => {
+    if (dayc2ScoringMethod !== 'bayley4ab') return [];
+    const fs = formSelections.find(f => f.formId === 'dayc2' || f.formId === 'dayc2sp');
+    if (!fs) return [];
+    const formState = formStates[fs.formId];
+    if (!formState) return [];
+    const form = getFormById(fs.formId);
+    if (!form) return [];
+    const ageMonthsVal = ageInMonths(childInfo.dob, childInfo.testDate, premWeeks);
+
+    // Compute scaled scores for each domain
+    const domainScaledScores: Record<string, number | null> = {};
+    for (const domainLocalId of fs.selectedDomainIds) {
+      const ds = formState.domains[domainLocalId];
+      if (!ds) continue;
+      const rawScore = Object.values(ds.scores).reduce((sum: number, s) => sum + (s || 0), 0);
+      const result = lookupDAYC2WithBayley4AB(rawScore, ageMonthsVal, domainLocalId);
+      domainScaledScores[domainLocalId] = result.scaledScore;
+    }
+
+    return computeDAYC2BayleyComposites(domainScaledScores);
+  }, [dayc2ScoringMethod, formSelections, formStates, childInfo, premWeeks]);
+
+  // Comparison scores: compute the alternate scoring method for side-by-side display
+  const dayc2ComparisonScores = useMemo((): Dayc2ScoreRow[] => {
+    if (!showScoringComparison) return [];
+    const fs = formSelections.find(f => f.formId === 'dayc2' || f.formId === 'dayc2sp');
+    if (!fs) return [];
+    const formState = formStates[fs.formId];
+    if (!formState) return [];
+    const form = getFormById(fs.formId);
+    if (!form) return [];
+    const ageMonthsVal = ageInMonths(childInfo.dob, childInfo.testDate, premWeeks);
+    const alternateMethod = dayc2ScoringMethod === 'bayley4ab' ? 'native' : 'bayley4ab';
+    const useAltBayley4AB = alternateMethod === 'bayley4ab';
+
+    const domainKeyMap: Record<string, 'social' | 'adaptive' | 'receptive' | 'expressive'> = {
+      'socialemotional': 'social',
+      'adaptivebahavior': 'adaptive',
+      'receptivecomm': 'receptive',
+      'expressivecomm': 'expressive',
+    };
+
+    return fs.selectedDomainIds.map(domainLocalId => {
+      const domain = form.domains.find(d => d.localId === domainLocalId);
+      if (!domain) return null;
+      const ds = formState.domains[domainLocalId];
+      if (!ds) return null;
+      const rawScore = Object.values(ds.scores).reduce((sum: number, s) => sum + (s || 0), 0);
+      const scoringKey = domainKeyMap[domainLocalId];
+
+      let standardScore = '\u2014';
+      let descriptiveTerm = '\u2014';
+      let percentDelay = '\u2014';
+      let ageEquivalent = '\u2014';
+
+      if (useAltBayley4AB) {
+        const result = lookupDAYC2WithBayley4AB(rawScore, ageMonthsVal, domainLocalId);
+        if (result.scaledScore !== null) {
+          standardScore = String(result.scaledScore);
+          descriptiveTerm = result.label;
+        } else {
+          descriptiveTerm = result.label + ' (no match)';
+        }
+      } else {
+        if (scoringKey) {
+          const stdScore = lookupDAYC2StandardScore(rawScore, ageMonthsVal, scoringKey);
+          if (stdScore !== null) {
+            standardScore = String(stdScore);
+            descriptiveTerm = lookupDAYC2DescriptiveTerm(stdScore);
+            const pctRank = lookupDAYC2PercentileRank(stdScore);
+            if (pctRank) descriptiveTerm += ` (PR: ${pctRank})`;
+          }
+        }
+      }
+      if (scoringKey) {
+        const aeMonths = lookupDAYC2AgeEquivalent(rawScore, scoringKey);
+        if (aeMonths !== null) {
+          ageEquivalent = `${aeMonths} months`;
+          if (ageMonthsVal > 0 && aeMonths < ageMonthsVal) {
+            percentDelay = `${Math.round(((ageMonthsVal - aeMonths) / ageMonthsVal) * 100)}%`;
+          } else if (aeMonths >= ageMonthsVal) {
+            percentDelay = '0%';
+          }
+        }
+      }
+
+      return { domain: domain.name, rawScore, standardScore, descriptiveTerm, ageEquivalent, percentDelay, scoringMethod: alternateMethod };
+    }).filter(Boolean) as Dayc2ScoreRow[];
+  }, [showScoringComparison, dayc2ScoringMethod, formSelections, formStates, childInfo, premWeeks]);
 
   // SP2 scores
   const sp2Scores = useMemo(() => computeSP2Scores(formStates, formSelections), [formStates, formSelections]);
@@ -1026,6 +1126,19 @@ export default function ClinicalReportEditor() {
             percentDelay: scoreOverrides[`dayc2_${domKey}_percentDelay`] ?? r.percentDelay,
           };
         }),
+        dayc2BayleyComposites: dayc2BayleyComposites.map(c => ({
+          composite: c.composite,
+          fullName: c.fullName,
+          sumOfScaledScores: c.sumOfScaledScores,
+          standardScore: scoreOverrides[`bayley4ab_${c.composite}_standardScore`] != null
+            ? Number(scoreOverrides[`bayley4ab_${c.composite}_standardScore`]) || c.standardScore
+            : c.standardScore,
+          percentileRank: c.percentileRank,
+          confidence90: c.confidence90,
+          confidence95: c.confidence95,
+          available: c.available,
+          note: c.note,
+        })),
         reel3Scores: reel3Scores.map(r => {
           const domKey = r.domain.toLowerCase().replace(/[^a-z]/g, '');
           return {
@@ -1298,7 +1411,50 @@ export default function ClinicalReportEditor() {
 
                     {dayc2Scores.length > 0 && (
                       <div>
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                        <div className="flex items-center justify-between mb-2 no-print">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                            {dayc2ScoringMethod === 'bayley4ab'
+                              ? 'DAYC-2 Items Scored with Bayley-4 Adaptive Behavior Scales'
+                              : 'DAYC-2 Developmental Assessment of Young Children, 2nd Edition'}
+                          </h4>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                if (dayc2ScoringMethod === 'native') {
+                                  setReportScoringOverride('bayley4ab');
+                                } else {
+                                  setReportScoringOverride('native');
+                                }
+                                setShowScoringComparison(false);
+                              }}
+                              className="text-[10px] px-2 py-1 rounded border border-slate-300 hover:bg-slate-50 transition-colors"
+                              title="Switch to alternate scoring method"
+                            >
+                              Switch to {dayc2ScoringMethod === 'bayley4ab' ? 'DAYC-2' : 'Bayley-4 AB'}
+                            </button>
+                            <button
+                              onClick={() => setShowScoringComparison(!showScoringComparison)}
+                              className={`text-[10px] px-2 py-1 rounded border transition-colors ${
+                                showScoringComparison
+                                  ? 'border-amber-400 bg-amber-50 text-amber-700'
+                                  : 'border-slate-300 hover:bg-slate-50'
+                              }`}
+                              title="Compare both scoring methods side by side"
+                            >
+                              {showScoringComparison ? 'Hide' : 'Show'} Comparison
+                            </button>
+                            {reportScoringOverride !== null && (
+                              <button
+                                onClick={() => { setReportScoringOverride(null); setShowScoringComparison(false); }}
+                                className="text-[10px] px-2 py-1 rounded border border-slate-300 hover:bg-slate-50 text-slate-500"
+                                title="Reset to original scoring method"
+                              >
+                                Reset
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 print-only" style={{ display: 'none' }}>
                           {dayc2ScoringMethod === 'bayley4ab'
                             ? 'DAYC-2 Items Scored with Bayley-4 Adaptive Behavior Scales'
                             : 'DAYC-2 Developmental Assessment of Young Children, 2nd Edition'}
@@ -1336,6 +1492,89 @@ export default function ClinicalReportEditor() {
                                   </tr>
                                 );
                               })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Comparison table: alternate scoring method side by side */}
+                        {showScoringComparison && dayc2ComparisonScores.length > 0 && (
+                          <div className="mt-3">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-amber-600 mb-2">
+                              Comparison: {dayc2ScoringMethod === 'bayley4ab' ? 'DAYC-2 Standard Scoring' : 'Bayley-4 AB Scoring'}
+                            </h4>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs border-collapse border border-amber-300">
+                                <thead>
+                                  <tr className="bg-amber-50">
+                                    <th className="border border-amber-300 px-3 py-2 text-left font-bold">Subtest</th>
+                                    <th className="border border-amber-300 px-3 py-2 text-center font-bold">Raw Score</th>
+                                    <th className="border border-amber-300 px-3 py-2 text-center font-bold">
+                                      {dayc2ScoringMethod === 'bayley4ab' ? 'Standard Score' : 'Scaled Score'}
+                                    </th>
+                                    <th className="border border-amber-300 px-3 py-2 text-center font-bold">
+                                      {dayc2ScoringMethod === 'bayley4ab' ? 'Descriptive Term' : 'Bayley-4 Subscale'}
+                                    </th>
+                                    <th className="border border-amber-300 px-3 py-2 text-center font-bold">Age Equivalence</th>
+                                    <th className="border border-amber-300 px-3 py-2 text-center font-bold">% Delay</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {dayc2ComparisonScores.map((row, i) => (
+                                    <tr key={i}>
+                                      <td className="border border-amber-300 px-3 py-2 font-medium">{row.domain}</td>
+                                      <td className="border border-amber-300 px-3 py-2 text-center">{row.rawScore}</td>
+                                      <td className="border border-amber-300 px-3 py-2 text-center">{row.standardScore}</td>
+                                      <td className="border border-amber-300 px-3 py-2 text-center">{row.descriptiveTerm}</td>
+                                      <td className="border border-amber-300 px-3 py-2 text-center">{row.ageEquivalent}</td>
+                                      <td className="border border-amber-300 px-3 py-2 text-center">{row.percentDelay}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {dayc2BayleyComposites.length > 0 && (
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Bayley-4 Adaptive Behavior Composite Scores</h4>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs border-collapse border border-slate-400">
+                            <thead>
+                              <tr className="bg-amber-50">
+                                <th className="border border-slate-400 px-3 py-2 text-left font-bold">Composite</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">Sum of Scaled Scores</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">Standard Score</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">Percentile Rank</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">90% CI</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">95% CI</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {dayc2BayleyComposites.map((comp, i) => (
+                                <tr key={i} className={!comp.available ? 'opacity-50' : ''}>
+                                  <td className="border border-slate-400 px-3 py-2 font-medium">
+                                    {comp.fullName}
+                                    {comp.note && <span className="block text-[9px] text-slate-400 italic">{comp.note}</span>}
+                                  </td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center font-mono">
+                                    {comp.available ? comp.sumOfScaledScores : '\u2014'}
+                                  </td>
+                                  <EditableCell
+                                    value={comp.standardScore !== null ? String(comp.standardScore) : '\u2014'}
+                                    overrideKey={`bayley4ab_${comp.composite}_standardScore`}
+                                    overrides={scoreOverrides}
+                                    setOverrides={setScoreOverrides}
+                                  />
+                                  <td className="border border-slate-400 px-3 py-2 text-center">
+                                    {comp.percentileRank !== null ? comp.percentileRank : '\u2014'}
+                                  </td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center text-[10px]">{comp.confidence90}</td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center text-[10px]">{comp.confidence95}</td>
+                                </tr>
+                              ))}
                             </tbody>
                           </table>
                         </div>

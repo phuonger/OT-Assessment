@@ -49,6 +49,18 @@ export interface Dayc2ScoreRow {
   scoringMethod?: 'native' | 'bayley4ab';
 }
 
+export interface Bayley4ABCompositeRow {
+  composite: string;
+  fullName: string;
+  sumOfScaledScores: number;
+  standardScore: number | null;
+  percentileRank: number | null;
+  confidence90: string;
+  confidence95: string;
+  available: boolean;
+  note?: string;
+}
+
 export interface Reel3ScoreRow {
   domain: string;
   rawScore: number;
@@ -127,6 +139,7 @@ export interface DocxReportData {
   cogComposite: CompositeScore | null;
   motorComposite: CompositeScore | null;
   dayc2Scores: Dayc2ScoreRow[];
+  dayc2BayleyComposites: Bayley4ABCompositeRow[];
   reel3Scores: Reel3ScoreRow[];
   domainNarratives: DomainNarrativeData[];
   feedingOralMotor: string;
@@ -439,6 +452,53 @@ function createDayc2Table(scores: Dayc2ScoreRow[]): (Paragraph | Table)[] {
   );
 
   return elements;
+}
+
+function createBayley4ABCompositeTable(composites: Bayley4ABCompositeRow[]): (Paragraph | Table)[] {
+  if (composites.length === 0) return [];
+
+  const headerRow = new TableRow({
+    children: [
+      tableCell('Composite', { bold: true, shading: 'FEF3C7' }),
+      tableCell('Sum of SS', { bold: true, shading: 'FEF3C7', alignment: AlignmentType.CENTER }),
+      tableCell('Standard Score', { bold: true, shading: 'FEF3C7', alignment: AlignmentType.CENTER }),
+      tableCell('Percentile Rank', { bold: true, shading: 'FEF3C7', alignment: AlignmentType.CENTER }),
+      tableCell('90% CI', { bold: true, shading: 'FEF3C7', alignment: AlignmentType.CENTER }),
+      tableCell('95% CI', { bold: true, shading: 'FEF3C7', alignment: AlignmentType.CENTER }),
+    ],
+  });
+
+  const dataRows = composites.map(
+    (comp) =>
+      new TableRow({
+        children: [
+          tableCell(comp.fullName + (comp.note ? ` (${comp.note})` : ''), { bold: true }),
+          tableCell(comp.available ? String(comp.sumOfScaledScores) : '\u2014', { alignment: AlignmentType.CENTER }),
+          tableCell(comp.standardScore !== null ? String(comp.standardScore) : '\u2014', { alignment: AlignmentType.CENTER }),
+          tableCell(comp.percentileRank !== null ? String(comp.percentileRank) : '\u2014', { alignment: AlignmentType.CENTER }),
+          tableCell(comp.confidence90, { alignment: AlignmentType.CENTER }),
+          tableCell(comp.confidence95, { alignment: AlignmentType.CENTER }),
+        ],
+      })
+  );
+
+  return [
+    new Paragraph({
+      spacing: { before: 200, after: 80 },
+      children: [
+        new TextRun({
+          text: 'BAYLEY-4 ADAPTIVE BEHAVIOR COMPOSITE SCORES',
+          bold: true,
+          font: FONT,
+          size: SMALL_SIZE,
+        }),
+      ],
+    }),
+    new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [headerRow, ...dataRows],
+    }),
+  ];
 }
 
 function createReel3Table(scores: Reel3ScoreRow[]): (Paragraph | Table)[] {
@@ -854,6 +914,10 @@ export async function generateDocxReport(data: DocxReportData): Promise<void> {
     children.push(...bayleyElements);
     const dayc2Elements = createDayc2Table(data.dayc2Scores);
     children.push(...dayc2Elements);
+    if (data.dayc2BayleyComposites && data.dayc2BayleyComposites.length > 0) {
+      const compositeElements = createBayley4ABCompositeTable(data.dayc2BayleyComposites);
+      children.push(...compositeElements);
+    }
     const reel3Elements = createReel3Table(data.reel3Scores);
     children.push(...reel3Elements);
 
