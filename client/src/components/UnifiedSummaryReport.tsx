@@ -13,6 +13,8 @@ import { useMultiAssessment } from '@/contexts/MultiAssessmentContext';
 import { getFormById, type FormDefinition, type UnifiedDomain } from '@/lib/formRegistry';
 import { lookupScaledScore, lookupAgeEquivalent, lookupGrowthScaleValue, lookupStandardScore } from '@/lib/scoringTables';
 import { REEL3_AGE_EQUIVALENT, REEL3_ABILITY_TO_PERCENTILE, REEL3_DESCRIPTIVE_TERMS, REEL3_LANGUAGE_ABILITY } from '@/lib/reel3Data';
+import { lookupDAYC2StandardScore, lookupDAYC2AgeEquivalent, lookupDAYC2PercentileRank, lookupDAYC2DescriptiveTerm } from '@/lib/dayc2ScoringTables';
+import { lookupREEL3AbilityScore, lookupREEL3PercentileRank, lookupREEL3DescriptiveTerm } from '@/lib/reel3ScoringTables';
 import { SP2_BIRTH6MO_CUTOFFS, SP2_ENGLISH_CUTOFFS, SP2_QUADRANT_MAP, getSP2Description } from '@/lib/sensoryProfileData';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Download, Printer, RotateCcw, Clock, FileText, Save, History, Shield, Settings, Home, Plus } from 'lucide-react';
@@ -331,9 +333,9 @@ function FormReport({ form, formState, selectedDomainIds, ageInDays, getRawScore
       return <Bayley4Report form={form} formState={formState} selectedDomainIds={selectedDomainIds} ageInDays={ageInDays} getRawScore={getRawScore} getDomainProgress={getDomainProgress} />;
     case 'dayc2':
     case 'dayc2sp':
-      return <Dayc2Report form={form} formState={formState} selectedDomainIds={selectedDomainIds} getRawScore={getRawScore} getDomainProgress={getDomainProgress} />;
+      return <Dayc2Report form={form} formState={formState} selectedDomainIds={selectedDomainIds} ageInDays={ageInDays} getRawScore={getRawScore} getDomainProgress={getDomainProgress} />;
     case 'reel3':
-      return <Reel3Report form={form} formState={formState} selectedDomainIds={selectedDomainIds} getRawScore={getRawScore} getDomainProgress={getDomainProgress} />;
+      return <Reel3Report form={form} formState={formState} selectedDomainIds={selectedDomainIds} ageInDays={ageInDays} getRawScore={getRawScore} getDomainProgress={getDomainProgress} />;
     case 'sp2':
       return <SP2Report form={form} formState={formState} selectedDomainIds={selectedDomainIds} getRawScore={getRawScore} getDomainProgress={getDomainProgress} />;
     default:
@@ -526,7 +528,16 @@ function Bayley4Report({ form, formState, selectedDomainIds, ageInDays, getRawSc
 // DAYC-2 Report
 // ============================================================
 
-function Dayc2Report({ form, formState, selectedDomainIds, getRawScore, getDomainProgress }: Omit<FormReportProps, 'ageInDays'>) {
+function Dayc2Report({ form, formState, selectedDomainIds, ageInDays, getRawScore, getDomainProgress }: FormReportProps) {
+  const ageMonths = ageInDays !== null ? Math.floor(ageInDays / 30.44) : 0;
+
+  const domainKeyMap: Record<string, 'social' | 'adaptive' | 'receptive' | 'expressive'> = {
+    'socialemotional': 'social',
+    'adaptivebahavior': 'adaptive',
+    'receptivecomm': 'receptive',
+    'expressivecomm': 'expressive',
+  };
+
   const scoringData = useMemo(() => {
     return selectedDomainIds.map(dId => {
       const domain = form.domains.find(d => d.localId === dId);
@@ -535,9 +546,35 @@ function Dayc2Report({ form, formState, selectedDomainIds, getRawScore, getDomai
       const progress = getDomainProgress(form.id, dId);
       const timer = formState?.domains[dId]?.timerSeconds || 0;
       const discontinued = formState?.domains[dId]?.discontinued || false;
-      return { domain, rawScore, progress, timer, discontinued };
+      const scoringKey = domainKeyMap[dId];
+
+      let standardScore: number | null = null;
+      let descriptiveTerm = '\u2014';
+      let percentileRank = '\u2014';
+      let ageEquivalent = '\u2014';
+      let percentDelay = '\u2014';
+
+      if (scoringKey) {
+        standardScore = lookupDAYC2StandardScore(rawScore, ageMonths, scoringKey);
+        if (standardScore !== null) {
+          descriptiveTerm = lookupDAYC2DescriptiveTerm(standardScore);
+          const pr = lookupDAYC2PercentileRank(standardScore);
+          if (pr) percentileRank = pr;
+        }
+        const aeMonths = lookupDAYC2AgeEquivalent(rawScore, scoringKey);
+        if (aeMonths !== null) {
+          ageEquivalent = `${aeMonths} mo`;
+          if (ageMonths > 0 && aeMonths < ageMonths) {
+            percentDelay = `${Math.round(((ageMonths - aeMonths) / ageMonths) * 100)}%`;
+          } else if (aeMonths >= ageMonths) {
+            percentDelay = '0%';
+          }
+        }
+      }
+
+      return { domain, rawScore, progress, timer, discontinued, standardScore, descriptiveTerm, percentileRank, ageEquivalent, percentDelay };
     }).filter(Boolean);
-  }, [selectedDomainIds, form, formState]);
+  }, [selectedDomainIds, form, formState, ageMonths]);
 
   return (
     <div className="bg-white rounded-lg border-2 overflow-hidden" style={{ borderColor: form.color + '40' }}>
@@ -557,9 +594,12 @@ function Dayc2Report({ form, formState, selectedDomainIds, getRawScore, getDomai
             <tr className="border-b-2" style={{ borderColor: form.color + '30' }}>
               <th className="text-left py-2 pr-4 font-semibold text-[#2C2C2C]">Domain</th>
               <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Raw Score</th>
-              <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Items</th>
+              <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Std Score</th>
+              <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Percentile</th>
+              <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Term</th>
+              <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Age Eq.</th>
+              <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">% Delay</th>
               <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Status</th>
-              <th className="text-center py-2 pl-2 font-semibold text-[#2C2C2C]">Time</th>
             </tr>
           </thead>
           <tbody>
@@ -567,7 +607,11 @@ function Dayc2Report({ form, formState, selectedDomainIds, getRawScore, getDomai
               <tr key={d.domain.localId} className="border-b border-gray-100">
                 <td className="py-2 pr-4 font-medium" style={{ color: form.color }}>{d.domain.name}</td>
                 <td className="text-center py-2 px-2 font-mono">{d.rawScore}</td>
-                <td className="text-center py-2 px-2 text-xs text-[#6B6B6B]">{d.progress.scored}/{d.progress.total}</td>
+                <td className="text-center py-2 px-2 font-mono">{d.standardScore ?? '\u2014'}</td>
+                <td className="text-center py-2 px-2">{d.percentileRank}</td>
+                <td className="text-center py-2 px-2 text-xs">{d.descriptiveTerm}</td>
+                <td className="text-center py-2 px-2">{d.ageEquivalent}</td>
+                <td className="text-center py-2 px-2">{d.percentDelay}</td>
                 <td className="text-center py-2 px-2">
                   {d.discontinued ? (
                     <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">Disc.</span>
@@ -577,14 +621,10 @@ function Dayc2Report({ form, formState, selectedDomainIds, getRawScore, getDomai
                     <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">In Progress</span>
                   )}
                 </td>
-                <td className="text-center py-2 pl-2 text-xs text-[#6B6B6B]">{formatTime(d.timer)}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        <p className="text-xs text-[#8B8B8B] mt-3 italic">
-          Note: Standard scores and percentiles require manual lookup from the DAYC-2 manual's normative tables based on the child's age.
-        </p>
       </div>
     </div>
   );
@@ -594,7 +634,9 @@ function Dayc2Report({ form, formState, selectedDomainIds, getRawScore, getDomai
 // REEL-3 Report
 // ============================================================
 
-function Reel3Report({ form, formState, selectedDomainIds, getRawScore, getDomainProgress }: Omit<FormReportProps, 'ageInDays'>) {
+function Reel3Report({ form, formState, selectedDomainIds, ageInDays, getRawScore, getDomainProgress }: FormReportProps) {
+  const ageMonths = ageInDays !== null ? Math.floor(ageInDays / 30.44) : 0;
+
   const scoringData = useMemo(() => {
     return selectedDomainIds.map(dId => {
       const domain = form.domains.find(d => d.localId === dId);
@@ -606,15 +648,33 @@ function Reel3Report({ form, formState, selectedDomainIds, getRawScore, getDomai
 
       // REEL-3 age equivalent lookup
       let ageEquivalent: string | null = null;
+      let aeMonths: number | null = null;
       const aeEntry = REEL3_AGE_EQUIVALENT.find(e => e.raw === rawScore);
       if (aeEntry) {
         const months = dId === 'receptive' ? aeEntry.receptiveMonths : aeEntry.expressiveMonths;
-        if (months !== null) ageEquivalent = `${months} months`;
+        if (months !== null) {
+          aeMonths = months;
+          ageEquivalent = `${months} mo`;
+        }
       }
 
-      return { domain, rawScore, progress, timer, discontinued, ageEquivalent };
+      // Ability score, percentile, descriptive term
+      const scoringKey = dId === 'receptive' ? 'receptive' as const : 'expressive' as const;
+      const abilityScore = lookupREEL3AbilityScore(rawScore, ageMonths, scoringKey);
+      const percentileRank = abilityScore !== null ? (lookupREEL3PercentileRank(abilityScore) ?? '\u2014') : '\u2014';
+      const descriptiveTerm = abilityScore !== null ? lookupREEL3DescriptiveTerm(abilityScore) : '\u2014';
+
+      // % delay
+      let percentDelay = '\u2014';
+      if (ageMonths > 0 && aeMonths !== null && aeMonths < ageMonths) {
+        percentDelay = `${Math.round(((ageMonths - aeMonths) / ageMonths) * 100)}%`;
+      } else if (aeMonths !== null && aeMonths >= ageMonths) {
+        percentDelay = '0%';
+      }
+
+      return { domain, rawScore, progress, timer, discontinued, ageEquivalent, abilityScore, percentileRank, descriptiveTerm, percentDelay };
     }).filter(Boolean);
-  }, [selectedDomainIds, form, formState]);
+  }, [selectedDomainIds, form, formState, ageMonths]);
 
   // Language ability composite
   const languageAbility = useMemo(() => {
@@ -652,9 +712,12 @@ function Reel3Report({ form, formState, selectedDomainIds, getRawScore, getDomai
             <tr className="border-b-2" style={{ borderColor: form.color + '30' }}>
               <th className="text-left py-2 pr-4 font-semibold text-[#2C2C2C]">Domain</th>
               <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Raw Score</th>
-              <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Age Equiv.</th>
+              <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Ability</th>
+              <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Percentile</th>
+              <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Term</th>
+              <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Age Eq.</th>
+              <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">% Delay</th>
               <th className="text-center py-2 px-2 font-semibold text-[#2C2C2C]">Status</th>
-              <th className="text-center py-2 pl-2 font-semibold text-[#2C2C2C]">Time</th>
             </tr>
           </thead>
           <tbody>
@@ -662,7 +725,11 @@ function Reel3Report({ form, formState, selectedDomainIds, getRawScore, getDomai
               <tr key={d.domain.localId} className="border-b border-gray-100">
                 <td className="py-2 pr-4 font-medium" style={{ color: form.color }}>{d.domain.name}</td>
                 <td className="text-center py-2 px-2 font-mono">{d.rawScore}</td>
-                <td className="text-center py-2 px-2">{d.ageEquivalent ?? '—'}</td>
+                <td className="text-center py-2 px-2 font-mono">{d.abilityScore ?? '\u2014'}</td>
+                <td className="text-center py-2 px-2">{d.percentileRank}</td>
+                <td className="text-center py-2 px-2 text-xs">{d.descriptiveTerm}</td>
+                <td className="text-center py-2 px-2">{d.ageEquivalent ?? '\u2014'}</td>
+                <td className="text-center py-2 px-2">{d.percentDelay}</td>
                 <td className="text-center py-2 px-2">
                   {d.discontinued ? (
                     <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">Disc.</span>
@@ -674,7 +741,6 @@ function Reel3Report({ form, formState, selectedDomainIds, getRawScore, getDomai
                     </span>
                   )}
                 </td>
-                <td className="text-center py-2 pl-2 text-xs text-[#6B6B6B]">{formatTime(d.timer)}</td>
               </tr>
             ))}
           </tbody>

@@ -53,6 +53,9 @@ export interface Reel3ScoreRow {
   rawScore: number;
   ageEquivalent: string;
   percentDelay: string;
+  abilityScore: number | null;
+  percentileRank: string;
+  descriptiveTerm: string;
 }
 
 export interface SP2QuadrantScore {
@@ -416,6 +419,9 @@ function createReel3Table(scores: Reel3ScoreRow[]): (Paragraph | Table)[] {
     children: [
       tableCell('Subtest', { bold: true, shading: 'F1F5F9' }),
       tableCell('Raw Score', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
+      tableCell('Ability Score', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
+      tableCell('Percentile', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
+      tableCell('Descriptive Term', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
       tableCell('Age Equivalence', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
       tableCell('% Delay', { bold: true, shading: 'F1F5F9', alignment: AlignmentType.CENTER }),
     ],
@@ -427,8 +433,11 @@ function createReel3Table(scores: Reel3ScoreRow[]): (Paragraph | Table)[] {
         children: [
           tableCell(row.domain, { bold: true }),
           tableCell(String(row.rawScore), { alignment: AlignmentType.CENTER }),
+          tableCell(row.abilityScore !== null ? String(row.abilityScore) : '\u2014', { alignment: AlignmentType.CENTER }),
+          tableCell(row.percentileRank, { alignment: AlignmentType.CENTER }),
+          tableCell(row.descriptiveTerm, { alignment: AlignmentType.CENTER }),
           tableCell(row.ageEquivalent, { alignment: AlignmentType.CENTER }),
-          tableCell(row.percentDelay || '—', { alignment: AlignmentType.CENTER }),
+          tableCell(row.percentDelay || '\u2014', { alignment: AlignmentType.CENTER }),
         ],
       })
   );

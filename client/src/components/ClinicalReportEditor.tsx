@@ -17,6 +17,8 @@ import { useMultiAssessment, type ChildInfo, type ExaminerInfo } from '@/context
 import { getFormById, type FormDefinition, type UnifiedDomain } from '@/lib/formRegistry';
 import { lookupScaledScore, lookupAgeEquivalent, lookupGrowthScaleValue, lookupStandardScore } from '@/lib/scoringTables';
 import { REEL3_AGE_EQUIVALENT } from '@/lib/reel3Data';
+import { lookupDAYC2StandardScore, lookupDAYC2AgeEquivalent, lookupDAYC2PercentileRank, lookupDAYC2DescriptiveTerm } from '@/lib/dayc2ScoringTables';
+import { lookupREEL3AbilityScore, lookupREEL3PercentileRank, lookupREEL3DescriptiveTerm } from '@/lib/reel3ScoringTables';
 import { SP2_ENGLISH_CUTOFFS, SP2_BIRTH6MO_CUTOFFS, SP2_QUADRANT_MAP, getSP2Description } from '@/lib/sensoryProfileData';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Download, Printer, FileText, ChevronDown, ChevronUp, Pencil, Check, RotateCcw, Save, Eye, EyeOff, LayoutTemplate, FileDown, BookmarkPlus, FileOutput } from 'lucide-react';
@@ -562,7 +564,7 @@ export default function ClinicalReportEditor() {
 
   interface BayleyScoreRow { domain: string; domainLocalId: string; rawScore: number; scaledScore: number | null; ageEquivalent: string; gsv: number | null; percentDelay: string; }
   interface Dayc2ScoreRow { domain: string; rawScore: number; standardScore: string; descriptiveTerm: string; ageEquivalent: string; percentDelay: string; }
-  interface Reel3ScoreRow { domain: string; rawScore: number; ageEquivalent: string; percentDelay: string; }
+  interface Reel3ScoreRow { domain: string; rawScore: number; ageEquivalent: string; percentDelay: string; abilityScore: number | null; percentileRank: string; descriptiveTerm: string; }
 
   const bayleyScores = useMemo((): BayleyScoreRow[] => {
     const fs = formSelections.find(f => f.formId === 'bayley4');
@@ -644,7 +646,14 @@ export default function ClinicalReportEditor() {
       let pctDelay = '';
       if (ageMonthsVal > 0 && aeMonths !== null && aeMonths < ageMonthsVal) pctDelay = `${Math.round(((ageMonthsVal - aeMonths) / ageMonthsVal) * 100)}%`;
       else if (aeMonths !== null && aeMonths >= ageMonthsVal) pctDelay = '0%';
-      return { domain: domain.name, rawScore, ageEquivalent: ageEq, percentDelay: pctDelay };
+
+      // Ability score lookup
+      const scoringKey = domainLocalId === 'receptive' ? 'receptive' as const : 'expressive' as const;
+      const abilityScore = lookupREEL3AbilityScore(rawScore, ageMonthsVal, scoringKey);
+      const percentileRank = abilityScore !== null ? (lookupREEL3PercentileRank(abilityScore) ?? '—') : '—';
+      const descriptiveTerm = abilityScore !== null ? lookupREEL3DescriptiveTerm(abilityScore) : '—';
+
+      return { domain: domain.name, rawScore, ageEquivalent: ageEq, percentDelay: pctDelay, abilityScore, percentileRank, descriptiveTerm };
     }).filter(Boolean) as Reel3ScoreRow[];
   }, [formSelections, formStates, childInfo, premWeeks]);
 
@@ -655,13 +664,54 @@ export default function ClinicalReportEditor() {
     if (!formState) return [];
     const form = getFormById(fs.formId);
     if (!form) return [];
+    const ageMonthsVal = ageInMonths(childInfo.dob, childInfo.testDate, premWeeks);
+
+    // Map domain localIds to DAYC-2 scoring table domain keys
+    const domainKeyMap: Record<string, 'social' | 'adaptive' | 'receptive' | 'expressive'> = {
+      'socialemotional': 'social',
+      'adaptivebahavior': 'adaptive',
+      'receptivecomm': 'receptive',
+      'expressivecomm': 'expressive',
+    };
+
     return fs.selectedDomainIds.map(domainLocalId => {
       const domain = form.domains.find(d => d.localId === domainLocalId);
       if (!domain) return null;
       const ds = formState.domains[domainLocalId];
       if (!ds) return null;
       const rawScore = Object.values(ds.scores).reduce((sum: number, s) => sum + (s || 0), 0);
-      return { domain: domain.name, rawScore, standardScore: '—', descriptiveTerm: '—', ageEquivalent: '— months', percentDelay: '—' };
+      const scoringKey = domainKeyMap[domainLocalId];
+
+      // Standard score lookup
+      let standardScore = '—';
+      let descriptiveTerm = '—';
+      let percentDelay = '—';
+      if (scoringKey) {
+        const stdScore = lookupDAYC2StandardScore(rawScore, ageMonthsVal, scoringKey);
+        if (stdScore !== null) {
+          standardScore = String(stdScore);
+          descriptiveTerm = lookupDAYC2DescriptiveTerm(stdScore);
+          const pctRank = lookupDAYC2PercentileRank(stdScore);
+          if (pctRank) descriptiveTerm += ` (PR: ${pctRank})`;
+        }
+      }
+
+      // Age equivalent lookup
+      let ageEquivalent = '—';
+      if (scoringKey) {
+        const aeMonths = lookupDAYC2AgeEquivalent(rawScore, scoringKey);
+        if (aeMonths !== null) {
+          ageEquivalent = `${aeMonths} months`;
+          // Percent delay calculation
+          if (ageMonthsVal > 0 && aeMonths < ageMonthsVal) {
+            percentDelay = `${Math.round(((ageMonthsVal - aeMonths) / ageMonthsVal) * 100)}%`;
+          } else if (aeMonths >= ageMonthsVal) {
+            percentDelay = '0%';
+          }
+        }
+      }
+
+      return { domain: domain.name, rawScore, standardScore, descriptiveTerm, ageEquivalent, percentDelay };
     }).filter(Boolean) as Dayc2ScoreRow[];
   }, [formSelections, formStates, childInfo, premWeeks]);
 
@@ -1154,6 +1204,9 @@ export default function ClinicalReportEditor() {
                               <tr className="bg-slate-100">
                                 <th className="border border-slate-400 px-3 py-2 text-left font-bold">Subtest</th>
                                 <th className="border border-slate-400 px-3 py-2 text-center font-bold">Raw Score</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">Ability Score</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">Percentile</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">Descriptive Term</th>
                                 <th className="border border-slate-400 px-3 py-2 text-center font-bold">Age Equivalence</th>
                                 <th className="border border-slate-400 px-3 py-2 text-center font-bold">% Delay</th>
                               </tr>
@@ -1163,6 +1216,9 @@ export default function ClinicalReportEditor() {
                                 <tr key={i}>
                                   <td className="border border-slate-400 px-3 py-2 font-medium">{row.domain}</td>
                                   <td className="border border-slate-400 px-3 py-2 text-center">{row.rawScore}</td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.abilityScore ?? '—'}</td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.percentileRank}</td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.descriptiveTerm}</td>
                                   <td className="border border-slate-400 px-3 py-2 text-center">{row.ageEquivalent}</td>
                                   <td className="border border-slate-400 px-3 py-2 text-center">{row.percentDelay || '—'}</td>
                                 </tr>
