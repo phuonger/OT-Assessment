@@ -2306,12 +2306,17 @@ export default function ClinicalReportEditor() {
                       <FeedingPerformanceChecklist
                         childName={firstName}
                         storageKey={childKey}
-                        onInsertNarrative={(narrative) => {
-                          setFeedingOralMotorCoord(prev => {
-                            const updated = prev ? prev + '\n\n' + narrative : narrative;
-                            toast.success('Narrative generated and inserted into Oral Motor Coordination section');
-                            return updated;
-                          });
+                        onInsertNarrative={(narrative, mode) => {
+                          if (mode === 'replace') {
+                            setFeedingOralMotorCoord(narrative);
+                            toast.success('Narrative replaced in Oral Motor Coordination section');
+                          } else {
+                            setFeedingOralMotorCoord(prev => {
+                              const updated = prev ? prev + '\n\n' + narrative : narrative;
+                              return updated;
+                            });
+                            toast.success('Narrative appended to Oral Motor Coordination section');
+                          }
                         }}
                       />
                       <EditableSection label="" value={feedingOralMotorCoord} onChange={setFeedingOralMotorCoord} placeholder={`During the feeding evaluation, ${firstName} was provided with [foods]. Per clinical observation, describe tongue lateralization, chewing endurance, jaw strength, compensatory techniques, etc.`} rows={5} />

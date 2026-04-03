@@ -17,7 +17,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Wand2, RotateCcw } from 'lucide-react';
+import { ChevronDown, ChevronUp, Wand2, RotateCcw, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 // ============================================================
@@ -362,7 +362,7 @@ function generateNarrative(data: FeedingChecklistData, childName: string): strin
 
 interface FeedingPerformanceChecklistProps {
   childName: string;
-  onInsertNarrative: (narrative: string) => void;
+  onInsertNarrative: (narrative: string, mode: 'append' | 'replace') => void;
   storageKey: string;
 }
 
@@ -385,12 +385,12 @@ export function FeedingPerformanceChecklist({ childName, onInsertNarrative, stor
     setData(prev => ({ ...prev, [key]: value }));
   }, []);
 
-  const handleGenerateNarrative = useCallback(() => {
+  const handleGenerateNarrative = useCallback((mode: 'append' | 'replace') => {
     const narrative = generateNarrative(data, childName);
     if (!narrative.trim()) {
       return;
     }
-    onInsertNarrative(narrative);
+    onInsertNarrative(narrative, mode);
   }, [data, childName, onInsertNarrative]);
 
   const handleReset = useCallback(() => {
@@ -646,14 +646,22 @@ export function FeedingPerformanceChecklist({ childName, onInsertNarrative, stor
           </SubSection>
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
+          <div className="flex items-center gap-2 pt-2 border-t border-slate-200 flex-wrap">
             <Button
-              onClick={handleGenerateNarrative}
+              onClick={() => handleGenerateNarrative('append')}
               size="sm"
               className="bg-teal-600 hover:bg-teal-700 text-white text-xs gap-1.5"
             >
               <Wand2 className="w-3.5 h-3.5" />
-              Generate Narrative
+              Generate & Append
+            </Button>
+            <Button
+              onClick={() => handleGenerateNarrative('replace')}
+              size="sm"
+              className="bg-amber-600 hover:bg-amber-700 text-white text-xs gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Clear & Re-generate
             </Button>
             <Button
               onClick={handleReset}
