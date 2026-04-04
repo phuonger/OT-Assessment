@@ -1506,29 +1506,38 @@ export default function ClinicalReportEditor() {
                 <LayoutTemplate className="w-4 h-4 mr-1" /> Template
               </Button>
             </div>
-            {/* Template selector rendered as fixed overlay to avoid clipping in Electron */}
+            {/* Template selector as centered modal dialog */}
             {showTemplateSelector && (
-              <>
-                <div className="fixed inset-0 z-[9998]" onClick={() => setShowTemplateSelector(false)} />
-                <div className="fixed top-14 right-4 w-80 bg-white border border-slate-200 rounded-lg shadow-2xl z-[9999]">
-                  <div className="p-2 border-b border-slate-100">
-                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-2">Report Template</span>
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setShowTemplateSelector(false)}>
+                <div className="bg-white rounded-xl shadow-2xl w-[360px] max-w-[90vw]" onClick={e => e.stopPropagation()}>
+                  <div className="px-5 py-4 border-b border-slate-200">
+                    <h3 className="text-base font-bold text-slate-800">Select Report Template</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Choose a template for this clinical report</p>
                   </div>
-                  {(Object.keys(TEMPLATE_INFO) as ReportTemplate[]).map(t => (
-                    <button
-                      key={t}
-                      onClick={() => handleTemplateSwitch(t)}
-                      className={`w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0 ${template === t ? 'bg-teal-50 border-l-2 border-l-teal-600' : ''}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold text-slate-800">{TEMPLATE_INFO[t].label}</span>
-                        {template === t && <span className="text-xs text-teal-700 font-medium">Active</span>}
-                      </div>
-                      <p className="text-xs text-slate-500 mt-0.5">{TEMPLATE_INFO[t].description}</p>
-                    </button>
-                  ))}
+                  <div className="p-2">
+                    {(Object.keys(TEMPLATE_INFO) as ReportTemplate[]).map(t => (
+                      <button
+                        key={t}
+                        onClick={() => handleTemplateSwitch(t)}
+                        className={`w-full text-left px-4 py-3 rounded-lg mb-1 last:mb-0 transition-colors ${
+                          template === t
+                            ? 'bg-teal-50 border border-teal-300 ring-1 ring-teal-200'
+                            : 'hover:bg-slate-50 border border-transparent'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-semibold text-slate-800">{TEMPLATE_INFO[t].label}</span>
+                          {template === t && <span className="text-xs bg-teal-600 text-white px-2 py-0.5 rounded-full font-medium">Active</span>}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">{TEMPLATE_INFO[t].description}</p>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="px-5 py-3 border-t border-slate-200 flex justify-end">
+                    <button onClick={() => setShowTemplateSelector(false)} className="text-sm text-slate-600 hover:text-slate-800 font-medium px-3 py-1.5 rounded-md hover:bg-slate-100 transition-colors">Close</button>
+                  </div>
                 </div>
-              </>
+              </div>
             )}
             <Button variant="outline" size="sm" onClick={handleManualSave}>
               <Save className="w-4 h-4 mr-1" /> Save
