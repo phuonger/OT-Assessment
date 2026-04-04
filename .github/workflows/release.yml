@@ -155,7 +155,7 @@ jobs:
           echo "Setting desktop version to $VERSION"
           npm pkg set version="$VERSION"
           cat package.json | grep version
-
+          
       - name: Install Electron dependencies
         working-directory: desktop
         run: npm install
