@@ -122,10 +122,25 @@ export default function UnifiedSummaryReport() {
   }, [state, saveLabel]);
 
   const handleNewAssessment = useCallback(() => {
-    if (confirm('Start a new assessment? Make sure you have saved the current one first.')) {
+    const hasData = state.childInfo.firstName || state.childInfo.lastName;
+    if (!hasData) {
+      dispatch({ type: 'NEW_ASSESSMENT' });
+      return;
+    }
+    const choice = confirm(
+      'Start a new assessment?\n\nThe current assessment will be auto-saved to your history before starting a new one.'
+    );
+    if (choice) {
+      // Auto-save current assessment before clearing
+      try {
+        saveMultiSession(state, 'in-progress', 'Auto-saved before new assessment');
+        toast.success('Current assessment auto-saved to history');
+      } catch (e) {
+        console.error('Auto-save failed:', e);
+      }
       dispatch({ type: 'NEW_ASSESSMENT' });
     }
-  }, [dispatch]);
+  }, [dispatch, state]);
 
   const handleBackToDashboard = useCallback(() => {
     dispatch({ type: 'GO_TO_PHASE', phase: 'dashboard' });

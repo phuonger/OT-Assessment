@@ -8,7 +8,7 @@
  */
 
 import { useMultiAssessment } from '@/contexts/MultiAssessmentContext';
-import { getAllMultiSessions, deleteMultiSession, duplicateMultiSession, type SavedMultiSession } from '@/lib/multiSessionStorage';
+import { getAllMultiSessions, deleteMultiSession, duplicateMultiSession, saveMultiSession, type SavedMultiSession } from '@/lib/multiSessionStorage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -86,7 +86,7 @@ const SORT_LABELS: Record<SortOption, string> = {
 };
 
 export default function AllAssessments() {
-  const { dispatch } = useMultiAssessment();
+  const { state, dispatch } = useMultiAssessment();
   const [searchQuery, setSearchQuery] = useState('');
   const [sessions, setSessions] = useState(() => getAllMultiSessions());
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -207,6 +207,15 @@ export default function AllAssessments() {
   };
 
   const handleNewAssessment = () => {
+    // Auto-save current in-progress assessment if it has data
+    const hasData = state.childInfo.firstName || state.childInfo.lastName;
+    if (hasData) {
+      try {
+        saveMultiSession(state, 'in-progress', 'Auto-saved before new assessment');
+      } catch (e) {
+        console.error('Auto-save failed:', e);
+      }
+    }
     dispatch({ type: 'NEW_ASSESSMENT' });
   };
 

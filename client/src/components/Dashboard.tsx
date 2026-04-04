@@ -10,7 +10,7 @@
  */
 
 import { useMultiAssessment } from '@/contexts/MultiAssessmentContext';
-import { getAllMultiSessions, deleteMultiSession, duplicateMultiSession, type SavedMultiSession } from '@/lib/multiSessionStorage';
+import { getAllMultiSessions, deleteMultiSession, duplicateMultiSession, saveMultiSession, type SavedMultiSession } from '@/lib/multiSessionStorage';
 import { Button } from '@/components/ui/button';
 import {
   Plus,
@@ -27,7 +27,7 @@ import {
   Play,
   Copy,
 } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { parseLocalDate } from '@/lib/dateUtils';
 
@@ -75,14 +75,30 @@ function getCompletionProgress(session: SavedMultiSession): { scored: number; to
 }
 
 export default function Dashboard() {
-  const { dispatch } = useMultiAssessment();
+  const { state, dispatch } = useMultiAssessment();
 
   const [sessions, setSessions] = useState(() => getAllMultiSessions());
   const recentSessions = useMemo(() => sessions.slice(0, 5), [sessions]);
   const hasMore = sessions.length > 5;
 
+  // Refresh sessions list whenever the component re-renders (e.g., after navigation)
+  useEffect(() => {
+    setSessions(getAllMultiSessions());
+  }, [state.phase]);
+
   const handleNewAssessment = () => {
+    // Auto-save current in-progress assessment if it has data
+    const hasData = state.childInfo.firstName || state.childInfo.lastName;
+    if (hasData) {
+      try {
+        saveMultiSession(state, 'in-progress', 'Auto-saved before new assessment');
+      } catch (e) {
+        console.error('Auto-save failed:', e);
+      }
+    }
     dispatch({ type: 'NEW_ASSESSMENT' });
+    // Refresh sessions list after auto-save
+    setTimeout(() => setSessions(getAllMultiSessions()), 100);
   };
 
   const handleLoadSession = (session: SavedMultiSession) => {

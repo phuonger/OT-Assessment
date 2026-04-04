@@ -28,6 +28,7 @@ import { generatePdfReport } from '@/lib/generateReportPdf';
 import { loadAppSettings, type RecommendationTemplate } from '@/components/SettingsPreferences';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
+import { saveMultiSession } from '@/lib/multiSessionStorage';
 import { FeedingPerformanceChecklist, ASPIRATION_SIGN_LABELS } from '@/components/FeedingPerformanceChecklist';
 import type { FeedingChecklistDataType } from '@/components/FeedingPerformanceChecklist';
 import type { FeedingChecklistExportData } from '@/lib/generateDocx';
@@ -1504,8 +1505,15 @@ export default function ClinicalReportEditor() {
               <Button variant="outline" size="sm" onClick={() => setShowTemplateSelector(!showTemplateSelector)} className="text-slate-600">
                 <LayoutTemplate className="w-4 h-4 mr-1" /> Template
               </Button>
-              {showTemplateSelector && (
-                <div className="absolute right-0 top-full mt-1 w-80 bg-white border border-slate-200 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
+            </div>
+            {/* Template selector rendered as fixed overlay to avoid clipping in Electron */}
+            {showTemplateSelector && (
+              <>
+                <div className="fixed inset-0 z-[9998]" onClick={() => setShowTemplateSelector(false)} />
+                <div className="fixed top-14 right-4 w-80 bg-white border border-slate-200 rounded-lg shadow-2xl z-[9999]">
+                  <div className="p-2 border-b border-slate-100">
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-2">Report Template</span>
+                  </div>
                   {(Object.keys(TEMPLATE_INFO) as ReportTemplate[]).map(t => (
                     <button
                       key={t}
@@ -1520,8 +1528,8 @@ export default function ClinicalReportEditor() {
                     </button>
                   ))}
                 </div>
-              )}
-            </div>
+              </>
+            )}
             <Button variant="outline" size="sm" onClick={handleManualSave}>
               <Save className="w-4 h-4 mr-1" /> Save
             </Button>
@@ -1539,7 +1547,18 @@ export default function ClinicalReportEditor() {
               Dashboard
             </Button>
             <Button variant="ghost" size="sm" onClick={() => {
-              if (confirm('Start a new assessment? Make sure you have saved the current one first.')) {
+              const hasData = state.childInfo.firstName || state.childInfo.lastName;
+              if (!hasData) {
+                dispatch({ type: 'NEW_ASSESSMENT' });
+                return;
+              }
+              if (confirm('Start a new assessment?\n\nThe current assessment will be auto-saved to your history before starting a new one.')) {
+                try {
+                  saveMultiSession(state, 'in-progress', 'Auto-saved before new assessment');
+                  toast.success('Current assessment auto-saved to history');
+                } catch (e) {
+                  console.error('Auto-save failed:', e);
+                }
                 dispatch({ type: 'NEW_ASSESSMENT' });
               }
             }} className="text-teal-700">
