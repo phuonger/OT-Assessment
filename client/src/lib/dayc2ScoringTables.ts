@@ -2,9 +2,11 @@
 // Auto-generated from DAYC-2_TEMPLATE_Ver2.0.xlsx Scores sheet
 // DO NOT EDIT MANUALLY
 
-// Table A.1: Raw Score to Age Equivalent (months)
-// Maps raw score -> age equivalent in months for each domain
+// Table A.1: Age Equivalent Lookup
+// Maps age_months (key) -> raw score thresholds per domain
+// To find age equivalent: search for the age where the domain's raw score is <= the given raw score
 export const DAYC2_AGE_EQUIVALENTS: Record<number, { social: number | null; adaptive: number | null; receptive: number | null; expressive: number | null }> = {
+  0: { social: 0, adaptive: 0, receptive: 0, expressive: 0 },  // Age < 1 month
   1: { social: 7, adaptive: 7, receptive: 5, expressive: 4 },
   2: { social: 8, adaptive: null, receptive: null, expressive: 5 },
   3: { social: 9, adaptive: 8, receptive: 6, expressive: null },
@@ -1688,9 +1690,24 @@ export const DAYC2_DESCRIPTIVE_TERMS: { minScore: number; term: string }[] = [
 // Lookup functions
 
 export function lookupDAYC2AgeEquivalent(rawScore: number, domain: 'social' | 'adaptive' | 'receptive' | 'expressive'): number | null {
-  const entry = DAYC2_AGE_EQUIVALENTS[rawScore];
-  if (!entry) return null;
-  return entry[domain];
+  // The DAYC2_AGE_EQUIVALENTS table maps age_months (key) -> raw_score thresholds per domain.
+  // To find the age equivalent for a given raw score, we search through all age entries
+  // and find the age where the domain's raw score is the largest value <= the given raw score.
+  // This mirrors Excel's XLOOKUP with match_mode=-1 (exact or next smaller).
+  let bestAge: number | null = null;
+  let bestRaw = -1;
+
+  const entries = Object.entries(DAYC2_AGE_EQUIVALENTS);
+  for (const [ageKey, entry] of entries) {
+    const domainRaw = entry[domain];
+    if (domainRaw === null) continue;
+    if (domainRaw <= rawScore && domainRaw > bestRaw) {
+      bestRaw = domainRaw;
+      bestAge = parseInt(ageKey);
+    }
+  }
+
+  return bestAge;
 }
 
 export function lookupDAYC2StandardScore(rawScore: number, ageMonths: number, domain: 'social' | 'adaptive' | 'receptive' | 'expressive'): number | null {

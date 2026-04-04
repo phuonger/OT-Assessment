@@ -350,9 +350,13 @@ function generateBayleyNarrative(domain: UnifiedDomain, scores: Record<number, n
 
   for (const item of sortedItems) {
     const score = scores[item.number];
-    if (score === 2) demonstrated.push(item.description);
-    else if (score === 0) notDemonstrated.push(item.description);
-    else if (score === 1) emerging.push(item.description);
+    if (score === null || score === undefined) continue;
+    // Use score-specific criteria description if available, otherwise fall back to item description
+    const criteriaDesc = item.scoringCriteria?.find(c => c.score === score)?.description;
+    const label = criteriaDesc ? `${item.description}: ${criteriaDesc}` : item.description;
+    if (score === 2) demonstrated.push(label);
+    else if (score === 0) notDemonstrated.push(label);
+    else if (score === 1) emerging.push(label);
   }
 
   return {
@@ -375,8 +379,12 @@ function generateBinaryNarrative(domain: UnifiedDomain, scores: Record<number, n
 
   for (const item of sortedItems) {
     const score = scores[item.number];
-    if (score === 1) demonstrated.push(item.description);
-    else if (score === 0) notDemonstrated.push(item.description);
+    if (score === null || score === undefined) continue;
+    // Use score-specific criteria description if available, otherwise fall back to item description
+    const criteriaDesc = item.scoringCriteria?.find(c => c.score === score)?.description;
+    const label = criteriaDesc ? `${item.description}: ${criteriaDesc}` : item.description;
+    if (score === 1) demonstrated.push(label);
+    else if (score === 0) notDemonstrated.push(label);
   }
 
   return {
@@ -742,11 +750,24 @@ export default function ClinicalReportEditor() {
         gsv = lookupGrowthScaleValue(rawScore, key);
       }
 
+      // % delay using Excel formula: ((aeMonths*30 + aeDays) / (childMonths*30 + childDays)) - 1
       let pctDelay = '—';
-      if (ageEq !== 'N/A') {
-        const aeMonths = parseInt(ageEq) || 0;
-        if (ageMonthsVal > 0 && aeMonths < ageMonthsVal) pctDelay = `${Math.round(((ageMonthsVal - aeMonths) / ageMonthsVal) * 100)}%`;
-        else if (aeMonths >= ageMonthsVal) pctDelay = '0%';
+      if (key && ageInDays !== null && ageInDays > 0) {
+        const ae2 = lookupAgeEquivalent(rawScore, key);
+        if (ae2 && ae2.months !== null && typeof ae2.months === 'number') {
+          const aeTotalDays = ae2.months * 30 + (ae2.days || 0);
+          const childMo = Math.floor(ageInDays / 30.44);
+          const childDaysRem = Math.round(ageInDays - childMo * 30.44);
+          const childTotalDays = childMo * 30 + childDaysRem;
+          if (childTotalDays > 0) {
+            const delayRatio = (aeTotalDays / childTotalDays) - 1;
+            if (delayRatio < 0) {
+              pctDelay = `${Math.round(Math.abs(delayRatio) * 100)}%`;
+            } else {
+              pctDelay = '0%';
+            }
+          }
+        }
       }
 
       return { domain: domain.name, domainLocalId, rawScore, scaledScore, ageEquivalent: ageEq, gsv, percentDelay: pctDelay };
@@ -792,9 +813,22 @@ export default function ClinicalReportEditor() {
       });
       const aeMonths = aeEntry ? (aeEntry as any).ageMonths : null;
       const ageEq = aeMonths !== null ? `${aeMonths} months` : 'N/A';
+      // % delay using Excel formula: ((aeMonths*30) / (childMonths*30 + childDays)) - 1
       let pctDelay = '';
-      if (ageMonthsVal > 0 && aeMonths !== null && aeMonths < ageMonthsVal) pctDelay = `${Math.round(((ageMonthsVal - aeMonths) / ageMonthsVal) * 100)}%`;
-      else if (aeMonths !== null && aeMonths >= ageMonthsVal) pctDelay = '0%';
+      if (ageInDays !== null && ageInDays > 0 && aeMonths !== null) {
+        const childMo = Math.floor(ageInDays / 30.44);
+        const childDaysRem = Math.round(ageInDays - childMo * 30.44);
+        const childTotalDays = childMo * 30 + childDaysRem;
+        const aeTotalDays = aeMonths * 30;
+        if (childTotalDays > 0) {
+          const delayRatio = (aeTotalDays / childTotalDays) - 1;
+          if (delayRatio < 0) {
+            pctDelay = `${Math.round(Math.abs(delayRatio) * 100)}%`;
+          } else {
+            pctDelay = '0%';
+          }
+        }
+      }
 
       // Ability score lookup
       const scoringKey = domainLocalId === 'receptive' ? 'receptive' as const : 'expressive' as const;
@@ -859,10 +893,20 @@ export default function ClinicalReportEditor() {
           const aeMonths = lookupDAYC2AgeEquivalent(rawScore, scoringKey);
           if (aeMonths !== null) {
             ageEquivalent = `${aeMonths} months`;
-            if (ageMonthsVal > 0 && aeMonths < ageMonthsVal) {
-              percentDelay = `${Math.round(((ageMonthsVal - aeMonths) / ageMonthsVal) * 100)}%`;
-            } else if (aeMonths >= ageMonthsVal) {
-              percentDelay = '0%';
+            // Use Excel formula: ((aeMonths*30) / (childMonths*30 + childDays)) - 1
+            if (ageInDays !== null && ageInDays > 0) {
+              const childMo = Math.floor(ageInDays / 30.44);
+              const childDaysRem = Math.round(ageInDays - childMo * 30.44);
+              const childTotalDays = childMo * 30 + childDaysRem;
+              const aeTotalDays = aeMonths * 30;
+              if (childTotalDays > 0) {
+                const delayRatio = (aeTotalDays / childTotalDays) - 1;
+                if (delayRatio < 0) {
+                  percentDelay = `${Math.round(Math.abs(delayRatio) * 100)}%`;
+                } else {
+                  percentDelay = '0%';
+                }
+              }
             }
           }
         }
@@ -881,10 +925,20 @@ export default function ClinicalReportEditor() {
           const aeMonths = lookupDAYC2AgeEquivalent(rawScore, scoringKey);
           if (aeMonths !== null) {
             ageEquivalent = `${aeMonths} months`;
-            if (ageMonthsVal > 0 && aeMonths < ageMonthsVal) {
-              percentDelay = `${Math.round(((ageMonthsVal - aeMonths) / ageMonthsVal) * 100)}%`;
-            } else if (aeMonths >= ageMonthsVal) {
-              percentDelay = '0%';
+            // Use Excel formula: ((aeMonths*30) / (childMonths*30 + childDays)) - 1
+            if (ageInDays !== null && ageInDays > 0) {
+              const childMo2 = Math.floor(ageInDays / 30.44);
+              const childDaysRem2 = Math.round(ageInDays - childMo2 * 30.44);
+              const childTotalDays2 = childMo2 * 30 + childDaysRem2;
+              const aeTotalDays2 = aeMonths * 30;
+              if (childTotalDays2 > 0) {
+                const delayRatio2 = (aeTotalDays2 / childTotalDays2) - 1;
+                if (delayRatio2 < 0) {
+                  percentDelay = `${Math.round(Math.abs(delayRatio2) * 100)}%`;
+                } else {
+                  percentDelay = '0%';
+                }
+              }
             }
           }
         }
@@ -980,10 +1034,20 @@ export default function ClinicalReportEditor() {
         const aeMonths = lookupDAYC2AgeEquivalent(rawScore, scoringKey);
         if (aeMonths !== null) {
           ageEquivalent = `${aeMonths} months`;
-          if (ageMonthsVal > 0 && aeMonths < ageMonthsVal) {
-            percentDelay = `${Math.round(((ageMonthsVal - aeMonths) / ageMonthsVal) * 100)}%`;
-          } else if (aeMonths >= ageMonthsVal) {
-            percentDelay = '0%';
+          // Use Excel formula: ((aeMonths*30) / (childMonths*30 + childDays)) - 1
+          if (ageInDays !== null && ageInDays > 0) {
+            const childMo3 = Math.floor(ageInDays / 30.44);
+            const childDaysRem3 = Math.round(ageInDays - childMo3 * 30.44);
+            const childTotalDays3 = childMo3 * 30 + childDaysRem3;
+            const aeTotalDays3 = aeMonths * 30;
+            if (childTotalDays3 > 0) {
+              const delayRatio3 = (aeTotalDays3 / childTotalDays3) - 1;
+              if (delayRatio3 < 0) {
+                percentDelay = `${Math.round(Math.abs(delayRatio3) * 100)}%`;
+              } else {
+                percentDelay = '0%';
+              }
+            }
           }
         }
       }
@@ -1108,8 +1172,11 @@ export default function ClinicalReportEditor() {
         if (adaptiveDomain && ds) {
           for (const item of adaptiveDomain.items) {
             const score = ds.scores[item.number];
-            if (score === 1) demonstrated.push(item.description);
-            else if (score === 0) notDemonstrated.push(item.description);
+            if (score === null || score === undefined) continue;
+            const criteriaDesc = item.scoringCriteria?.find(c => c.score === score)?.description;
+            const label = criteriaDesc ? `${item.description}: ${criteriaDesc}` : item.description;
+            if (score === 1) demonstrated.push(label);
+            else if (score === 0) notDemonstrated.push(label);
           }
         }
       }
@@ -1133,8 +1200,11 @@ export default function ClinicalReportEditor() {
             if (!ds) continue;
             for (const item of domain.items) {
               const score = ds.scores[item.number];
-              if (score && score > 0) demonstrated.push(item.description);
-              else if (score === 0) notDemonstrated.push(item.description);
+              if (score === null || score === undefined) continue;
+              const criteriaDesc = item.scoringCriteria?.find(c => c.score === score)?.description;
+              const label = criteriaDesc ? `${item.description}: ${criteriaDesc}` : item.description;
+              if (score && score > 0) demonstrated.push(label);
+              else if (score === 0) notDemonstrated.push(label);
             }
           }
         }
@@ -1414,7 +1484,7 @@ export default function ClinicalReportEditor() {
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header Bar */}
-      <div className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-sm print:hidden">
+      <div className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-sm print:hidden" style={{ overflow: 'visible' }}>
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => dispatch({ type: 'GO_TO_PHASE', phase: 'summary' })} className="text-slate-600">
@@ -1435,7 +1505,7 @@ export default function ClinicalReportEditor() {
                 <LayoutTemplate className="w-4 h-4 mr-1" /> Template
               </Button>
               {showTemplateSelector && (
-                <div className="absolute right-0 top-full mt-1 w-80 bg-white border border-slate-200 rounded-lg shadow-lg z-30 overflow-hidden">
+                <div className="absolute right-0 top-full mt-1 w-80 bg-white border border-slate-200 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
                   {(Object.keys(TEMPLATE_INFO) as ReportTemplate[]).map(t => (
                     <button
                       key={t}

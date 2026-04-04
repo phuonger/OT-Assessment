@@ -253,11 +253,20 @@ function renderBayley4Section(
       const aeResult = lookupAgeEquivalent(rawScore, key);
       if (aeResult && aeResult.months !== null) {
         ageEquivalent = `${aeResult.months} mo${aeResult.days !== null ? ` ${aeResult.days} d` : ''}`;
-        const childAgeMonths = Math.floor(ageInDays / 30.44);
+        // Use Excel formula: ((aeMonths*30 + aeDays) / (childMonths*30 + childDays)) - 1
         const aeMonths = typeof aeResult.months === 'string' ? parseFloat(aeResult.months) : aeResult.months;
-        if (childAgeMonths > 0 && !isNaN(aeMonths)) {
-          const delay = ((childAgeMonths - aeMonths) / childAgeMonths) * 100;
-          percentDelay = `${Math.round(delay)}%`;
+        const aeDays = aeResult.days || 0;
+        const childMonths = Math.floor(ageInDays / 30.44);
+        const childDaysRem = Math.round(ageInDays - childMonths * 30.44);
+        const childTotalDays = childMonths * 30 + childDaysRem;
+        const aeTotalDays = aeMonths * 30 + aeDays;
+        if (childTotalDays > 0 && !isNaN(aeMonths)) {
+          const delayRatio = (aeTotalDays / childTotalDays) - 1;
+          if (delayRatio < 0) {
+            percentDelay = `${Math.round(Math.abs(delayRatio) * 100)}%`;
+          } else {
+            percentDelay = '0%';
+          }
         }
       }
       const gsvResult = lookupGrowthScaleValue(rawScore, key);

@@ -374,17 +374,23 @@ function Bayley4Report({ form, formState, selectedDomainIds, ageInDays, getRawSc
         growthScaleValue = lookupGrowthScaleValue(rawScore, key);
       }
 
-      // Calculate % delay
+      // Calculate % delay using Excel formula: ((aeMonths*30 + aeDays) / (childMonths*30 + childDays)) - 1
       let percentDelay: string | null = null;
-      if (ageInDays !== null && ageEquivalent) {
-        const aeMonths = parseInt(ageEquivalent);
-        const childAgeMonths = Math.floor(ageInDays / 30.44);
-        if (childAgeMonths > 0 && !isNaN(aeMonths)) {
-          const delay = ((childAgeMonths - aeMonths) / childAgeMonths) * 100;
-          if (delay > 0) {
-            percentDelay = `${Math.round(delay)}%`;
-          } else {
-            percentDelay = '0%';
+      if (ageInDays !== null && key) {
+        const ageEqData = lookupAgeEquivalent(rawScore, key);
+        if (ageEqData && ageEqData.months !== null && typeof ageEqData.months === 'number') {
+          const aeTotalDays = ageEqData.months * 30 + (ageEqData.days || 0);
+          // Convert child's ageInDays to months*30+days format for consistency with Excel
+          const childMonths = Math.floor(ageInDays / 30.44);
+          const childDays = Math.round(ageInDays - childMonths * 30.44);
+          const childTotalDays = childMonths * 30 + childDays;
+          if (childTotalDays > 0) {
+            const delayRatio = (aeTotalDays / childTotalDays) - 1;
+            if (delayRatio < 0) {
+              percentDelay = `${Math.round(Math.abs(delayRatio) * 100)}%`;
+            } else {
+              percentDelay = '0%';
+            }
           }
         }
       }
@@ -571,10 +577,20 @@ function Dayc2Report({ form, formState, selectedDomainIds, ageInDays, getRawScor
           const aeMonths = lookupDAYC2AgeEquivalent(rawScore, scoringKey);
           if (aeMonths !== null) {
             ageEquivalent = `${aeMonths} mo`;
-            if (ageMonths > 0 && aeMonths < ageMonths) {
-              percentDelay = `${Math.round(((ageMonths - aeMonths) / ageMonths) * 100)}%`;
-            } else if (aeMonths >= ageMonths) {
-              percentDelay = '0%';
+            // Use Excel formula: ((aeMonths*30) / (childMonths*30 + childDays)) - 1
+            if (ageInDays !== null && ageInDays > 0) {
+              const childMonths = Math.floor(ageInDays / 30.44);
+              const childDaysRem = Math.round(ageInDays - childMonths * 30.44);
+              const childTotalDays = childMonths * 30 + childDaysRem;
+              const aeTotalDays = aeMonths * 30;
+              if (childTotalDays > 0) {
+                const delayRatio = (aeTotalDays / childTotalDays) - 1;
+                if (delayRatio < 0) {
+                  percentDelay = `${Math.round(Math.abs(delayRatio) * 100)}%`;
+                } else {
+                  percentDelay = '0%';
+                }
+              }
             }
           }
         }
@@ -591,10 +607,20 @@ function Dayc2Report({ form, formState, selectedDomainIds, ageInDays, getRawScor
           const aeMonths = lookupDAYC2AgeEquivalent(rawScore, scoringKey);
           if (aeMonths !== null) {
             ageEquivalent = `${aeMonths} mo`;
-            if (ageMonths > 0 && aeMonths < ageMonths) {
-              percentDelay = `${Math.round(((ageMonths - aeMonths) / ageMonths) * 100)}%`;
-            } else if (aeMonths >= ageMonths) {
-              percentDelay = '0%';
+            // Use Excel formula: ((aeMonths*30) / (childMonths*30 + childDays)) - 1
+            if (ageInDays !== null && ageInDays > 0) {
+              const childMonths2 = Math.floor(ageInDays / 30.44);
+              const childDaysRem2 = Math.round(ageInDays - childMonths2 * 30.44);
+              const childTotalDays2 = childMonths2 * 30 + childDaysRem2;
+              const aeTotalDays2 = aeMonths * 30;
+              if (childTotalDays2 > 0) {
+                const delayRatio2 = (aeTotalDays2 / childTotalDays2) - 1;
+                if (delayRatio2 < 0) {
+                  percentDelay = `${Math.round(Math.abs(delayRatio2) * 100)}%`;
+                } else {
+                  percentDelay = '0%';
+                }
+              }
             }
           }
         }
@@ -766,12 +792,21 @@ function Reel3Report({ form, formState, selectedDomainIds, ageInDays, getRawScor
       const percentileRank = abilityScore !== null ? (lookupREEL3PercentileRank(abilityScore) ?? '\u2014') : '\u2014';
       const descriptiveTerm = abilityScore !== null ? lookupREEL3DescriptiveTerm(abilityScore) : '\u2014';
 
-      // % delay
+      // % delay using Excel formula: ((aeMonths*30) / (childMonths*30 + childDays)) - 1
       let percentDelay = '\u2014';
-      if (ageMonths > 0 && aeMonths !== null && aeMonths < ageMonths) {
-        percentDelay = `${Math.round(((ageMonths - aeMonths) / ageMonths) * 100)}%`;
-      } else if (aeMonths !== null && aeMonths >= ageMonths) {
-        percentDelay = '0%';
+      if (ageInDays !== null && ageInDays > 0 && aeMonths !== null) {
+        const childMo = Math.floor(ageInDays / 30.44);
+        const childDaysRem = Math.round(ageInDays - childMo * 30.44);
+        const childTotalDays = childMo * 30 + childDaysRem;
+        const aeTotalDays = aeMonths * 30;
+        if (childTotalDays > 0) {
+          const delayRatio = (aeTotalDays / childTotalDays) - 1;
+          if (delayRatio < 0) {
+            percentDelay = `${Math.round(Math.abs(delayRatio) * 100)}%`;
+          } else {
+            percentDelay = '0%';
+          }
+        }
       }
 
       return { domain, rawScore, progress, timer, discontinued, ageEquivalent, abilityScore, percentileRank, descriptiveTerm, percentDelay };
