@@ -16,8 +16,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   ArrowLeft, Settings, Building2, Stethoscope, FileText,
   Save, RotateCcw, ImagePlus, Trash2, Check, Plus, GripVertical,
-  BookmarkPlus, Pencil
+  BookmarkPlus, Pencil, Sparkles, Eye, EyeOff, ExternalLink
 } from 'lucide-react';
+import {
+  getApiKey, setApiKey as saveApiKey,
+  getSelectedModel, setSelectedModel as saveSelectedModel,
+  AI_MODELS, type AiModelId, isAiConfigured
+} from '@/lib/aiEnhance';
 import { toast } from 'sonner';
 
 // ============================================================
@@ -106,6 +111,12 @@ export default function SettingsPreferences({ onBack }: { onBack: () => void }) 
   const [hasChanges, setHasChanges] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // AI Settings
+  const [aiApiKey, setAiApiKey] = useState(() => getApiKey());
+  const [aiModel, setAiModel] = useState<AiModelId>(() => getSelectedModel());
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [aiKeyJustSaved, setAiKeyJustSaved] = useState(false);
 
   // Recommendation template editing
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
@@ -622,6 +633,133 @@ export default function SettingsPreferences({ onBack }: { onBack: () => void }) 
                 Add Recommendation Template
               </Button>
             )}
+          </div>
+        </section>
+
+        {/* AI Settings */}
+        <section>
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles className="w-5 h-5 text-[#0D7377]" />
+            <h2 className="text-lg font-semibold text-[#2C2C2C]">AI Settings</h2>
+          </div>
+          <p className="text-sm text-[#6B6B6B] mb-4">
+            Configure AI-powered report enhancement. The "AI Enhance" button on report sections uses OpenRouter to rewrite clinical text into professional narratives.
+          </p>
+          <div className="bg-white rounded-lg border border-[#E5E1D8] p-6 space-y-5">
+            {/* API Key */}
+            <div>
+              <Label htmlFor="aiApiKey">OpenRouter API Key</Label>
+              <p className="text-xs text-[#8B8B8B] mt-0.5 mb-2">
+                Get a free API key at{' '}
+                <a
+                  href="https://openrouter.ai/keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#0D7377] hover:underline inline-flex items-center gap-0.5"
+                >
+                  openrouter.ai/keys <ExternalLink className="w-3 h-3" />
+                </a>
+                . Your key is stored locally and never shared.
+              </p>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    id="aiApiKey"
+                    type={showApiKey ? 'text' : 'password'}
+                    value={aiApiKey}
+                    onChange={e => { setAiApiKey(e.target.value); setAiKeyJustSaved(false); }}
+                    placeholder="sk-or-v1-..."
+                    className="pr-10 font-mono text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8B8B8B] hover:text-[#2C2C2C] transition-colors"
+                    title={showApiKey ? 'Hide key' : 'Show key'}
+                  >
+                    {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    saveApiKey(aiApiKey);
+                    setAiKeyJustSaved(true);
+                    toast.success(aiApiKey ? 'API key saved' : 'API key removed');
+                    setTimeout(() => setAiKeyJustSaved(false), 2000);
+                  }}
+                  className={`gap-1.5 px-4 ${aiKeyJustSaved ? 'bg-green-600 hover:bg-green-700' : 'bg-[#0D7377] hover:bg-[#0a5c5f]'} text-white`}
+                >
+                  {aiKeyJustSaved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+                  {aiKeyJustSaved ? 'Saved' : 'Save Key'}
+                </Button>
+              </div>
+              {aiApiKey && (
+                <div className="flex items-center gap-1.5 mt-2">
+                  <div className="w-2 h-2 rounded-full bg-green-500" />
+                  <span className="text-xs text-green-700">API key configured</span>
+                </div>
+              )}
+              {!aiApiKey && (
+                <div className="flex items-center gap-1.5 mt-2">
+                  <div className="w-2 h-2 rounded-full bg-amber-400" />
+                  <span className="text-xs text-amber-700">No API key — AI Enhance buttons will prompt you to add one</span>
+                </div>
+              )}
+            </div>
+
+            {/* Model Selection */}
+            <div>
+              <Label htmlFor="aiModel">AI Model</Label>
+              <p className="text-xs text-[#8B8B8B] mt-0.5 mb-2">
+                Choose which AI model to use for rewriting report sections.
+              </p>
+              <Select
+                value={aiModel}
+                onValueChange={(v: string) => {
+                  const modelId = v as AiModelId;
+                  setAiModel(modelId);
+                  saveSelectedModel(modelId);
+                  toast.success('AI model updated');
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {AI_MODELS.map(m => (
+                    <SelectItem key={m.id} value={m.id}>
+                      <div className="flex flex-col">
+                        <span>{m.label}</span>
+                        <span className="text-xs text-[#8B8B8B]">{m.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* How it works */}
+            <div className="bg-[#F8F7F4] rounded-md p-4 border border-[#E5E1D8]">
+              <h4 className="text-sm font-semibold text-[#2C2C2C] mb-2">How AI Enhance works</h4>
+              <ul className="text-xs text-[#6B6B6B] space-y-1.5">
+                <li className="flex items-start gap-2">
+                  <span className="text-[#0D7377] font-bold mt-0.5">1.</span>
+                  Click the <span className="inline-flex items-center gap-0.5 bg-white border border-[#E5E1D8] rounded px-1.5 py-0.5 text-[#7C3AED] font-medium"><Sparkles className="w-3 h-3" /> AI Enhance</span> button next to any report section
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-[#0D7377] font-bold mt-0.5">2.</span>
+                  The AI rewrites the text into a professional clinical narrative while preserving all factual content
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-[#0D7377] font-bold mt-0.5">3.</span>
+                  Review the result — click "Undo AI" to revert if needed, or edit further manually
+                </li>
+              </ul>
+              <p className="text-xs text-[#8B8B8B] mt-3 italic">
+                Requires an internet connection. Your report text is sent to OpenRouter for processing — no data is stored by the AI service.
+              </p>
+            </div>
           </div>
         </section>
 

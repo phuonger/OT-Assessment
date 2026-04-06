@@ -22,7 +22,7 @@ import { lookupDAYC2WithBayley4AB, computeDAYC2BayleyComposites, getScaledScoreC
 import { lookupREEL3AbilityScore, lookupREEL3PercentileRank, lookupREEL3DescriptiveTerm } from '@/lib/reel3ScoringTables';
 import { SP2_ENGLISH_CUTOFFS, SP2_BIRTH6MO_CUTOFFS, SP2_QUADRANT_MAP, getSP2Description } from '@/lib/sensoryProfileData';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Download, Printer, FileText, ChevronDown, ChevronUp, Pencil, Check, RotateCcw, Save, Eye, EyeOff, LayoutTemplate, FileDown, BookmarkPlus, FileOutput } from 'lucide-react';
+import { ArrowLeft, Download, Printer, FileText, ChevronDown, ChevronUp, Pencil, Check, RotateCcw, Save, Eye, EyeOff, LayoutTemplate, FileDown, BookmarkPlus, FileOutput, WandSparkles, Loader2, Undo2 } from 'lucide-react';
 import { generateDocxReport, type DocxReportData, type DomainNarrativeData as DocxDomainNarrative } from '@/lib/generateDocx';
 import { generatePdfReport } from '@/lib/generateReportPdf';
 import { loadAppSettings, type RecommendationTemplate } from '@/components/SettingsPreferences';
@@ -40,6 +40,7 @@ import type { SelfFeedingData } from '@/components/SelfFeedingChecklist';
 import type { DrinkingData } from '@/components/DrinkingChecklist';
 import { generateAllChecklistsPdf } from '@/lib/generateAllChecklistsPdf';
 import { parseLocalDate, formatDateLocal, calculateAge } from '@/lib/dateUtils';
+import { enhanceWithAI, isOnline, isAiConfigured } from '@/lib/aiEnhance';
 
 // ============================================================
 // Types & Constants
@@ -166,12 +167,16 @@ function getChildKey(childInfo: ChildInfo): string {
 // ============================================================
 
 function EditableSection({
-  label, value, onChange, placeholder, rows = 4,
+  label, value, onChange, placeholder, rows = 4, childName, sectionContext,
 }: {
   label: string; value: string; onChange: (v: string) => void; placeholder?: string; rows?: number;
+  childName?: string; sectionContext?: string;
 }) {
   const [editing, setEditing] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [previousValue, setPreviousValue] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (editing && textareaRef.current) {
@@ -181,23 +186,158 @@ function EditableSection({
     }
   }, [editing]);
 
+  const handleAiEnhance = async () => {
+    const textToEnhance = value?.trim();
+    if (!textToEnhance || textToEnhance.length < 10) {
+      toast.error('Please add more text before using AI Enhance.');
+      return;
+    }
+    if (!isOnline()) {
+      toast.error('No internet connection. AI Enhance requires internet access.');
+      return;
+    }
+    if (!isAiConfigured()) {
+      toast('OpenRouter API key required', {
+        description: 'Go to Settings → AI Settings to add your API key.',
+        duration: 6000,
+        action: {
+          label: 'How to get a key',
+          onClick: () => window.open('https://openrouter.ai/keys', '_blank'),
+        },
+      });
+      return;
+    }
+    setAiLoading(true);
+    setPreviousValue(value);
+    abortRef.current = new AbortController();
+    try {
+      const result = await enhanceWithAI({
+        text: textToEnhance,
+        sectionContext: sectionContext || label || undefined,
+        childName,
+        signal: abortRef.current.signal,
+      });
+      if (result.success && result.enhanced) {
+        onChange(result.enhanced);
+        toast.success('Text enhanced! Click "Undo AI" to revert.', { duration: 5000 });
+      } else if (result.needsSetup) {
+        setPreviousValue(null);
+        toast('API key issue', {
+          description: result.error,
+          duration: 6000,
+          action: {
+            label: 'Open Settings',
+            onClick: () => window.open('https://openrouter.ai/keys', '_blank'),
+          },
+        });
+      } else {
+        setPreviousValue(null);
+        toast.error(result.error || 'AI enhancement failed.');
+      }
+    } catch {
+      setPreviousValue(null);
+      toast.error('AI enhancement failed unexpectedly.');
+    } finally {
+      setAiLoading(false);
+      abortRef.current = null;
+    }
+  };
+
+  const handleUndoAi = () => {
+    if (previousValue !== null) {
+      onChange(previousValue);
+      setPreviousValue(null);
+      toast.info('Reverted to original text.');
+    }
+  };
+
+  const handleCancelAi = () => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    setAiLoading(false);
+  };
+
   const isHeader = !label;
+  const hasContent = !!value?.trim() && value.trim().length >= 10;
+
   return (
     <div className="mb-4">
       {label ? (
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
           <h3 className="text-sm font-bold uppercase tracking-wider text-slate-700">{label}</h3>
           <button onClick={() => setEditing(!editing)} className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 print:hidden">
             {editing ? <Check className="w-3 h-3" /> : <Pencil className="w-3 h-3" />}
             {editing ? 'Done' : 'Edit'}
           </button>
+          {hasContent && !isHeader && (
+            <>
+              {aiLoading ? (
+                <span className="flex items-center gap-1 text-xs text-purple-600 print:hidden">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Enhancing…
+                  <button onClick={handleCancelAi} className="ml-1 text-red-500 hover:text-red-700 underline">Cancel</button>
+                </span>
+              ) : (
+                <button
+                  onClick={handleAiEnhance}
+                  className="text-xs text-purple-600 hover:text-purple-800 flex items-center gap-1 print:hidden"
+                  title="Rewrite this section using AI for a more professional clinical narrative"
+                >
+                  <WandSparkles className="w-3 h-3" />
+                  AI Enhance
+                </button>
+              )}
+              {previousValue !== null && !aiLoading && (
+                <button
+                  onClick={handleUndoAi}
+                  className="text-xs text-amber-600 hover:text-amber-800 flex items-center gap-1 print:hidden"
+                  title="Revert to the text before AI enhancement"
+                >
+                  <Undo2 className="w-3 h-3" />
+                  Undo AI
+                </button>
+              )}
+            </>
+          )}
         </div>
       ) : (
-        <div className="flex justify-end mb-1 print:hidden">
+        <div className="flex justify-end gap-2 mb-1 print:hidden">
           <button onClick={() => setEditing(!editing)} className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1">
             {editing ? <Check className="w-3 h-3" /> : <Pencil className="w-3 h-3" />}
             {editing ? 'Done' : 'Edit'}
           </button>
+          {hasContent && (
+            <>
+              {aiLoading ? (
+                <span className="flex items-center gap-1 text-xs text-purple-600">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Enhancing…
+                  <button onClick={handleCancelAi} className="ml-1 text-red-500 hover:text-red-700 underline">Cancel</button>
+                </span>
+              ) : (
+                <button
+                  onClick={handleAiEnhance}
+                  className="text-xs text-purple-600 hover:text-purple-800 flex items-center gap-1"
+                  title="Rewrite this section using AI for a more professional clinical narrative"
+                >
+                  <WandSparkles className="w-3 h-3" />
+                  AI Enhance
+                </button>
+              )}
+              {previousValue !== null && !aiLoading && (
+                <button
+                  onClick={handleUndoAi}
+                  className="text-xs text-amber-600 hover:text-amber-800 flex items-center gap-1"
+                  title="Revert to the text before AI enhancement"
+                >
+                  <Undo2 className="w-3 h-3" />
+                  Undo AI
+                </button>
+              )}
+            </>
+          )}
         </div>
       )}
       {editing ? (
@@ -212,9 +352,16 @@ function EditableSection({
       ) : (
         <div
           onClick={() => setEditing(true)}
-          className={`leading-relaxed font-serif text-slate-800 whitespace-pre-wrap cursor-text hover:bg-slate-50 rounded-md p-2 -m-2 min-h-[2rem] ${isHeader ? 'text-center text-lg font-bold' : 'text-sm'}`}
+          className={`leading-relaxed font-serif text-slate-800 whitespace-pre-wrap cursor-text hover:bg-slate-50 rounded-md p-2 -m-2 min-h-[2rem] ${isHeader ? 'text-center text-lg font-bold' : 'text-sm'} ${aiLoading ? 'opacity-50 pointer-events-none' : ''}`}
         >
-          {value || <span className="text-slate-400 italic">{placeholder || 'Click to edit...'}</span>}
+          {aiLoading ? (
+            <span className="flex items-center gap-2 text-purple-600 italic">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              AI is enhancing this section…
+            </span>
+          ) : (
+            value || <span className="text-slate-400 italic">{placeholder || 'Click to edit...'}</span>
+          )}
         </div>
       )}
     </div>
@@ -1593,7 +1740,7 @@ export default function ClinicalReportEditor() {
                   />
                 )}
                 <div className="text-center">
-                  <EditableSection label="" value={practiceName} onChange={setPracticeName} rows={1} />
+                  <EditableSection label="" value={practiceName} onChange={setPracticeName} childName={firstName} rows={1} />
                   <p className="text-sm text-slate-600 font-serif">{examinerInfo.name} — {examinerInfo.title}</p>
                   {(appSettings.practiceAddress || appSettings.practicePhone || appSettings.practiceEmail) && (
                     <p className="text-xs text-slate-500 font-serif mt-1">
@@ -1605,7 +1752,7 @@ export default function ClinicalReportEditor() {
             </div>
 
             {/* ===== TITLE ===== */}
-            <EditableSection label="" value={reportTitle} onChange={setReportTitle} rows={1} />
+            <EditableSection label="" value={reportTitle} onChange={setReportTitle} childName={firstName} rows={1} />
 
             {/* ===== CLIENT INFO TABLE ===== */}
             <div className="border border-slate-300 rounded-md overflow-hidden mb-6">
@@ -1644,17 +1791,17 @@ export default function ClinicalReportEditor() {
               <>
                 <SectionHeader title="Referral Information" sectionKey="referral" collapsed={collapsedSections} toggle={toggleSection} />
                 {!collapsedSections.referral && (
-                  <EditableSection label="" value={referralInfo} onChange={setReferralInfo} placeholder="Enter referral information..." rows={3} />
+                  <EditableSection label="" value={referralInfo} onChange={setReferralInfo} childName={firstName} placeholder="Enter referral information..." rows={3} />
                 )}
 
                 <SectionHeader title="Birth/Medical History" sectionKey="medical" collapsed={collapsedSections} toggle={toggleSection} />
                 {!collapsedSections.medical && (
-                  <EditableSection label="" value={medicalHistory} onChange={setMedicalHistory} placeholder="Enter birth and medical history details..." rows={6} />
+                  <EditableSection label="" value={medicalHistory} onChange={setMedicalHistory} childName={firstName} placeholder="Enter birth and medical history details..." rows={6} />
                 )}
 
                 <SectionHeader title="Parent's Concerns" sectionKey="concerns" collapsed={collapsedSections} toggle={toggleSection} />
                 {!collapsedSections.concerns && (
-                  <EditableSection label="" value={parentConcerns} onChange={setParentConcerns} placeholder="Enter parent/caregiver concerns..." rows={4} />
+                  <EditableSection label="" value={parentConcerns} onChange={setParentConcerns} childName={firstName} placeholder="Enter parent/caregiver concerns..." rows={4} />
                 )}
 
                 <SectionHeader title="Assessment Tools" sectionKey="tools" collapsed={collapsedSections} toggle={toggleSection} />
@@ -1671,7 +1818,7 @@ export default function ClinicalReportEditor() {
 
                 <SectionHeader title="Clinical Observation" sectionKey="observation" collapsed={collapsedSections} toggle={toggleSection} />
                 {!collapsedSections.observation && (
-                  <EditableSection label="" value={clinicalObservation} onChange={setClinicalObservation} placeholder={`Enter clinical observations about ${firstName}'s behavior, state control, regulation, and interaction during the assessment...`} rows={6} />
+                  <EditableSection label="" value={clinicalObservation} onChange={setClinicalObservation} childName={firstName} placeholder={`Enter clinical observations about ${firstName}'s behavior, state control, regulation, and interaction during the assessment...`} rows={6} />
                 )}
 
                 {/* Scoring Tables */}
@@ -2007,7 +2154,7 @@ export default function ClinicalReportEditor() {
                               <strong>{firstName} obtained a raw score of {narrative.rawScore} with a scaled score of {narrative.scaledScore}.</strong>
                             </p>
                           )}
-                          <EditableSection label="" value={isOverridden ? overrideText : autoText} onChange={(v) => setDomainOverrides(prev => ({ ...prev, [key]: v }))} placeholder="Domain narrative..." rows={6} />
+                          <EditableSection label="" value={isOverridden ? overrideText : autoText} onChange={(v) => setDomainOverrides(prev => ({ ...prev, [key]: v }))} childName={firstName} placeholder="Domain narrative..." rows={6} />
                           {narrative.allNotDemonstrated.length > 0 && (
                             <div className="mt-2">
                               <button onClick={() => toggleNotDemonstrated(key)} className="flex items-center gap-1.5 text-xs text-rose-600 hover:text-rose-800 transition-colors print:hidden">
@@ -2038,13 +2185,13 @@ export default function ClinicalReportEditor() {
                 {/* Feeding/Oral Motor */}
                 <SectionHeader title="Feeding/Oral Motor Skills" sectionKey="feeding" collapsed={collapsedSections} toggle={toggleSection} />
                 {!collapsedSections.feeding && (
-                  <EditableSection label="" value={feedingOralMotor} onChange={setFeedingOralMotor} placeholder="Enter feeding and oral motor observations (texture progression, self-feeding, straw cup, open cup, positioning)..." rows={5} />
+                  <EditableSection label="" value={feedingOralMotor} onChange={setFeedingOralMotor} childName={firstName} placeholder="Enter feeding and oral motor observations (texture progression, self-feeding, straw cup, open cup, positioning)..." rows={5} />
                 )}
 
                 {/* Sensory Processing (brief) */}
                 <SectionHeader title="Sensory Processing" sectionKey="sensory" collapsed={collapsedSections} toggle={toggleSection} />
                 {!collapsedSections.sensory && (
-                  <EditableSection label="" value={sensoryNarrative} onChange={setSensoryNarrative} placeholder="Enter sensory processing observations..." rows={8} />
+                  <EditableSection label="" value={sensoryNarrative} onChange={setSensoryNarrative} childName={firstName} placeholder="Enter sensory processing observations..." rows={8} />
                 )}
 
                 {/* Summary of Development */}
@@ -2107,7 +2254,7 @@ export default function ClinicalReportEditor() {
                         )}
                       </div>
                     )}
-                    <EditableSection label="" value={recommendations} onChange={setRecommendations} placeholder="Enter recommendations..." rows={10} />
+                    <EditableSection label="" value={recommendations} onChange={setRecommendations} childName={firstName} placeholder="Enter recommendations..." rows={10} />
                   </>
                 )}
               </>
@@ -2120,17 +2267,17 @@ export default function ClinicalReportEditor() {
               <>
                 <SectionHeader title="Background Information" sectionKey="si_background" collapsed={collapsedSections} toggle={toggleSection} number="I" />
                 {!collapsedSections.si_background && (
-                  <EditableSection label="" value={medicalHistory} onChange={setMedicalHistory} placeholder="Enter birth and medical history (born full term/preterm, delivery method, hospital, NICU stay, health history, allergies, medications)..." rows={6} />
+                  <EditableSection label="" value={medicalHistory} onChange={setMedicalHistory} childName={firstName} placeholder="Enter birth and medical history (born full term/preterm, delivery method, hospital, NICU stay, health history, allergies, medications)..." rows={6} />
                 )}
 
                 <SectionHeader title="Referral Information" sectionKey="si_referral" collapsed={collapsedSections} toggle={toggleSection} number="II" />
                 {!collapsedSections.si_referral && (
-                  <EditableSection label="" value={referralInfo} onChange={setReferralInfo} placeholder="This evaluation is being completed to assess eligibility for Early Start Services..." rows={3} />
+                  <EditableSection label="" value={referralInfo} onChange={setReferralInfo} childName={firstName} placeholder="This evaluation is being completed to assess eligibility for Early Start Services..." rows={3} />
                 )}
 
                 <SectionHeader title="Parent's Concerns" sectionKey="si_concerns" collapsed={collapsedSections} toggle={toggleSection} number="III" />
                 {!collapsedSections.si_concerns && (
-                  <EditableSection label="" value={parentConcerns} onChange={setParentConcerns} placeholder="Enter parent/caregiver concerns..." rows={4} />
+                  <EditableSection label="" value={parentConcerns} onChange={setParentConcerns} childName={firstName} placeholder="Enter parent/caregiver concerns..." rows={4} />
                 )}
 
                 <SectionHeader title="Assessment Tools" sectionKey="si_tools" collapsed={collapsedSections} toggle={toggleSection} number="IV" />
@@ -2155,12 +2302,12 @@ export default function ClinicalReportEditor() {
 
                 <SectionHeader title="Testing Conditions and Behavior During Evaluation" sectionKey="si_testing" collapsed={collapsedSections} toggle={toggleSection} number="V" />
                 {!collapsedSections.si_testing && (
-                  <EditableSection label="" value={testingConditions} onChange={setTestingConditions} placeholder={`The assessment was completed in-home with ${childName} and caregiver present...`} rows={5} />
+                  <EditableSection label="" value={testingConditions} onChange={setTestingConditions} childName={firstName} placeholder={`The assessment was completed in-home with ${childName} and caregiver present...`} rows={5} />
                 )}
 
                 <SectionHeader title="Validity of Assessment Findings" sectionKey="si_validity" collapsed={collapsedSections} toggle={toggleSection} number="VI" />
                 {!collapsedSections.si_validity && (
-                  <EditableSection label="" value={validityStatement} onChange={setValidityStatement} placeholder="Behavior and performance observed during the assessment is reported to be typical..." rows={2} />
+                  <EditableSection label="" value={validityStatement} onChange={setValidityStatement} childName={firstName} placeholder="Behavior and performance observed during the assessment is reported to be typical..." rows={2} />
                 )}
 
                 <SectionHeader title="Sensory Processing" sectionKey="si_sensory" collapsed={collapsedSections} toggle={toggleSection} number="VII" />
@@ -2316,7 +2463,7 @@ export default function ClinicalReportEditor() {
                         )}
                       </div>
                     )}
-                    <EditableSection label="" value={recommendations} onChange={setRecommendations} placeholder="Enter summary and recommendations..." rows={10} />
+                    <EditableSection label="" value={recommendations} onChange={setRecommendations} childName={firstName} placeholder="Enter summary and recommendations..." rows={10} />
                   </>
                 )}
               </>
@@ -2329,17 +2476,17 @@ export default function ClinicalReportEditor() {
               <>
                 <SectionHeader title="Referral Information" sectionKey="fd_referral" collapsed={collapsedSections} toggle={toggleSection} number="I" />
                 {!collapsedSections.fd_referral && (
-                  <EditableSection label="" value={referralInfo} onChange={setReferralInfo} placeholder={`${firstName} was referred to the regional center due to concerns regarding ${pronoun(gender, 'possessive')} overall development. A developmental assessment is being completed to obtain present levels of performance and to determine eligibility for early intervention services.`} rows={4} />
+                  <EditableSection label="" value={referralInfo} onChange={setReferralInfo} childName={firstName} placeholder={`${firstName} was referred to the regional center due to concerns regarding ${pronoun(gender, 'possessive')} overall development. A developmental assessment is being completed to obtain present levels of performance and to determine eligibility for early intervention services.`} rows={4} />
                 )}
 
                 <SectionHeader title="Birth/Medical History" sectionKey="fd_medical" collapsed={collapsedSections} toggle={toggleSection} number="II" />
                 {!collapsedSections.fd_medical && (
-                  <EditableSection label="" value={medicalHistory} onChange={setMedicalHistory} placeholder={`${firstName} was born full term via vaginal delivery at [Hospital], in [City], CA.\n\nFamily History: None reported.\nMedical History/Hospitalizations: \nMedications: N/A\nAllergies: None reported.\nMedical/Adaptive Equipment: N/A\nVision: There are no concerns reported at this time.\nHearing: Passed newborn hearing test`} rows={10} />
+                  <EditableSection label="" value={medicalHistory} onChange={setMedicalHistory} childName={firstName} placeholder={`${firstName} was born full term via vaginal delivery at [Hospital], in [City], CA.\n\nFamily History: None reported.\nMedical History/Hospitalizations: \nMedications: N/A\nAllergies: None reported.\nMedical/Adaptive Equipment: N/A\nVision: There are no concerns reported at this time.\nHearing: Passed newborn hearing test`} rows={10} />
                 )}
 
                 <SectionHeader title="Testing Conditions and Behavior During Evaluation" sectionKey="fd_testing" collapsed={collapsedSections} toggle={toggleSection} number="III" />
                 {!collapsedSections.fd_testing && (
-                  <EditableSection label="" value={feedingTestingConditions} onChange={setFeedingTestingConditions} placeholder={`${firstName} was seen at home with ${pronoun(gender, 'possessive')} caregiver present during the evaluation. ${Pronoun(gender, 'subject')} transitioned easily to a high chair for the meal. Behavior and performance observed during the assessment is reported to be typical. Therefore, this assessment is believed to be valid and reliable in regard to present levels of function in all areas.`} rows={6} />
+                  <EditableSection label="" value={feedingTestingConditions} onChange={setFeedingTestingConditions} childName={firstName} placeholder={`${firstName} was seen at home with ${pronoun(gender, 'possessive')} caregiver present during the evaluation. ${Pronoun(gender, 'subject')} transitioned easily to a high chair for the meal. Behavior and performance observed during the assessment is reported to be typical. Therefore, this assessment is believed to be valid and reliable in regard to present levels of function in all areas.`} rows={6} />
                 )}
 
                 <SectionHeader title="Assessment Tools" sectionKey="fd_tools" collapsed={collapsedSections} toggle={toggleSection} number="IV" />
@@ -2458,7 +2605,7 @@ export default function ClinicalReportEditor() {
 
                 <SectionHeader title="Previous Feeding History" sectionKey="fd_prevhistory" collapsed={collapsedSections} toggle={toggleSection} number="" />
                 {!collapsedSections.fd_prevhistory && (
-                  <EditableSection label="" value={feedingPreviousHistory} onChange={setFeedingPreviousHistory} placeholder={`Describe ${firstName}'s previous feeding history, including when solid foods were introduced, any history of breastfeeding/bottle feeding, feeding difficulties, tube feeding, etc.`} rows={5} />
+                  <EditableSection label="" value={feedingPreviousHistory} onChange={setFeedingPreviousHistory} childName={firstName} placeholder={`Describe ${firstName}'s previous feeding history, including when solid foods were introduced, any history of breastfeeding/bottle feeding, feeding difficulties, tube feeding, etc.`} rows={5} />
                 )}
 
                 <SectionHeader title="Feeding/Oral Motor Skills" sectionKey="fd_oralmotor" collapsed={collapsedSections} toggle={toggleSection} number="VI" />
@@ -2466,7 +2613,7 @@ export default function ClinicalReportEditor() {
                   <div className="space-y-5 mb-6">
                     <div>
                       <h4 className="text-sm font-bold text-slate-700 mb-1">a. Oral Structures</h4>
-                      <EditableSection label="" value={feedingOralStructures} onChange={setFeedingOralStructures} placeholder={`${firstName}'s facial structures are symmetrical. ${Pronoun(gender, 'possessive')} oral structures appear to be healthy and grossly intact as observed while ${pronoun(gender, 'subject')} was engaging in feeding.`} rows={4} />
+                      <EditableSection label="" value={feedingOralStructures} onChange={setFeedingOralStructures} childName={firstName} placeholder={`${firstName}'s facial structures are symmetrical. ${Pronoun(gender, 'possessive')} oral structures appear to be healthy and grossly intact as observed while ${pronoun(gender, 'subject')} was engaging in feeding.`} rows={4} />
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-slate-700 mb-1">b. Feeding Behaviors</h4>
@@ -2489,7 +2636,7 @@ export default function ClinicalReportEditor() {
                           }
                         }}
                       />
-                      <EditableSection label="" value={feedingBehaviors} onChange={setFeedingBehaviors} placeholder={`${firstName} demonstrates adequate readiness with feeding activity. Describe feeding behaviors observed during the evaluation (drooling, posture, ability to stay seated, finger feeding, etc.).`} rows={4} />
+                      <EditableSection label="" value={feedingBehaviors} onChange={setFeedingBehaviors} childName={firstName} placeholder={`${firstName} demonstrates adequate readiness with feeding activity. Describe feeding behaviors observed during the evaluation (drooling, posture, ability to stay seated, finger feeding, etc.).`} rows={4} />
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-slate-700 mb-1">c. Oral Motor Coordination</h4>
@@ -2512,11 +2659,11 @@ export default function ClinicalReportEditor() {
                           }
                         }}
                       />
-                      <EditableSection label="" value={feedingOralMotorCoord} onChange={setFeedingOralMotorCoord} placeholder={`During the feeding evaluation, ${firstName} was provided with [foods]. Per clinical observation, describe tongue lateralization, chewing endurance, jaw strength, compensatory techniques, etc.`} rows={5} />
+                      <EditableSection label="" value={feedingOralMotorCoord} onChange={setFeedingOralMotorCoord} childName={firstName} placeholder={`During the feeding evaluation, ${firstName} was provided with [foods]. Per clinical observation, describe tongue lateralization, chewing endurance, jaw strength, compensatory techniques, etc.`} rows={5} />
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-slate-700 mb-1">d. Food Repertoire</h4>
-                      <EditableSection label="" value={feedingFoodRepertoire} onChange={setFeedingFoodRepertoire} placeholder={`${firstName} was introduced to solid foods around [age]. Per caregiver report, ${pronoun(gender, 'subject')} began with purees and is now eating [describe current foods]. Describe food preferences, textures accepted/refused, etc.`} rows={5} />
+                      <EditableSection label="" value={feedingFoodRepertoire} onChange={setFeedingFoodRepertoire} childName={firstName} placeholder={`${firstName} was introduced to solid foods around [age]. Per caregiver report, ${pronoun(gender, 'subject')} began with purees and is now eating [describe current foods]. Describe food preferences, textures accepted/refused, etc.`} rows={5} />
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-slate-700 mb-1">e. Self-Feeding Skills</h4>
@@ -2539,7 +2686,7 @@ export default function ClinicalReportEditor() {
                           }
                         }}
                       />
-                      <EditableSection label="" value={feedingSelfFeeding} onChange={setFeedingSelfFeeding} placeholder={`${firstName} is able to finger feed ${pronoun(gender, 'object')}self independently. Describe hand-eye coordination, utensil use, cup drinking ability, etc.`} rows={4} />
+                      <EditableSection label="" value={feedingSelfFeeding} onChange={setFeedingSelfFeeding} childName={firstName} placeholder={`${firstName} is able to finger feed ${pronoun(gender, 'object')}self independently. Describe hand-eye coordination, utensil use, cup drinking ability, etc.`} rows={4} />
                     </div>
                   </div>
                 )}
@@ -2566,7 +2713,7 @@ export default function ClinicalReportEditor() {
                         }
                       }}
                     />
-                    <EditableSection label="" value={feedingDrinking} onChange={setFeedingDrinking} placeholder={`Describe ${firstName}'s drinking skills, including bottle use, sippy cup, straw cup, open cup, liquid preferences, and any difficulties with drinking.`} rows={5} />
+                    <EditableSection label="" value={feedingDrinking} onChange={setFeedingDrinking} childName={firstName} placeholder={`Describe ${firstName}'s drinking skills, including bottle use, sippy cup, straw cup, open cup, liquid preferences, and any difficulties with drinking.`} rows={5} />
                   </div>
                 )}
 
@@ -2578,21 +2725,21 @@ export default function ClinicalReportEditor() {
                       <div className="bg-slate-50 border border-slate-200 rounded-md p-3 text-xs font-serif text-slate-600 mb-2 leading-relaxed">
                         The vestibular system is located in the inner ear and has the primary function of giving the brain information about head position and movement in relation to gravity. It is responsible in part for head stability, muscle tone, postural control, balance and equilibrium reaction and the development of eye-hand coordination and bilateral integration.
                       </div>
-                      <EditableSection label="" value={feedingVestibular} onChange={setFeedingVestibular} placeholder={`${firstName} demonstrated [describe vestibular processing observations, trunk control, balance, etc.].`} rows={3} />
+                      <EditableSection label="" value={feedingVestibular} onChange={setFeedingVestibular} childName={firstName} placeholder={`${firstName} demonstrated [describe vestibular processing observations, trunk control, balance, etc.].`} rows={3} />
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-slate-700 mb-1">b. Proprioceptive Processing and Modulation</h4>
                       <div className="bg-slate-50 border border-slate-200 rounded-md p-3 text-xs font-serif text-slate-600 mb-2 leading-relaxed">
                         The proprioceptive system is a system of receptors found in the joints and muscle tissues that gives an internal awareness of limb and body position, position relative to the environment, information about joint and muscle movement, as well as the force and speed at which the muscles are moving.
                       </div>
-                      <EditableSection label="" value={feedingProprioceptive} onChange={setFeedingProprioceptive} placeholder={`${firstName} demonstrates [describe proprioceptive processing, grading of force, body awareness, impact on feeding].`} rows={3} />
+                      <EditableSection label="" value={feedingProprioceptive} onChange={setFeedingProprioceptive} childName={firstName} placeholder={`${firstName} demonstrates [describe proprioceptive processing, grading of force, body awareness, impact on feeding].`} rows={3} />
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-slate-700 mb-1">c. Tactile Processing and Modulation</h4>
                       <div className="bg-slate-50 border border-slate-200 rounded-md p-3 text-xs font-serif text-slate-600 mb-2 leading-relaxed">
                         The sense of touch. The tactile system is involved with the identification and localization of touch and the discrimination of shapes, sizes, and textures of materials.
                       </div>
-                      <EditableSection label="" value={feedingTactile} onChange={setFeedingTactile} placeholder={`Per caregiver report, ${firstName} [describe tactile processing, messy play tolerance, texture sensitivity, etc.].`} rows={3} />
+                      <EditableSection label="" value={feedingTactile} onChange={setFeedingTactile} childName={firstName} placeholder={`Per caregiver report, ${firstName} [describe tactile processing, messy play tolerance, texture sensitivity, etc.].`} rows={3} />
                     </div>
                   </div>
                 )}
@@ -2602,19 +2749,19 @@ export default function ClinicalReportEditor() {
                   <div className="space-y-3 mb-6">
                     <div className="grid grid-cols-[180px_1fr] gap-2 text-sm font-serif">
                       <span className="font-bold text-slate-700">Range of Motion:</span>
-                      <EditableSection label="" value={feedingROM} onChange={setFeedingROM} rows={1} />
+                      <EditableSection label="" value={feedingROM} onChange={setFeedingROM} childName={firstName} rows={1} />
                     </div>
                     <div className="grid grid-cols-[180px_1fr] gap-2 text-sm font-serif">
                       <span className="font-bold text-slate-700">Muscle Strength:</span>
-                      <EditableSection label="" value={feedingMuscleStrength} onChange={setFeedingMuscleStrength} rows={1} />
+                      <EditableSection label="" value={feedingMuscleStrength} onChange={setFeedingMuscleStrength} childName={firstName} rows={1} />
                     </div>
                     <div className="grid grid-cols-[180px_1fr] gap-2 text-sm font-serif">
                       <span className="font-bold text-slate-700">Muscle Tone:</span>
-                      <EditableSection label="" value={feedingMuscleTone} onChange={setFeedingMuscleTone} rows={1} />
+                      <EditableSection label="" value={feedingMuscleTone} onChange={setFeedingMuscleTone} childName={firstName} rows={1} />
                     </div>
                     <div className="grid grid-cols-[180px_1fr] gap-2 text-sm font-serif">
                       <span className="font-bold text-slate-700">Postural Stability:</span>
-                      <EditableSection label="" value={feedingPosturalStability} onChange={setFeedingPosturalStability} rows={1} />
+                      <EditableSection label="" value={feedingPosturalStability} onChange={setFeedingPosturalStability} childName={firstName} rows={1} />
                     </div>
                   </div>
                 )}
@@ -2652,7 +2799,7 @@ export default function ClinicalReportEditor() {
                         )}
                       </div>
                     )}
-                    <EditableSection label="" value={feedingSummary} onChange={setFeedingSummary} placeholder={`${firstName} is a [age] old [boy/girl] who was referred for difficulty with feeding development and feeding skills. Describe key findings and recommendations...\n\nIt is recommended that the IFSP team consider the following and make the final determination of eligibility and services:\n\n1. Occupational therapy feeding is recommended to address delays in oral motor skills impacting age-appropriate feeding.\n2. Occupational Therapy is recommended to work on fine motor skills and body awareness to support overall participation in adaptive skills, specifically feeding.`} rows={12} />
+                    <EditableSection label="" value={feedingSummary} onChange={setFeedingSummary} childName={firstName} placeholder={`${firstName} is a [age] old [boy/girl] who was referred for difficulty with feeding development and feeding skills. Describe key findings and recommendations...\n\nIt is recommended that the IFSP team consider the following and make the final determination of eligibility and services:\n\n1. Occupational therapy feeding is recommended to address delays in oral motor skills impacting age-appropriate feeding.\n2. Occupational Therapy is recommended to work on fine motor skills and body awareness to support overall participation in adaptive skills, specifically feeding.`} rows={12} />
                   </>
                 )}
 
@@ -2708,7 +2855,7 @@ export default function ClinicalReportEditor() {
 
             {/* ===== CLOSING (both templates) ===== */}
             <div className="border-t border-slate-300 pt-4 mt-6">
-              <EditableSection label="" value={closingNote} onChange={setClosingNote} rows={2} />
+              <EditableSection label="" value={closingNote} onChange={setClosingNote} childName={firstName} rows={2} />
             </div>
 
             {/* ===== SIGNATURE ===== */}
