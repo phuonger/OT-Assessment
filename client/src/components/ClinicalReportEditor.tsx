@@ -131,6 +131,8 @@ interface SavedReportState {
   reportTitle: string;
   domainOverrides: Record<string, string>;
   scoreOverrides?: Record<string, string>; // e.g. "bayley4_cognitive_scaledScore" → "8"
+  uciNumber?: string;
+  regionalCenter?: string;
   // SI-specific
   testingConditions: string;
   validityStatement: string;
@@ -771,6 +773,8 @@ export default function ClinicalReportEditor() {
   const [reportTitle, setReportTitle] = useState(() => savedReport?.reportTitle ?? TEMPLATE_INFO[template].title);
   const [domainOverrides, setDomainOverrides] = useState<Record<string, string>>(() => savedReport?.domainOverrides ?? {});
   const [scoreOverrides, setScoreOverrides] = useState<Record<string, string>>(() => savedReport?.scoreOverrides ?? {});
+  const [uciNumber, setUciNumber] = useState(() => savedReport?.uciNumber ?? '');
+  const [regionalCenter, setRegionalCenter] = useState(() => savedReport?.regionalCenter ?? '');
 
   // SI-specific editable sections
   const [testingConditions, setTestingConditions] = useState(() =>
@@ -826,7 +830,8 @@ export default function ClinicalReportEditor() {
     const reportState: SavedReportState = {
       template, referralInfo, medicalHistory, parentConcerns, clinicalObservation,
       feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName,
-      reportTitle, domainOverrides, scoreOverrides, testingConditions, validityStatement,
+      reportTitle, domainOverrides, scoreOverrides, uciNumber, regionalCenter,
+      testingConditions, validityStatement,
       quadrantNarratives, sectionNarratives, siSummary, childKey,
       feedingTestingConditions, feedingOralStructures, feedingBehaviors, feedingOralMotorCoord,
       feedingFoodRepertoire, feedingSelfFeeding, feedingPreviousHistory, feedingDrinking,
@@ -839,9 +844,9 @@ export default function ClinicalReportEditor() {
       setLastSavedAt(reportState.savedAt);
       setIsDirty(false);
     } catch { /* localStorage full */ }
-  }, [template, referralInfo, medicalHistory, parentConcerns, clinicalObservation, feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName, reportTitle, domainOverrides, scoreOverrides, testingConditions, validityStatement, quadrantNarratives, sectionNarratives, siSummary, childKey, feedingTestingConditions, feedingOralStructures, feedingBehaviors, feedingOralMotorCoord, feedingFoodRepertoire, feedingSelfFeeding, feedingPreviousHistory, feedingDrinking, feedingVestibular, feedingProprioceptive, feedingTactile, feedingROM, feedingMuscleStrength, feedingMuscleTone, feedingPosturalStability, feedingSummary]);
+  }, [template, referralInfo, medicalHistory, parentConcerns, clinicalObservation, feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName, reportTitle, domainOverrides, scoreOverrides, uciNumber, regionalCenter, testingConditions, validityStatement, quadrantNarratives, sectionNarratives, siSummary, childKey, feedingTestingConditions, feedingOralStructures, feedingBehaviors, feedingOralMotorCoord, feedingFoodRepertoire, feedingSelfFeeding, feedingPreviousHistory, feedingDrinking, feedingVestibular, feedingProprioceptive, feedingTactile, feedingROM, feedingMuscleStrength, feedingMuscleTone, feedingPosturalStability, feedingSummary]);
 
-  useEffect(() => { setIsDirty(true); }, [template, referralInfo, medicalHistory, parentConcerns, clinicalObservation, feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName, reportTitle, domainOverrides, scoreOverrides, testingConditions, validityStatement, quadrantNarratives, sectionNarratives, siSummary, feedingTestingConditions, feedingOralStructures, feedingBehaviors, feedingOralMotorCoord, feedingFoodRepertoire, feedingSelfFeeding, feedingPreviousHistory, feedingDrinking, feedingVestibular, feedingProprioceptive, feedingTactile, feedingROM, feedingMuscleStrength, feedingMuscleTone, feedingPosturalStability, feedingSummary]);
+  useEffect(() => { setIsDirty(true); }, [template, referralInfo, medicalHistory, parentConcerns, clinicalObservation, feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName, reportTitle, domainOverrides, scoreOverrides, uciNumber, regionalCenter, testingConditions, validityStatement, quadrantNarratives, sectionNarratives, siSummary, feedingTestingConditions, feedingOralStructures, feedingBehaviors, feedingOralMotorCoord, feedingFoodRepertoire, feedingSelfFeeding, feedingPreviousHistory, feedingDrinking, feedingVestibular, feedingProprioceptive, feedingTactile, feedingROM, feedingMuscleStrength, feedingMuscleTone, feedingPosturalStability, feedingSummary]);
 
   useEffect(() => {
     if (!isDirty) return;
@@ -1416,6 +1421,7 @@ export default function ClinicalReportEditor() {
             formName,
             scaledScore: narrative.scaledScore,
             rawScore: narrative.rawScore,
+            ageEquivalent: narrative.ageEquivalent,
             narrativeText: overrideText !== undefined ? overrideText : autoText,
             notDemonstratedItems: narrative.allNotDemonstrated,
           };
@@ -1500,6 +1506,8 @@ export default function ClinicalReportEditor() {
         dob: formatDate(childInfo.dob),
         chronAge,
         adjAge,
+        uciNumber,
+        regionalCenter,
 
         referralInfo,
         medicalHistory,
@@ -1604,7 +1612,7 @@ export default function ClinicalReportEditor() {
     }
   }, [
     template, practiceName, reportTitle, examinerInfo, childName, firstName, childInfo,
-    chronAge, adjAge, referralInfo, medicalHistory, parentConcerns, assessmentTools,
+    chronAge, adjAge, uciNumber, regionalCenter, referralInfo, medicalHistory, parentConcerns, assessmentTools,
     closingNote, recommendations, clinicalObservation, bayleyScores, bayleyCogComposite,
     bayleyMotorComposite, dayc2Scores, reel3Scores, domainNarratives, domainOverrides,
     gender, feedingOralMotor, sensoryNarrative, summaryOfDevelopment, testingConditions,
@@ -1763,6 +1771,18 @@ export default function ClinicalReportEditor() {
                     <td className="px-4 py-2 text-slate-900">{childName.toUpperCase()}</td>
                   </tr>
                   <tr className="border-b border-slate-200">
+                    <td className="px-4 py-2 font-bold text-slate-700 bg-slate-50">UCI:</td>
+                    <td className="px-4 py-2 text-slate-900">
+                      <input
+                        type="text"
+                        value={uciNumber}
+                        onChange={e => setUciNumber(e.target.value)}
+                        placeholder="Enter UCI number..."
+                        className="w-full bg-transparent border-none outline-none text-slate-900 placeholder:text-slate-400 placeholder:italic text-sm p-0 focus:ring-0"
+                      />
+                    </td>
+                  </tr>
+                  <tr className="border-b border-slate-200">
                     <td className="px-4 py-2 font-bold text-slate-700 bg-slate-50">DATE OF EVALUATION:</td>
                     <td className="px-4 py-2 text-slate-900">{formatDate(childInfo.testDate)}</td>
                   </tr>
@@ -1780,6 +1800,18 @@ export default function ClinicalReportEditor() {
                       <td className="px-4 py-2 text-slate-900">{adjAge}</td>
                     </tr>
                   )}
+                  <tr>
+                    <td className="px-4 py-2 font-bold text-slate-700 bg-slate-50">REGIONAL CENTER:</td>
+                    <td className="px-4 py-2 text-slate-900">
+                      <input
+                        type="text"
+                        value={regionalCenter}
+                        onChange={e => setRegionalCenter(e.target.value)}
+                        placeholder="Enter regional center..."
+                        className="w-full bg-transparent border-none outline-none text-slate-900 placeholder:text-slate-400 placeholder:italic text-sm p-0 focus:ring-0"
+                      />
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -2149,9 +2181,9 @@ export default function ClinicalReportEditor() {
                             </h4>
                             <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 rounded text-slate-500">{formName}</span>
                           </div>
-                          {formId === 'bayley4' && narrative.scaledScore !== null && (
+                          {formId === 'bayley4' && narrative.ageEquivalent !== 'N/A' && (
                             <p className="text-sm font-serif text-slate-700 mb-2">
-                              <strong>{firstName} obtained a raw score of {narrative.rawScore} with a scaled score of {narrative.scaledScore}.</strong>
+                              <strong>Age Equivalence: {narrative.ageEquivalent}</strong>
                             </p>
                           )}
                           <EditableSection label="" value={isOverridden ? overrideText : autoText} onChange={(v) => setDomainOverrides(prev => ({ ...prev, [key]: v }))} childName={firstName} placeholder="Domain narrative..." rows={6} />

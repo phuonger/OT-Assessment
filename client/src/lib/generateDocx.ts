@@ -100,6 +100,7 @@ export interface DomainNarrativeData {
   formName: string;
   scaledScore: number | null;
   rawScore: number;
+  ageEquivalent: string;
   narrativeText: string;
   notDemonstratedItems: string[];
 }
@@ -125,6 +126,8 @@ export interface DocxReportData {
   dob: string;
   chronAge: string;
   adjAge: string | null;
+  uciNumber?: string;
+  regionalCenter?: string;
 
   // Shared sections
   referralInfo: string;
@@ -363,6 +366,7 @@ function tableCell(text: string, options?: { bold?: boolean; shading?: string; a
 function createInfoTable(data: DocxReportData): Table {
   const rows: { label: string; value: string }[] = [
     { label: "CLIENT'S NAME:", value: data.childName.toUpperCase() },
+    { label: 'UCI:', value: data.uciNumber || '' },
     { label: 'DATE OF EVALUATION:', value: data.testDate },
     { label: 'DATE OF BIRTH:', value: data.dob },
     { label: 'CHRONOLOGICAL AGE:', value: data.chronAge },
@@ -370,6 +374,7 @@ function createInfoTable(data: DocxReportData): Table {
   if (data.adjAge) {
     rows.push({ label: 'ADJUSTED AGE:', value: data.adjAge });
   }
+  rows.push({ label: 'REGIONAL CENTER:', value: data.regionalCenter || '' });
 
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
@@ -761,14 +766,14 @@ function createDomainNarratives(narratives: DomainNarrativeData[], firstName: st
       })
     );
 
-    // Score line for Bayley
-    if (n.scaledScore !== null) {
+    // Age Equivalence line for Bayley
+    if (n.ageEquivalent && n.ageEquivalent !== 'N/A') {
       elements.push(
         new Paragraph({
           spacing: { before: 40, after: 40 },
           children: [
             new TextRun({
-              text: `${firstName} obtained a raw score of ${n.rawScore} with a scaled score of ${n.scaledScore}.`,
+              text: `Age Equivalence: ${n.ageEquivalent}`,
               font: FONT,
               size: FONT_SIZE,
               bold: true,
