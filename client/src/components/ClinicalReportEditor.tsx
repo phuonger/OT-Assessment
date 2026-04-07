@@ -1404,6 +1404,130 @@ export default function ClinicalReportEditor() {
     toast.success('Report saved successfully');
   }, [saveReport]);
 
+  // Enhance All Sections handler
+  const [enhancingAll, setEnhancingAll] = useState(false);
+  const enhanceAllAbortRef = useRef<AbortController | null>(null);
+
+  const handleEnhanceAll = useCallback(async () => {
+    if (!isAiConfigured()) {
+      toast('OpenRouter API key required', {
+        description: 'Go to Settings → AI Settings to add your API key.',
+        duration: 6000,
+        action: {
+          label: 'How to get a key',
+          onClick: () => window.open('https://openrouter.ai/keys', '_blank'),
+        },
+      });
+      return;
+    }
+    if (!isOnline()) {
+      toast.error('No internet connection. AI Enhance requires internet access.');
+      return;
+    }
+    if (!confirm('Enhance all report sections with AI?\n\nThis will rewrite all text sections into professional clinical narratives. You can undo individual sections afterwards.')) {
+      return;
+    }
+
+    setEnhancingAll(true);
+    enhanceAllAbortRef.current = new AbortController();
+    const signal = enhanceAllAbortRef.current.signal;
+
+    // Build list of sections to enhance
+    type SectionItem = { label: string; value: string; setter: (v: string) => void };
+    const sections: SectionItem[] = [];
+
+    // Shared sections
+    if (referralInfo?.trim().length > 10) sections.push({ label: 'Referral Information', value: referralInfo, setter: setReferralInfo });
+    if (medicalHistory?.trim().length > 10) sections.push({ label: 'Medical History', value: medicalHistory, setter: setMedicalHistory });
+    if (parentConcerns?.trim().length > 10) sections.push({ label: 'Parent Concerns', value: parentConcerns, setter: setParentConcerns });
+    if (clinicalObservation?.trim().length > 10) sections.push({ label: 'Clinical Observation', value: clinicalObservation, setter: setClinicalObservation });
+    if (feedingOralMotor?.trim().length > 10) sections.push({ label: 'Feeding/Oral Motor', value: feedingOralMotor, setter: setFeedingOralMotor });
+    if (sensoryNarrative?.trim().length > 10) sections.push({ label: 'Sensory Processing', value: sensoryNarrative, setter: setSensoryNarrative });
+    if (recommendations?.trim().length > 10) sections.push({ label: 'Recommendations', value: recommendations, setter: setRecommendations });
+    if (closingNote?.trim().length > 10) sections.push({ label: 'Closing Note', value: closingNote, setter: setClosingNote });
+
+    // SI-specific
+    if (testingConditions?.trim().length > 10) sections.push({ label: 'Testing Conditions', value: testingConditions, setter: setTestingConditions });
+    if (validityStatement?.trim().length > 10) sections.push({ label: 'Validity Statement', value: validityStatement, setter: setValidityStatement });
+
+    // Feeding-specific
+    if (feedingTestingConditions?.trim().length > 10) sections.push({ label: 'Feeding Testing Conditions', value: feedingTestingConditions, setter: setFeedingTestingConditions });
+    if (feedingOralStructures?.trim().length > 10) sections.push({ label: 'Oral Structures', value: feedingOralStructures, setter: setFeedingOralStructures });
+    if (feedingBehaviors?.trim().length > 10) sections.push({ label: 'Feeding Behaviors', value: feedingBehaviors, setter: setFeedingBehaviors });
+    if (feedingOralMotorCoord?.trim().length > 10) sections.push({ label: 'Oral Motor Coordination', value: feedingOralMotorCoord, setter: setFeedingOralMotorCoord });
+    if (feedingFoodRepertoire?.trim().length > 10) sections.push({ label: 'Food Repertoire', value: feedingFoodRepertoire, setter: setFeedingFoodRepertoire });
+    if (feedingSelfFeeding?.trim().length > 10) sections.push({ label: 'Self-Feeding Skills', value: feedingSelfFeeding, setter: setFeedingSelfFeeding });
+    if (feedingPreviousHistory?.trim().length > 10) sections.push({ label: 'Previous Feeding History', value: feedingPreviousHistory, setter: setFeedingPreviousHistory });
+    if (feedingDrinking?.trim().length > 10) sections.push({ label: 'Drinking', value: feedingDrinking, setter: setFeedingDrinking });
+    if (feedingVestibular?.trim().length > 10) sections.push({ label: 'Vestibular Processing', value: feedingVestibular, setter: setFeedingVestibular });
+    if (feedingProprioceptive?.trim().length > 10) sections.push({ label: 'Proprioceptive Processing', value: feedingProprioceptive, setter: setFeedingProprioceptive });
+    if (feedingTactile?.trim().length > 10) sections.push({ label: 'Tactile Processing', value: feedingTactile, setter: setFeedingTactile });
+    if (feedingSummary?.trim().length > 10) sections.push({ label: 'Feeding Summary', value: feedingSummary, setter: setFeedingSummary });
+
+    // Domain narrative overrides
+    for (const dn of domainNarratives.filter(d => d.formId !== 'sp2')) {
+      const key = `${dn.formId}_${dn.domainLocalId}`;
+      const overrideText = domainOverrides[key];
+      const autoText = generateNarrativeText(dn.narrative, firstName, gender, dn.formId);
+      const currentText = overrideText !== undefined ? overrideText : autoText;
+      if (currentText?.trim().length > 10) {
+        sections.push({
+          label: dn.narrative.domainName,
+          value: currentText,
+          setter: (v: string) => setDomainOverrides(prev => ({ ...prev, [key]: v })),
+        });
+      }
+    }
+
+    if (sections.length === 0) {
+      toast.error('No sections with enough text to enhance.');
+      setEnhancingAll(false);
+      return;
+    }
+
+    toast.info(`Enhancing ${sections.length} sections... This may take a minute.`);
+
+    let successCount = 0;
+    let failCount = 0;
+
+    // Process sections sequentially to avoid rate limits
+    for (const section of sections) {
+      if (signal.aborted) break;
+      try {
+        const result = await enhanceWithAI({
+          text: section.value,
+          sectionContext: section.label,
+          childName: firstName,
+          signal,
+        });
+        if (result.success && result.enhanced) {
+          section.setter(result.enhanced);
+          successCount++;
+        } else {
+          failCount++;
+        }
+      } catch {
+        failCount++;
+      }
+      // Small delay between requests to avoid rate limits
+      if (!signal.aborted) await new Promise(r => setTimeout(r, 500));
+    }
+
+    setEnhancingAll(false);
+    if (successCount > 0) {
+      toast.success(`Enhanced ${successCount} section${successCount > 1 ? 's' : ''}${failCount > 0 ? ` (${failCount} failed)` : ''}. Save to keep changes.`);
+    } else {
+      toast.error('All sections failed to enhance. Please check your API key and try again.');
+    }
+  }, [
+    referralInfo, medicalHistory, parentConcerns, clinicalObservation, feedingOralMotor,
+    sensoryNarrative, recommendations, closingNote, testingConditions, validityStatement,
+    feedingTestingConditions, feedingOralStructures, feedingBehaviors, feedingOralMotorCoord,
+    feedingFoodRepertoire, feedingSelfFeeding, feedingPreviousHistory, feedingDrinking,
+    feedingVestibular, feedingProprioceptive, feedingTactile, feedingSummary,
+    domainNarratives, domainOverrides, firstName, gender,
+  ]);
+
   // DOCX Export handler
   const handleDocxExport = useCallback(async () => {
     try {
@@ -1602,6 +1726,24 @@ export default function ClinicalReportEditor() {
         feedingAdaptiveItemsDemonstrated: feedingAdaptiveItems.demonstrated,
         feedingAdaptiveItemsNotDemonstrated: feedingAdaptiveItems.notDemonstrated,
         feedingChecklistData: feedingChecklistExport,
+        feedingBehaviorsData: (() => {
+          try {
+            const raw = localStorage.getItem(`feeding-behaviors-${childKey}`);
+            return raw ? JSON.parse(raw) : undefined;
+          } catch { return undefined; }
+        })(),
+        selfFeedingData: (() => {
+          try {
+            const raw = localStorage.getItem(`self-feeding-${childKey}`);
+            return raw ? JSON.parse(raw) : undefined;
+          } catch { return undefined; }
+        })(),
+        drinkingData: (() => {
+          try {
+            const raw = localStorage.getItem(`drinking-checklist-${childKey}`);
+            return raw ? JSON.parse(raw) : undefined;
+          } catch { return undefined; }
+        })(),
       };
 
       await generateDocxReport(data);
@@ -1696,6 +1838,18 @@ export default function ClinicalReportEditor() {
             )}
             <Button variant="outline" size="sm" onClick={handleManualSave}>
               <Save className="w-4 h-4 mr-1" /> Save
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={enhancingAll ? () => { enhanceAllAbortRef.current?.abort(); setEnhancingAll(false); } : handleEnhanceAll}
+              className={enhancingAll ? 'text-amber-700 border-amber-300 hover:bg-amber-50' : 'text-purple-700 border-purple-300 hover:bg-purple-50'}
+            >
+              {enhancingAll ? (
+                <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Cancel
+              </>) : (
+                <><WandSparkles className="w-4 h-4 mr-1" /> Enhance All
+              </>)}
             </Button>
             <Button variant="outline" size="sm" onClick={handleDocxExport} className="text-blue-700 border-blue-300 hover:bg-blue-50">
               <FileDown className="w-4 h-4 mr-1" /> Word

@@ -178,6 +178,79 @@ export interface DocxReportData {
   feedingAdaptiveItemsDemonstrated?: string[];
   feedingAdaptiveItemsNotDemonstrated?: string[];
   feedingChecklistData?: FeedingChecklistExportData;
+  feedingBehaviorsData?: FeedingBehaviorsExportData;
+  selfFeedingData?: SelfFeedingExportData;
+  drinkingData?: DrinkingExportData;
+}
+
+/** Feeding Behaviors checklist data */
+export interface FeedingBehaviorsExportData {
+  readiness: string;
+  drooling: string;
+  droolingDesc: string;
+  posture: string;
+  seatedTolerance: string;
+  seatedToleranceDesc: string;
+  fingerFeeding: string;
+  fingerFeedingDesc: string;
+  foodAcceptance: string;
+  foodAcceptanceDesc: string;
+  refusalBehaviors: string;
+  refusalDesc: string;
+  gagging: string;
+  gaggingDesc: string;
+  sensoryResponse: string;
+  mealDuration: string;
+  additionalObs: string;
+}
+
+/** Self-Feeding checklist data */
+export interface SelfFeedingExportData {
+  fingerFeeds: string;
+  fingerFeedsDesc: string;
+  spoonUse: string;
+  spoonGrasp: string;
+  spoonAccuracy: string;
+  forkUse: string;
+  forkStabbing: string;
+  cupDrinking: string;
+  cupType: string;
+  cupSpilling: string;
+  handEyeCoord: string;
+  bilateralCoord: string;
+  graspRelease: string;
+  messiness: string;
+  independence: string;
+  additionalObs: string;
+}
+
+/** Drinking checklist data */
+export interface DrinkingExportData {
+  bottleUse: string;
+  bottleNippleType: string;
+  bottleSuckPattern: string;
+  bottleLipSeal: string;
+  bottleSwallowCoord: string;
+  sippyCupUse: string;
+  sippyCupType: string;
+  sippyCupLipSeal: string;
+  sippyCupJawStability: string;
+  strawUse: string;
+  strawSuckStrength: string;
+  strawLipSeal: string;
+  strawLiquidLoss: string;
+  openCupUse: string;
+  openCupJawGrading: string;
+  openCupLipSeal: string;
+  openCupLiquidLoss: string;
+  openCupAssistLevel: string;
+  liquidPreferences: string;
+  liquidConsistency: string;
+  liquidTemp: string;
+  swallowCoordDrinking: string;
+  coughingWithLiquids: string;
+  nasalRegurgitation: string;
+  additionalObs: string;
 }
 
 /** Structured checklist data from Feeders & Growers evaluation tool */
@@ -1624,6 +1697,148 @@ export async function generateDocxReport(data: DocxReportData): Promise<void> {
               row2('Refusal Behaviors', cl.refusalBehaviors),
               row2('Self-Feeding', cl.selfFeeding + (cl.selfFeedingDesc ? ` — ${cl.selfFeedingDesc}` : '')),
             ],
+          })
+        );
+      }
+    }
+
+    // Appendix: Feeding Behaviors Checklist
+    if (data.feedingBehaviorsData) {
+      const fb = data.feedingBehaviorsData;
+      const hasAny = Object.values(fb).some(v => v && v !== '');
+      if (hasAny) {
+        children.push(bodyParagraph('Feeding Behaviors Checklist', { bold: true, spacing: { before: 300, after: 60 } }));
+        const hdrCell2 = (text: string) => tableCell(text, { bold: true, shading: 'E3F2FD' });
+        const valCell2 = (text: string) => tableCell(text || '—');
+        const row2b = (label: string, value: string) =>
+          new TableRow({ children: [hdrCell2(label), valCell2(value)] });
+        children.push(
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              new TableRow({ children: [hdrCell2('Assessment Item'), hdrCell2('Finding')] }),
+              row2b('Readiness with Feeding', fb.readiness),
+              row2b('Drooling', fb.drooling + (fb.droolingDesc ? ` — ${fb.droolingDesc}` : '')),
+              row2b('Posture During Feeding', fb.posture),
+              row2b('Seated Tolerance', fb.seatedTolerance + (fb.seatedToleranceDesc ? ` — ${fb.seatedToleranceDesc}` : '')),
+              row2b('Finger Feeding', fb.fingerFeeding + (fb.fingerFeedingDesc ? ` — ${fb.fingerFeedingDesc}` : '')),
+              row2b('Food Acceptance', fb.foodAcceptance + (fb.foodAcceptanceDesc ? ` — ${fb.foodAcceptanceDesc}` : '')),
+              row2b('Refusal Behaviors', fb.refusalBehaviors + (fb.refusalDesc ? ` — ${fb.refusalDesc}` : '')),
+              row2b('Gagging', fb.gagging + (fb.gaggingDesc ? ` — ${fb.gaggingDesc}` : '')),
+              row2b('Sensory Response', fb.sensoryResponse),
+              row2b('Meal Duration', fb.mealDuration),
+              ...(fb.additionalObs ? [row2b('Additional Observations', fb.additionalObs)] : []),
+            ],
+          })
+        );
+      }
+    }
+
+    // Appendix: Self-Feeding Checklist
+    if (data.selfFeedingData) {
+      const sf = data.selfFeedingData;
+      const hasAny = Object.values(sf).some(v => v && v !== '');
+      if (hasAny) {
+        children.push(bodyParagraph('Self-Feeding Skills Checklist', { bold: true, spacing: { before: 300, after: 60 } }));
+        const hdrCell3 = (text: string) => tableCell(text, { bold: true, shading: 'FFF3E0' });
+        const valCell3 = (text: string) => tableCell(text || '—');
+        const row2s = (label: string, value: string) =>
+          new TableRow({ children: [hdrCell3(label), valCell3(value)] });
+        children.push(
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              new TableRow({ children: [hdrCell3('Assessment Item'), hdrCell3('Finding')] }),
+              row2s('Finger Feeds Independently', sf.fingerFeeds + (sf.fingerFeedsDesc ? ` — ${sf.fingerFeedsDesc}` : '')),
+              row2s('Spoon Use', sf.spoonUse),
+              row2s('Spoon Grasp Pattern', sf.spoonGrasp),
+              row2s('Spoon Accuracy', sf.spoonAccuracy),
+              row2s('Fork Use', sf.forkUse),
+              row2s('Fork Stabbing', sf.forkStabbing),
+              row2s('Cup Drinking', sf.cupDrinking + (sf.cupType ? ` (${sf.cupType})` : '')),
+              row2s('Cup Spilling', sf.cupSpilling),
+              row2s('Hand-Eye Coordination', sf.handEyeCoord),
+              row2s('Bilateral Coordination', sf.bilateralCoord),
+              row2s('Grasp & Release', sf.graspRelease),
+              row2s('Messiness', sf.messiness),
+              row2s('Overall Self-Feeding Independence', sf.independence),
+              ...(sf.additionalObs ? [row2s('Additional Observations', sf.additionalObs)] : []),
+            ],
+          })
+        );
+      }
+    }
+
+    // Appendix: Drinking Checklist
+    if (data.drinkingData) {
+      const dk = data.drinkingData;
+      const hasAny = Object.values(dk).some(v => v && v !== '');
+      if (hasAny) {
+        children.push(bodyParagraph('Drinking Skills Checklist', { bold: true, spacing: { before: 300, after: 60 } }));
+        const hdrCell4 = (text: string) => tableCell(text, { bold: true, shading: 'F3E5F5' });
+        const valCell4 = (text: string) => tableCell(text || '—');
+        const row2d = (label: string, value: string) =>
+          new TableRow({ children: [hdrCell4(label), valCell4(value)] });
+
+        const rows: TableRow[] = [
+          new TableRow({ children: [hdrCell4('Assessment Item'), hdrCell4('Finding')] }),
+        ];
+
+        // Bottle section
+        if (dk.bottleUse && dk.bottleUse !== 'Never used') {
+          rows.push(row2d('Bottle Use', dk.bottleUse));
+          if (dk.bottleNippleType) rows.push(row2d('Nipple Type', dk.bottleNippleType));
+          rows.push(row2d('Suck Pattern', dk.bottleSuckPattern));
+          rows.push(row2d('Lip Seal (Bottle)', dk.bottleLipSeal));
+          rows.push(row2d('Swallow Coordination (Bottle)', dk.bottleSwallowCoord));
+        } else {
+          rows.push(row2d('Bottle Use', dk.bottleUse || '—'));
+        }
+
+        // Sippy Cup section
+        if (dk.sippyCupUse && dk.sippyCupUse !== 'Not yet') {
+          rows.push(row2d('Sippy Cup Use', dk.sippyCupUse));
+          if (dk.sippyCupType) rows.push(row2d('Sippy Cup Type', dk.sippyCupType));
+          rows.push(row2d('Lip Seal (Sippy)', dk.sippyCupLipSeal));
+          rows.push(row2d('Jaw Stability (Sippy)', dk.sippyCupJawStability));
+        } else {
+          rows.push(row2d('Sippy Cup Use', dk.sippyCupUse || '—'));
+        }
+
+        // Straw section
+        if (dk.strawUse && dk.strawUse !== 'Not yet') {
+          rows.push(row2d('Straw Use', dk.strawUse));
+          rows.push(row2d('Suck Strength (Straw)', dk.strawSuckStrength));
+          rows.push(row2d('Lip Seal (Straw)', dk.strawLipSeal));
+          rows.push(row2d('Liquid Loss (Straw)', dk.strawLiquidLoss));
+        } else {
+          rows.push(row2d('Straw Use', dk.strawUse || '—'));
+        }
+
+        // Open Cup section
+        if (dk.openCupUse && dk.openCupUse !== 'Not yet') {
+          rows.push(row2d('Open Cup Use', dk.openCupUse));
+          rows.push(row2d('Jaw Grading (Open Cup)', dk.openCupJawGrading));
+          rows.push(row2d('Lip Seal (Open Cup)', dk.openCupLipSeal));
+          rows.push(row2d('Liquid Loss (Open Cup)', dk.openCupLiquidLoss));
+          rows.push(row2d('Assist Level (Open Cup)', dk.openCupAssistLevel));
+        } else {
+          rows.push(row2d('Open Cup Use', dk.openCupUse || '—'));
+        }
+
+        // Liquid preferences & general
+        if (dk.liquidPreferences) rows.push(row2d('Liquid Preferences', dk.liquidPreferences));
+        if (dk.liquidConsistency) rows.push(row2d('Liquid Consistency', dk.liquidConsistency));
+        if (dk.liquidTemp) rows.push(row2d('Liquid Temperature', dk.liquidTemp));
+        rows.push(row2d('Swallow Coordination', dk.swallowCoordDrinking));
+        rows.push(row2d('Coughing with Liquids', dk.coughingWithLiquids));
+        rows.push(row2d('Nasal Regurgitation', dk.nasalRegurgitation));
+        if (dk.additionalObs) rows.push(row2d('Additional Observations', dk.additionalObs));
+
+        children.push(
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows,
           })
         );
       }
