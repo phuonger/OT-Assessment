@@ -314,16 +314,14 @@ export default function Dashboard() {
                 );
               })}
 
-              {/* See All button */}
-              {hasMore && (
-                <button
-                  onClick={handleSeeAll}
-                  className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-dashed border-[#D4D0C8] text-sm text-[#6B6B6B] hover:border-[#0D7377]/40 hover:text-[#0D7377] hover:bg-[#0D7377]/5 transition-all"
-                >
-                  See All Assessments
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              )}
+              {/* View Full History button - always visible when there are assessments */}
+              <button
+                onClick={handleSeeAll}
+                className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-dashed border-[#D4D0C8] text-sm text-[#6B6B6B] hover:border-[#0D7377]/40 hover:text-[#0D7377] hover:bg-[#0D7377]/5 transition-all"
+              >
+                View Full History
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
           )}
         </div>
