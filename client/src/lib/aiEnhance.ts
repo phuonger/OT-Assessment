@@ -114,6 +114,156 @@ export function isOnline(): boolean {
 /**
  * Call the OpenRouter API to rewrite clinical text.
  */
+/** System prompt for generating clinical recommendations from assessment findings */
+const RECOMMENDATIONS_SYSTEM_PROMPT = `You are an expert pediatric occupational therapist writing clinical recommendations for early intervention (IFSP) evaluation reports. Based on the assessment findings provided, generate professional, specific, and actionable recommendations.
+
+RULES:
+1. Use the child's first name naturally throughout.
+2. Begin with a brief summary sentence about the child (age, gender, reason for referral).
+3. Reference specific assessment findings (scores, age equivalences, delays) to justify each recommendation.
+4. Include the quarter-delay calculation when provided (e.g., "A ¼ delay would be considered X months").
+5. Structure recommendations as numbered items.
+6. Common recommendation categories for early intervention OT:
+   - Occupational therapy services (specify areas: fine motor, feeding, sensory processing, self-care)
+   - Speech and language pathology referral (if communication delays noted)
+   - Physical therapy referral (if gross motor delays noted)
+   - Feeding therapy (if oral motor or feeding concerns)
+   - Sensory integration therapy (if sensory processing concerns)
+   - Parent/caregiver education and home program
+   - Re-evaluation timeline
+7. Include the standard IFSP language: "It is recommended that the IFSP team consider the following, however, regional center to make the final determination of eligibility and services."
+8. Be specific about WHICH skills need to be addressed based on the findings.
+9. Use professional clinical language.
+10. Output ONLY the recommendations text — no explanations, headers, or markdown formatting.
+11. Keep recommendations concise but thorough — typically 1-2 paragraphs of context followed by 3-6 numbered recommendations.`;
+
+export interface GenerateRecommendationsOptions {
+  /** Child's full name */
+  childName: string;
+  /** Child's first name */
+  firstName: string;
+  /** Chronological age string (e.g., "18 months") */
+  chronAge: string;
+  /** Gender */
+  gender: string;
+  /** Template type */
+  template: string;
+  /** Domain scores with age equivalences */
+  domainFindings: string;
+  /** Summary of all report sections (narrative text from the report) */
+  reportSummary: string;
+  /** Quarter delay in months */
+  quarterDelay?: number;
+  /** Existing recommendations to enhance (if any) */
+  existingRecommendations?: string;
+  /** AbortSignal for cancellation */
+  signal?: AbortSignal;
+}
+
+/**
+ * Generate clinical recommendations based on assessment findings.
+ */
+export async function generateRecommendations(options: GenerateRecommendationsOptions): Promise<AiEnhanceResult> {
+  const {
+    childName, firstName, chronAge, gender, template,
+    domainFindings, reportSummary, quarterDelay,
+    existingRecommendations, signal,
+  } = options;
+
+  if (!isOnline()) {
+    return { success: false, error: 'No internet connection. AI requires an internet connection.' };
+  }
+
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    return {
+      success: false,
+      error: 'OpenRouter API key not configured. Please add your API key in Settings → AI Settings.',
+      needsSetup: true,
+    };
+  }
+
+  const model = getSelectedModel();
+
+  const userParts: string[] = [
+    `Child: ${childName}`,
+    `First name: ${firstName}`,
+    `Age: ${chronAge}`,
+    `Gender: ${gender}`,
+    `Assessment type: ${template}`,
+  ];
+
+  if (quarterDelay && quarterDelay > 0) {
+    userParts.push(`Quarter delay threshold: ${quarterDelay} months`);
+  }
+
+  if (domainFindings) {
+    userParts.push('', 'Assessment Scores and Findings:', domainFindings);
+  }
+
+  if (reportSummary) {
+    userParts.push('', 'Report Narrative Summary:', reportSummary);
+  }
+
+  if (existingRecommendations) {
+    userParts.push('', 'Current recommendations (enhance and improve these):', existingRecommendations);
+  } else {
+    userParts.push('', 'Please generate comprehensive clinical recommendations based on the above findings.');
+  }
+
+  try {
+    const response = await fetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://ot-assessment.app',
+        'X-Title': 'OT Developmental Assessment Suite',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: RECOMMENDATIONS_SYSTEM_PROMPT },
+          { role: 'user', content: userParts.join('\n') },
+        ],
+        max_tokens: 2048,
+        temperature: 0.5,
+      }),
+      signal,
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text().catch(() => '');
+      console.error('[AI Recommendations] API error:', response.status, errBody);
+      if (response.status === 401 || response.status === 403) {
+        return { success: false, error: 'Invalid API key. Please check your OpenRouter API key in Settings.', needsSetup: true };
+      }
+      if (response.status === 402) {
+        return { success: false, error: 'Insufficient credits on your OpenRouter account.' };
+      }
+      if (response.status === 429) {
+        return { success: false, error: 'Rate limit reached. Please wait a moment and try again.' };
+      }
+      return { success: false, error: `AI service error (${response.status}). Please try again.` };
+    }
+
+    const data = await response.json();
+    const enhanced = data?.choices?.[0]?.message?.content?.trim();
+
+    if (!enhanced) {
+      return { success: false, error: 'AI returned an empty response. Please try again.' };
+    }
+
+    return { success: true, enhanced };
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      return { success: false, error: 'Generation was cancelled.' };
+    }
+    console.error('[AI Recommendations] Network error:', err);
+    return { success: false, error: 'Could not reach the AI service. Please check your internet connection.' };
+  }
+}
+
 export async function enhanceWithAI(options: AiEnhanceOptions): Promise<AiEnhanceResult> {
   const { text, sectionContext, childName, signal } = options;
 

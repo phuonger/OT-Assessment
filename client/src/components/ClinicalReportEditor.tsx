@@ -40,7 +40,7 @@ import type { SelfFeedingData } from '@/components/SelfFeedingChecklist';
 import type { DrinkingData } from '@/components/DrinkingChecklist';
 import { generateAllChecklistsPdf } from '@/lib/generateAllChecklistsPdf';
 import { parseLocalDate, formatDateLocal, calculateAge } from '@/lib/dateUtils';
-import { enhanceWithAI, isOnline, isAiConfigured } from '@/lib/aiEnhance';
+import { enhanceWithAI, generateRecommendations, isOnline, isAiConfigured } from '@/lib/aiEnhance';
 
 // ============================================================
 // Types & Constants
@@ -1528,6 +1528,95 @@ export default function ClinicalReportEditor() {
     domainNarratives, domainOverrides, firstName, gender,
   ]);
 
+  // AI Generate Recommendations handler
+  const [generatingRecs, setGeneratingRecs] = useState(false);
+  const recsAbortRef = useRef<AbortController | null>(null);
+
+  const handleAiRecommendations = useCallback(async () => {
+    if (!isAiConfigured()) {
+      toast('OpenRouter API key required', {
+        description: 'Go to Settings → AI Settings to add your API key.',
+        duration: 6000,
+        action: {
+          label: 'How to get a key',
+          onClick: () => window.open('https://openrouter.ai/keys', '_blank'),
+        },
+      });
+      return;
+    }
+    if (!isOnline()) {
+      toast.error('No internet connection. AI requires an internet connection.');
+      return;
+    }
+
+    setGeneratingRecs(true);
+    recsAbortRef.current = new AbortController();
+
+    try {
+      // Build domain findings summary
+      const findingsParts: string[] = [];
+      for (const row of bayleyScores) {
+        findingsParts.push(`${row.domain}: Age Equivalence ${row.ageEquivalent} months, Scaled Score ${row.scaledScore}, Percent Delay ${row.percentDelay}`);
+      }
+      for (const row of dayc2Scores) {
+        findingsParts.push(`${row.domain}: Age Equivalence ${row.ageEquivalent} months, Standard Score ${row.standardScore}`);
+      }
+      for (const row of reel3Scores) {
+        findingsParts.push(`${row.domain}: Age Equivalence ${row.ageEquivalent} months`);
+      }
+
+      // Build report narrative summary from all sections
+      const narrativeParts: string[] = [];
+      if (clinicalObservation) narrativeParts.push(`Clinical Observation: ${clinicalObservation.substring(0, 500)}`);
+      if (feedingOralMotor) narrativeParts.push(`Feeding/Oral Motor: ${feedingOralMotor.substring(0, 500)}`);
+      if (sensoryNarrative) narrativeParts.push(`Sensory Processing: ${sensoryNarrative.substring(0, 500)}`);
+      if (feedingBehaviors) narrativeParts.push(`Feeding Behaviors: ${feedingBehaviors.substring(0, 300)}`);
+      if (feedingOralMotorCoord) narrativeParts.push(`Oral Motor Coordination: ${feedingOralMotorCoord.substring(0, 300)}`);
+      if (feedingSelfFeeding) narrativeParts.push(`Self-Feeding: ${feedingSelfFeeding.substring(0, 300)}`);
+      if (feedingDrinking) narrativeParts.push(`Drinking: ${feedingDrinking.substring(0, 300)}`);
+      // Include domain narrative overrides
+      for (const dn of domainNarratives) {
+        const key = `${dn.formId}_${dn.domainLocalId}`;
+        const override = domainOverrides[key];
+        if (override) narrativeParts.push(`${dn.formName} - ${dn.domainLocalId}: ${override.substring(0, 300)}`);
+      }
+
+      const ageMonthsVal = ageInMonths(childInfo.dob, childInfo.testDate, premWeeks);
+      const quarterDelay = Math.floor(ageMonthsVal * 0.75);
+
+      const result = await generateRecommendations({
+        childName,
+        firstName,
+        chronAge,
+        gender,
+        template,
+        domainFindings: findingsParts.join('\n'),
+        reportSummary: narrativeParts.join('\n\n'),
+        quarterDelay,
+        existingRecommendations: recommendations || undefined,
+        signal: recsAbortRef.current.signal,
+      });
+
+      if (result.success && result.enhanced) {
+        setRecommendations(result.enhanced);
+        toast.success('Recommendations generated! Review and edit as needed.');
+      } else {
+        toast.error(result.error || 'Failed to generate recommendations.');
+      }
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') {
+        toast.error('Failed to generate recommendations. Please try again.');
+      }
+    } finally {
+      setGeneratingRecs(false);
+    }
+  }, [
+    bayleyScores, dayc2Scores, reel3Scores, clinicalObservation, feedingOralMotor,
+    sensoryNarrative, feedingBehaviors, feedingOralMotorCoord, feedingSelfFeeding,
+    feedingDrinking, domainNarratives, domainOverrides, childInfo, premWeeks,
+    childName, firstName, chronAge, gender, template, recommendations,
+  ]);
+
   // DOCX Export handler
   const handleDocxExport = useCallback(async () => {
     try {
@@ -2410,8 +2499,27 @@ export default function ClinicalReportEditor() {
                 <SectionHeader title="Recommendations" sectionKey="recs" collapsed={collapsedSections} toggle={toggleSection} />
                 {!collapsedSections.recs && (
                   <>
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAiRecommendations}
+                        disabled={generatingRecs}
+                        className="gap-1.5 text-xs bg-gradient-to-r from-violet-50 to-purple-50 border-violet-200 hover:from-violet-100 hover:to-purple-100 text-violet-700"
+                      >
+                        {generatingRecs ? (
+                          <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating...</>
+                        ) : (
+                          <><WandSparkles className="w-3.5 h-3.5" /> AI Generate Recommendations</>
+                        )}
+                      </Button>
+                      {generatingRecs && (
+                        <Button variant="ghost" size="sm" onClick={() => recsAbortRef.current?.abort()} className="text-xs text-red-500 hover:text-red-700">
+                          Cancel
+                        </Button>
+                      )}
                     {appSettings.recommendationTemplates.length > 0 && (
-                      <div className="mb-2 relative">
+                      <div className="relative">
                         <Button
                           variant="outline"
                           size="sm"
@@ -2440,6 +2548,7 @@ export default function ClinicalReportEditor() {
                         )}
                       </div>
                     )}
+                    </div>
                     <EditableSection label="" value={recommendations} onChange={setRecommendations} childName={firstName} placeholder="Enter recommendations..." rows={10} />
                   </>
                 )}
@@ -2619,8 +2728,27 @@ export default function ClinicalReportEditor() {
                 <SectionHeader title="Summary and Recommendations" sectionKey="si_recs" collapsed={collapsedSections} toggle={toggleSection} />
                 {!collapsedSections.si_recs && (
                   <>
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAiRecommendations}
+                        disabled={generatingRecs}
+                        className="gap-1.5 text-xs bg-gradient-to-r from-violet-50 to-purple-50 border-violet-200 hover:from-violet-100 hover:to-purple-100 text-violet-700"
+                      >
+                        {generatingRecs ? (
+                          <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating...</>
+                        ) : (
+                          <><WandSparkles className="w-3.5 h-3.5" /> AI Generate Recommendations</>
+                        )}
+                      </Button>
+                      {generatingRecs && (
+                        <Button variant="ghost" size="sm" onClick={() => recsAbortRef.current?.abort()} className="text-xs text-red-500 hover:text-red-700">
+                          Cancel
+                        </Button>
+                      )}
                     {appSettings.recommendationTemplates.length > 0 && (
-                      <div className="mb-2 relative">
+                      <div className="relative">
                         <Button
                           variant="outline"
                           size="sm"
@@ -2649,6 +2777,7 @@ export default function ClinicalReportEditor() {
                         )}
                       </div>
                     )}
+                    </div>
                     <EditableSection label="" value={recommendations} onChange={setRecommendations} childName={firstName} placeholder="Enter summary and recommendations..." rows={10} />
                   </>
                 )}
@@ -2955,8 +3084,27 @@ export default function ClinicalReportEditor() {
                 <SectionHeader title="Summary" sectionKey="fd_summary" collapsed={collapsedSections} toggle={toggleSection} number="IX" />
                 {!collapsedSections.fd_summary && (
                   <>
+                    <div className="mb-2 flex flex-wrap gap-2 no-print">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAiRecommendations}
+                        disabled={generatingRecs}
+                        className="gap-1.5 text-xs bg-gradient-to-r from-violet-50 to-purple-50 border-violet-200 hover:from-violet-100 hover:to-purple-100 text-violet-700"
+                      >
+                        {generatingRecs ? (
+                          <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating...</>
+                        ) : (
+                          <><WandSparkles className="w-3.5 h-3.5" /> AI Generate Recommendations</>
+                        )}
+                      </Button>
+                      {generatingRecs && (
+                        <Button variant="ghost" size="sm" onClick={() => recsAbortRef.current?.abort()} className="text-xs text-red-500 hover:text-red-700">
+                          Cancel
+                        </Button>
+                      )}
                     {appSettings.recommendationTemplates.length > 0 && (
-                      <div className="mb-2 relative no-print">
+                      <div className="relative">
                         <Button
                           variant="outline"
                           size="sm"
@@ -2985,6 +3133,7 @@ export default function ClinicalReportEditor() {
                         )}
                       </div>
                     )}
+                    </div>
                     <EditableSection label="" value={feedingSummary} onChange={setFeedingSummary} childName={firstName} placeholder={`${firstName} is a [age] old [boy/girl] who was referred for difficulty with feeding development and feeding skills. Describe key findings and recommendations...\n\nIt is recommended that the IFSP team consider the following and make the final determination of eligibility and services:\n\n1. Occupational therapy feeding is recommended to address delays in oral motor skills impacting age-appropriate feeding.\n2. Occupational Therapy is recommended to work on fine motor skills and body awareness to support overall participation in adaptive skills, specifically feeding.`} rows={12} />
                   </>
                 )}
