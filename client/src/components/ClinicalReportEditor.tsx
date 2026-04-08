@@ -40,7 +40,8 @@ import type { SelfFeedingData } from '@/components/SelfFeedingChecklist';
 import type { DrinkingData } from '@/components/DrinkingChecklist';
 import { generateAllChecklistsPdf } from '@/lib/generateAllChecklistsPdf';
 import { parseLocalDate, formatDateLocal, calculateAge } from '@/lib/dateUtils';
-import { enhanceWithAI, generateRecommendations, isOnline, isAiConfigured } from '@/lib/aiEnhance';
+import { enhanceWithAI, generateRecommendations, isOnline, isAiConfigured, isAnyAiAvailable } from '@/lib/aiEnhance';
+import { isLocalModelReady } from '@/lib/localLLM';
 
 // ============================================================
 // Types & Constants
@@ -194,19 +195,15 @@ function EditableSection({
       toast.error('Please add more text before using AI Enhance.');
       return;
     }
-    if (!isOnline()) {
-      toast.error('No internet connection. AI Enhance requires internet access.');
+    if (!isAnyAiAvailable()) {
+      toast('AI not configured', {
+        description: 'Download the Local AI model in Settings, or add an OpenRouter API key for cloud AI.',
+        duration: 6000,
+      });
       return;
     }
-    if (!isAiConfigured()) {
-      toast('OpenRouter API key required', {
-        description: 'Go to Settings → AI Settings to add your API key.',
-        duration: 6000,
-        action: {
-          label: 'How to get a key',
-          onClick: () => window.open('https://openrouter.ai/keys', '_blank'),
-        },
-      });
+    if (!isLocalModelReady() && !isOnline()) {
+      toast.error('No internet connection and local AI model not loaded. Download the Local AI model in Settings for offline use.');
       return;
     }
     setAiLoading(true);
@@ -221,16 +218,13 @@ function EditableSection({
       });
       if (result.success && result.enhanced) {
         onChange(result.enhanced);
-        toast.success('Text enhanced! Click "Undo AI" to revert.', { duration: 5000 });
+        const sourceLabel = result.source === 'local' ? ' (Local AI)' : ' (Cloud AI)';
+        toast.success(`Text enhanced${sourceLabel}! Click "Undo AI" to revert.`, { duration: 5000 });
       } else if (result.needsSetup) {
         setPreviousValue(null);
-        toast('API key issue', {
+        toast('AI setup needed', {
           description: result.error,
           duration: 6000,
-          action: {
-            label: 'Open Settings',
-            onClick: () => window.open('https://openrouter.ai/keys', '_blank'),
-          },
         });
       } else {
         setPreviousValue(null);
@@ -1409,19 +1403,15 @@ export default function ClinicalReportEditor() {
   const enhanceAllAbortRef = useRef<AbortController | null>(null);
 
   const handleEnhanceAll = useCallback(async () => {
-    if (!isAiConfigured()) {
-      toast('OpenRouter API key required', {
-        description: 'Go to Settings → AI Settings to add your API key.',
+    if (!isAnyAiAvailable()) {
+      toast('AI not configured', {
+        description: 'Download the Local AI model in Settings, or add an OpenRouter API key for cloud AI.',
         duration: 6000,
-        action: {
-          label: 'How to get a key',
-          onClick: () => window.open('https://openrouter.ai/keys', '_blank'),
-        },
       });
       return;
     }
-    if (!isOnline()) {
-      toast.error('No internet connection. AI Enhance requires internet access.');
+    if (!isLocalModelReady() && !isOnline()) {
+      toast.error('No internet connection and local AI model not loaded. Download the Local AI model in Settings for offline use.');
       return;
     }
     if (!confirm('Enhance all report sections with AI?\n\nThis will rewrite all text sections into professional clinical narratives. You can undo individual sections afterwards.')) {
@@ -1533,19 +1523,15 @@ export default function ClinicalReportEditor() {
   const recsAbortRef = useRef<AbortController | null>(null);
 
   const handleAiRecommendations = useCallback(async () => {
-    if (!isAiConfigured()) {
-      toast('OpenRouter API key required', {
-        description: 'Go to Settings → AI Settings to add your API key.',
+    if (!isAnyAiAvailable()) {
+      toast('AI not configured', {
+        description: 'Download the Local AI model in Settings, or add an OpenRouter API key for cloud AI.',
         duration: 6000,
-        action: {
-          label: 'How to get a key',
-          onClick: () => window.open('https://openrouter.ai/keys', '_blank'),
-        },
       });
       return;
     }
-    if (!isOnline()) {
-      toast.error('No internet connection. AI requires an internet connection.');
+    if (!isLocalModelReady() && !isOnline()) {
+      toast.error('No internet connection and local AI model not loaded. Download the Local AI model in Settings for offline use.');
       return;
     }
 

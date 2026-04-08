@@ -7,7 +7,7 @@
  * All settings persist in localStorage under key 'bayley4-app-settings'.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,7 +16,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   ArrowLeft, Settings, Building2, Stethoscope, FileText,
   Save, RotateCcw, ImagePlus, Trash2, Check, Plus, GripVertical,
-  BookmarkPlus, Pencil, Sparkles, Eye, EyeOff, ExternalLink
+  BookmarkPlus, Pencil, Sparkles, Eye, EyeOff, ExternalLink,
+  Download, HardDrive, Cpu, Loader2, Wifi, WifiOff, AlertCircle
 } from 'lucide-react';
 import {
   getApiKey, setApiKey as saveApiKey,
@@ -24,6 +25,17 @@ import {
   AI_MODELS, type AiModelId, isAiConfigured
 } from '@/lib/aiEnhance';
 import { toast } from 'sonner';
+import {
+  getLocalLLMState,
+  subscribeToLocalLLMState,
+  downloadAndLoadModel,
+  loadCachedModel,
+  deleteModel,
+  isLocalModelReady,
+  isLocalAIEnabled,
+  setLocalAIEnabled,
+  LOCAL_MODEL_INFO,
+} from '@/lib/localLLM';
 
 // ============================================================
 // Types
@@ -117,6 +129,13 @@ export default function SettingsPreferences({ onBack }: { onBack: () => void }) 
   const [aiModel, setAiModel] = useState<AiModelId>(() => getSelectedModel());
   const [showApiKey, setShowApiKey] = useState(false);
   const [aiKeyJustSaved, setAiKeyJustSaved] = useState(false);
+
+  // Local AI state (reactive via useSyncExternalStore)
+  const localLLMState = useSyncExternalStore(
+    subscribeToLocalLLMState,
+    getLocalLLMState
+  );
+  const [localAiDownloading, setLocalAiDownloading] = useState(false);
 
   // Recommendation template editing
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
@@ -636,14 +655,201 @@ export default function SettingsPreferences({ onBack }: { onBack: () => void }) 
           </div>
         </section>
 
-        {/* AI Settings */}
+        {/* Local AI Model */}
+        <section>
+          <div className="flex items-center gap-2 mb-4">
+            <Cpu className="w-5 h-5 text-[#0D7377]" />
+            <h2 className="text-lg font-semibold text-[#2C2C2C]">Local AI Model</h2>
+            <span className="text-xs bg-[#0D7377]/10 text-[#0D7377] px-2 py-0.5 rounded-full font-medium">Recommended</span>
+          </div>
+          <p className="text-sm text-[#6B6B6B] mb-4">
+            Download a local AI model for offline, unlimited report enhancement. No API key needed. Works without internet after download.
+          </p>
+          <div className="bg-white rounded-lg border border-[#E5E1D8] p-6 space-y-5">
+            {/* Model Info */}
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-[#0D7377] to-[#0a5c5f] flex items-center justify-center flex-shrink-0">
+                <HardDrive className="w-6 h-6 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-sm font-semibold text-[#2C2C2C]">{LOCAL_MODEL_INFO.name}</h4>
+                <p className="text-xs text-[#6B6B6B] mt-0.5">{LOCAL_MODEL_INFO.description}</p>
+                <div className="flex items-center gap-3 mt-1.5">
+                  <span className="text-xs text-[#8B8B8B]">Size: {LOCAL_MODEL_INFO.sizeGB} GB</span>
+                  <span className="text-xs text-[#8B8B8B]">Quantization: {LOCAL_MODEL_INFO.quantization}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Status & Actions */}
+            {localLLMState.isModelLoaded ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse" />
+                  <span className="text-sm font-medium text-green-800">Model loaded and ready</span>
+                  <WifiOff className="w-3.5 h-3.5 text-green-600 ml-auto" />
+                  <span className="text-xs text-green-600">Works offline</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      if (confirm('Delete the local AI model? You can re-download it later.')) {
+                        await deleteModel();
+                        toast.success('Local AI model deleted');
+                      }
+                    }}
+                    className="gap-1.5 text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete Model
+                  </Button>
+                </div>
+              </div>
+            ) : localLLMState.isDownloading ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
+                  <span className="text-sm font-medium text-blue-800">
+                    Downloading model... {localLLMState.downloadProgress}%
+                  </span>
+                </div>
+                <div className="w-full bg-[#E5E1D8] rounded-full h-2.5">
+                  <div
+                    className="bg-gradient-to-r from-[#0D7377] to-[#0a9ea3] h-2.5 rounded-full transition-all duration-300"
+                    style={{ width: `${localLLMState.downloadProgress}%` }}
+                  />
+                </div>
+                <p className="text-xs text-[#8B8B8B]">
+                  Downloading {LOCAL_MODEL_INFO.sizeGB} GB from HuggingFace. This may take several minutes depending on your connection.
+                  The model will be cached locally for future use.
+                </p>
+              </div>
+            ) : localLLMState.isLoading ? (
+              <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <Loader2 className="w-4 h-4 text-amber-600 animate-spin" />
+                <span className="text-sm font-medium text-amber-800">
+                  Loading model into memory... {localLLMState.loadProgress}%
+                </span>
+              </div>
+            ) : localLLMState.isModelDownloaded ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <HardDrive className="w-4 h-4 text-amber-600" />
+                  <span className="text-sm font-medium text-amber-800">Model downloaded but not loaded</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      toast.info('Loading local AI model...');
+                      const result = await loadCachedModel();
+                      if (result.success) {
+                        toast.success('Local AI model loaded and ready!');
+                      } else {
+                        toast.error(result.error || 'Failed to load model');
+                      }
+                    }}
+                    className="gap-1.5 bg-[#0D7377] hover:bg-[#0a5c5f] text-white"
+                  >
+                    <Cpu className="w-3.5 h-3.5" />
+                    Load Model
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      if (confirm('Delete the local AI model? You can re-download it later.')) {
+                        await deleteModel();
+                        toast.success('Local AI model deleted');
+                      }
+                    }}
+                    className="gap-1.5 text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    toast.info('Starting model download... This may take several minutes.');
+                    const result = await downloadAndLoadModel((phase, pct) => {
+                      // Progress is handled via state subscription
+                    });
+                    if (result.success) {
+                      toast.success('Local AI model downloaded and ready! AI Enhance now works offline.');
+                    } else {
+                      toast.error(result.error || 'Failed to download model');
+                    }
+                  }}
+                  className="gap-2 bg-gradient-to-r from-[#0D7377] to-[#0a9ea3] hover:from-[#0a5c5f] hover:to-[#088589] text-white px-6"
+                >
+                  <Download className="w-4 h-4" />
+                  Download Local AI Model ({LOCAL_MODEL_INFO.sizeGB} GB)
+                </Button>
+                <p className="text-xs text-[#8B8B8B]">
+                  One-time download. After downloading, AI Enhance works completely offline with no rate limits or API keys needed.
+                </p>
+              </div>
+            )}
+
+            {/* Error display */}
+            {localLLMState.lastError && (
+              <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <span className="text-sm font-medium text-red-800">Error</span>
+                  <p className="text-xs text-red-600 mt-0.5">{localLLMState.lastError}</p>
+                </div>
+              </div>
+            )}
+
+            {/* How local AI works */}
+            <div className="bg-[#F8F7F4] rounded-md p-4 border border-[#E5E1D8]">
+              <h4 className="text-sm font-semibold text-[#2C2C2C] mb-2">How Local AI works</h4>
+              <ul className="text-xs text-[#6B6B6B] space-y-1.5">
+                <li className="flex items-start gap-2">
+                  <span className="text-[#0D7377] font-bold mt-0.5">1.</span>
+                  Download the AI model once ({LOCAL_MODEL_INFO.sizeGB} GB) — it's cached on your device
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-[#0D7377] font-bold mt-0.5">2.</span>
+                  AI Enhance automatically uses the local model — no internet needed
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-[#0D7377] font-bold mt-0.5">3.</span>
+                  Completely free, unlimited use with no rate limits
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-[#0D7377] font-bold mt-0.5">4.</span>
+                  Your data never leaves your device — 100% private
+                </li>
+              </ul>
+              <p className="text-xs text-[#8B8B8B] mt-3 italic">
+                Note: Local inference is slower than cloud AI (30-90 seconds per section depending on your device).
+                If speed is important, you can still use cloud AI below as a fallback.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Cloud AI Settings */}
         <section>
           <div className="flex items-center gap-2 mb-4">
             <Sparkles className="w-5 h-5 text-[#0D7377]" />
-            <h2 className="text-lg font-semibold text-[#2C2C2C]">AI Settings</h2>
+            <h2 className="text-lg font-semibold text-[#2C2C2C]">Cloud AI Settings</h2>
+            <span className="text-xs bg-[#F0EDE8] text-[#6B6B6B] px-2 py-0.5 rounded-full font-medium">Fallback</span>
           </div>
           <p className="text-sm text-[#6B6B6B] mb-4">
-            Configure AI-powered report enhancement. The "AI Enhance" button on report sections uses OpenRouter to rewrite clinical text into professional narratives.
+            Cloud AI is used as a fallback when the local model is not available. Requires internet and an OpenRouter API key.
+            {isLocalModelReady() && (
+              <span className="block mt-1 text-green-700 font-medium">Local AI is active — cloud AI will only be used if you disable local AI.</span>
+            )}
           </p>
           <div className="bg-white rounded-lg border border-[#E5E1D8] p-6 space-y-5">
             {/* API Key */}

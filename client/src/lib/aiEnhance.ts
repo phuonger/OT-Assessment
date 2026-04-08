@@ -1,21 +1,27 @@
 /**
  * AI Enhance — rewrites raw clinical text into professional OT narrative style.
  *
- * Uses the OpenRouter API (OpenAI-compatible chat completions endpoint).
- * The API key is stored in localStorage and configured via the Settings page.
+ * Hybrid approach:
+ *   1. If local model is loaded → use it (offline, free, unlimited)
+ *   2. Otherwise → fall back to OpenRouter cloud API
+ *
+ * The local model is managed by localLLM.ts (wllama WebAssembly).
+ * The cloud API key is stored in localStorage and configured via the Settings page.
  */
+
+import { isLocalModelReady, localChatCompletion } from '@/lib/localLLM';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-/** Available models — ordered by quality for clinical writing.
+/** Available cloud models — ordered by reliability for clinical writing.
  *  Free model IDs verified against OpenRouter /api/v1/models on 2026-04-08. */
 export const AI_MODELS = [
-  { id: 'google/gemma-4-31b-it:free', label: 'Gemma 4 31B (Free)', description: 'High quality, completely free' },
-  { id: 'stepfun/step-3.5-flash:free', label: 'Step 3.5 Flash (Free)', description: 'Fast reasoning model, completely free' },
+  { id: 'openai/gpt-oss-120b:free', label: 'GPT-OSS 120B (Free)', description: 'Most reliable free model, recommended' },
   { id: 'nvidia/nemotron-3-super-120b-a12b:free', label: 'Nemotron 3 Super 120B (Free)', description: 'Strong reasoning, completely free' },
-  { id: 'google/gemma-4-26b-a4b-it:free', label: 'Gemma 4 26B (Free)', description: 'Good quality, completely free' },
   { id: 'minimax/minimax-m2.5:free', label: 'MiniMax M2.5 (Free)', description: 'Capable model, completely free' },
-  { id: 'openai/gpt-oss-120b:free', label: 'GPT-OSS 120B (Free)', description: 'OpenAI open-source, completely free' },
+  { id: 'google/gemma-4-26b-a4b-it:free', label: 'Gemma 4 26B (Free)', description: 'Good quality, completely free' },
+  { id: 'google/gemma-4-31b-it:free', label: 'Gemma 4 31B (Free)', description: 'High quality, may have rate limits' },
+  { id: 'stepfun/step-3.5-flash:free', label: 'Step 3.5 Flash (Free)', description: 'Fast reasoning, may have rate limits' },
   { id: 'anthropic/claude-3.5-haiku', label: 'Claude 3.5 Haiku (Paid)', description: 'Best quality, requires credits (~$0.01/use)' },
   { id: 'openai/gpt-4o-mini', label: 'GPT-4o Mini (Paid)', description: 'Good quality, requires credits (~$0.01/use)' },
 ] as const;
@@ -69,9 +75,14 @@ export function setSelectedModel(modelId: AiModelId): void {
   }
 }
 
-/** Check if AI is configured (has an API key) */
+/** Check if cloud AI is configured (has an API key) */
 export function isAiConfigured(): boolean {
   return getApiKey().length > 0;
+}
+
+/** Check if ANY AI is available (local or cloud) */
+export function isAnyAiAvailable(): boolean {
+  return isLocalModelReady() || isAiConfigured();
 }
 
 /** System prompt that instructs the LLM to behave as a clinical report writer */
@@ -107,6 +118,8 @@ export interface AiEnhanceResult {
   enhanced?: string;
   error?: string;
   needsSetup?: boolean;
+  /** Which backend was used */
+  source?: 'local' | 'cloud';
 }
 
 /**
@@ -116,9 +129,6 @@ export function isOnline(): boolean {
   return typeof navigator !== 'undefined' ? navigator.onLine : true;
 }
 
-/**
- * Call the OpenRouter API to rewrite clinical text.
- */
 /** System prompt for generating clinical recommendations from assessment findings */
 const RECOMMENDATIONS_SYSTEM_PROMPT = `You are an expert pediatric occupational therapist writing clinical recommendations for early intervention (IFSP) evaluation reports. Based on the assessment findings provided, generate professional, specific, and actionable recommendations.
 
@@ -165,8 +175,111 @@ export interface GenerateRecommendationsOptions {
   signal?: AbortSignal;
 }
 
+// ─── Cloud API helper ─────────────────────────────────────────────────────────
+
+async function callCloudAPI(
+  systemPrompt: string,
+  userMessage: string,
+  options: { signal?: AbortSignal; maxTokens?: number; temperature?: number }
+): Promise<AiEnhanceResult> {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    return {
+      success: false,
+      error: 'OpenRouter API key not configured. Please add your API key in Settings → Cloud AI Settings, or download the Local AI model for offline use.',
+      needsSetup: true,
+    };
+  }
+
+  if (!isOnline()) {
+    return { success: false, error: 'No internet connection. Download the Local AI model in Settings for offline use.' };
+  }
+
+  const model = getSelectedModel();
+
+  try {
+    const response = await fetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://ot-assessment.app',
+        'X-Title': 'OT Developmental Assessment Suite',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+        max_tokens: options.maxTokens ?? 2048,
+        temperature: options.temperature ?? 0.4,
+      }),
+      signal: options.signal,
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text().catch(() => '');
+      console.error('[AI Cloud] API error:', response.status, errBody);
+
+      if (response.status === 401 || response.status === 403) {
+        return { success: false, error: 'Invalid API key. Please check your OpenRouter API key in Settings.', needsSetup: true };
+      }
+      if (response.status === 402) {
+        return { success: false, error: 'Insufficient credits for this model. Switch to a free model in Settings → Cloud AI Settings.' };
+      }
+      if (response.status === 429) {
+        return { success: false, error: 'Rate limit reached. Please wait a moment and try again, or download the Local AI model for unlimited use.' };
+      }
+      return { success: false, error: `AI service error (${response.status}). Please try again later.` };
+    }
+
+    const data = await response.json();
+    const enhanced = data?.choices?.[0]?.message?.content?.trim();
+
+    if (!enhanced) {
+      return { success: false, error: 'AI returned an empty response. Please try again.' };
+    }
+
+    return { success: true, enhanced, source: 'cloud' };
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      return { success: false, error: 'AI enhancement was cancelled.' };
+    }
+    console.error('[AI Cloud] Network error:', err);
+    return { success: false, error: 'Could not reach the AI service. Please check your internet connection or download the Local AI model for offline use.' };
+  }
+}
+
+// ─── Local model helper ───────────────────────────────────────────────────────
+
+async function callLocalModel(
+  systemPrompt: string,
+  userMessage: string,
+  options: { signal?: AbortSignal; maxTokens?: number; temperature?: number }
+): Promise<AiEnhanceResult> {
+  console.log('[AI Local] Using local model for inference...');
+
+  const result = await localChatCompletion({
+    systemPrompt,
+    userMessage,
+    maxTokens: options.maxTokens ?? 2048,
+    temperature: options.temperature ?? 0.4,
+    signal: options.signal,
+  });
+
+  if (result.success && result.text) {
+    return { success: true, enhanced: result.text, source: 'local' };
+  }
+
+  return { success: false, error: result.error || 'Local model inference failed.' };
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
 /**
  * Generate clinical recommendations based on assessment findings.
+ * Uses local model if available, falls back to cloud.
  */
 export async function generateRecommendations(options: GenerateRecommendationsOptions): Promise<AiEnhanceResult> {
   const {
@@ -174,21 +287,6 @@ export async function generateRecommendations(options: GenerateRecommendationsOp
     domainFindings, reportSummary, quarterDelay,
     existingRecommendations, signal,
   } = options;
-
-  if (!isOnline()) {
-    return { success: false, error: 'No internet connection. AI requires an internet connection.' };
-  }
-
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    return {
-      success: false,
-      error: 'OpenRouter API key not configured. Please add your API key in Settings → AI Settings.',
-      needsSetup: true,
-    };
-  }
-
-  const model = getSelectedModel();
 
   const userParts: string[] = [
     `Child: ${childName}`,
@@ -216,80 +314,45 @@ export async function generateRecommendations(options: GenerateRecommendationsOp
     userParts.push('', 'Please generate comprehensive clinical recommendations based on the above findings.');
   }
 
-  try {
-    const response = await fetch(OPENROUTER_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://ot-assessment.app',
-        'X-Title': 'OT Developmental Assessment Suite',
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: RECOMMENDATIONS_SYSTEM_PROMPT },
-          { role: 'user', content: userParts.join('\n') },
-        ],
-        max_tokens: 2048,
-        temperature: 0.5,
-      }),
-      signal,
+  const userMessage = userParts.join('\n');
+
+  // Try local model first
+  if (isLocalModelReady()) {
+    const result = await callLocalModel(RECOMMENDATIONS_SYSTEM_PROMPT, userMessage, {
+      signal, maxTokens: 2048, temperature: 0.5,
     });
-
-    if (!response.ok) {
-      const errBody = await response.text().catch(() => '');
-      console.error('[AI Recommendations] API error:', response.status, errBody);
-      if (response.status === 401 || response.status === 403) {
-        return { success: false, error: 'Invalid API key. Please check your OpenRouter API key in Settings.', needsSetup: true };
-      }
-      if (response.status === 402) {
-        return { success: false, error: 'Insufficient credits for this model. Switch to a free model (Llama 3.3 70B or Gemini Flash) in Settings → AI Settings.' };
-      }
-      if (response.status === 429) {
-        return { success: false, error: 'Rate limit reached. Please wait a moment and try again.' };
-      }
-      return { success: false, error: `AI service error (${response.status}). Please try again.` };
-    }
-
-    const data = await response.json();
-    const enhanced = data?.choices?.[0]?.message?.content?.trim();
-
-    if (!enhanced) {
-      return { success: false, error: 'AI returned an empty response. Please try again.' };
-    }
-
-    return { success: true, enhanced };
-  } catch (err: any) {
-    if (err?.name === 'AbortError') {
-      return { success: false, error: 'Generation was cancelled.' };
-    }
-    console.error('[AI Recommendations] Network error:', err);
-    return { success: false, error: 'Could not reach the AI service. Please check your internet connection.' };
+    if (result.success) return result;
+    console.warn('[AI] Local model failed, falling back to cloud:', result.error);
   }
+
+  // Fall back to cloud
+  if (!isOnline()) {
+    return { success: false, error: 'No internet connection and local AI model not available. Download the Local AI model in Settings for offline use.' };
+  }
+
+  if (!isAiConfigured()) {
+    return {
+      success: false,
+      error: 'No AI available. Either download the Local AI model in Settings, or add an OpenRouter API key for cloud AI.',
+      needsSetup: true,
+    };
+  }
+
+  return callCloudAPI(RECOMMENDATIONS_SYSTEM_PROMPT, userMessage, {
+    signal, maxTokens: 2048, temperature: 0.5,
+  });
 }
 
+/**
+ * Enhance clinical text using AI.
+ * Uses local model if available, falls back to cloud.
+ */
 export async function enhanceWithAI(options: AiEnhanceOptions): Promise<AiEnhanceResult> {
   const { text, sectionContext, childName, signal } = options;
 
   if (!text || text.trim().length < 10) {
     return { success: false, error: 'Text is too short to enhance. Please add more content first.' };
   }
-
-  if (!isOnline()) {
-    return { success: false, error: 'No internet connection. AI Enhance requires an internet connection.' };
-  }
-
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    return {
-      success: false,
-      error: 'OpenRouter API key not configured. Please add your API key in Settings → AI Settings.',
-      needsSetup: true,
-    };
-  }
-
-  const model = getSelectedModel();
 
   const userMessage = [
     sectionContext ? `Section: ${sectionContext}` : '',
@@ -299,60 +362,29 @@ export async function enhanceWithAI(options: AiEnhanceOptions): Promise<AiEnhanc
     text,
   ].filter(Boolean).join('\n');
 
-  try {
-    const response = await fetch(OPENROUTER_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://ot-assessment.app',
-        'X-Title': 'OT Developmental Assessment Suite',
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userMessage },
-        ],
-        max_tokens: 2048,
-        temperature: 0.4,
-      }),
-      signal,
+  // Try local model first
+  if (isLocalModelReady()) {
+    const result = await callLocalModel(SYSTEM_PROMPT, userMessage, {
+      signal, maxTokens: 2048, temperature: 0.4,
     });
-
-    if (!response.ok) {
-      const errBody = await response.text().catch(() => '');
-      console.error('[AI Enhance] API error:', response.status, errBody);
-
-      if (response.status === 401 || response.status === 403) {
-        return {
-          success: false,
-          error: 'Invalid API key. Please check your OpenRouter API key in Settings → AI Settings.',
-          needsSetup: true,
-        };
-      }
-      if (response.status === 402) {
-        return { success: false, error: 'Insufficient credits for this model. Switch to a free model (Llama 3.3 70B or Gemini Flash) in Settings → AI Settings.' };
-      }
-      if (response.status === 429) {
-        return { success: false, error: 'Rate limit reached. Please wait a moment and try again.' };
-      }
-      return { success: false, error: `AI service error (${response.status}). Please try again later.` };
-    }
-
-    const data = await response.json();
-    const enhanced = data?.choices?.[0]?.message?.content?.trim();
-
-    if (!enhanced) {
-      return { success: false, error: 'AI returned an empty response. Please try again.' };
-    }
-
-    return { success: true, enhanced };
-  } catch (err: any) {
-    if (err?.name === 'AbortError') {
-      return { success: false, error: 'AI enhancement was cancelled.' };
-    }
-    console.error('[AI Enhance] Network error:', err);
-    return { success: false, error: 'Could not reach the AI service. Please check your internet connection and try again.' };
+    if (result.success) return result;
+    console.warn('[AI] Local model failed, falling back to cloud:', result.error);
   }
+
+  // Fall back to cloud
+  if (!isOnline()) {
+    return { success: false, error: 'No internet connection and local AI model not available. Download the Local AI model in Settings for offline use.' };
+  }
+
+  if (!isAiConfigured()) {
+    return {
+      success: false,
+      error: 'No AI available. Either download the Local AI model in Settings, or add an OpenRouter API key for cloud AI.',
+      needsSetup: true,
+    };
+  }
+
+  return callCloudAPI(SYSTEM_PROMPT, userMessage, {
+    signal, maxTokens: 2048, temperature: 0.4,
+  });
 }
