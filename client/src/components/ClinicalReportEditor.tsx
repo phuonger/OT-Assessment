@@ -40,8 +40,7 @@ import type { SelfFeedingData } from '@/components/SelfFeedingChecklist';
 import type { DrinkingData } from '@/components/DrinkingChecklist';
 import { generateAllChecklistsPdf } from '@/lib/generateAllChecklistsPdf';
 import { parseLocalDate, formatDateLocal, calculateAge } from '@/lib/dateUtils';
-import { enhanceWithAI, generateRecommendations, isOnline, isAiConfigured, isAnyAiAvailable } from '@/lib/aiEnhance';
-import { isLocalModelReady } from '@/lib/localLLM';
+import { enhanceWithAI, generateRecommendations, isOnline, isAiConfigured } from '@/lib/aiEnhance';
 
 // ============================================================
 // Types & Constants
@@ -195,15 +194,15 @@ function EditableSection({
       toast.error('Please add more text before using AI Enhance.');
       return;
     }
-    if (!isAnyAiAvailable()) {
+    if (!isAiConfigured()) {
       toast('AI not configured', {
-        description: 'Download the Local AI model in Settings, or add an OpenRouter API key for cloud AI.',
+        description: 'Add your OpenRouter API key in Settings → AI Settings to enable AI Enhance.',
         duration: 6000,
       });
       return;
     }
-    if (!isLocalModelReady() && !isOnline()) {
-      toast.error('No internet connection and local AI model not loaded. Download the Local AI model in Settings for offline use.');
+    if (!isOnline()) {
+      toast.error('No internet connection. AI Enhance requires an internet connection.');
       return;
     }
     setAiLoading(true);
@@ -218,8 +217,7 @@ function EditableSection({
       });
       if (result.success && result.enhanced) {
         onChange(result.enhanced);
-        const sourceLabel = result.source === 'local' ? ' (Local AI)' : ' (Cloud AI)';
-        toast.success(`Text enhanced${sourceLabel}! Click "Undo AI" to revert.`, { duration: 5000 });
+        toast.success('Text enhanced! Click "Undo AI" to revert.', { duration: 5000 });
       } else if (result.needsSetup) {
         setPreviousValue(null);
         toast('AI setup needed', {
@@ -1403,15 +1401,15 @@ export default function ClinicalReportEditor() {
   const enhanceAllAbortRef = useRef<AbortController | null>(null);
 
   const handleEnhanceAll = useCallback(async () => {
-    if (!isAnyAiAvailable()) {
+    if (!isAiConfigured()) {
       toast('AI not configured', {
-        description: 'Download the Local AI model in Settings, or add an OpenRouter API key for cloud AI.',
+        description: 'Add your OpenRouter API key in Settings → AI Settings to enable AI Enhance.',
         duration: 6000,
       });
       return;
     }
-    if (!isLocalModelReady() && !isOnline()) {
-      toast.error('No internet connection and local AI model not loaded. Download the Local AI model in Settings for offline use.');
+    if (!isOnline()) {
+      toast.error('No internet connection. AI Enhance requires an internet connection.');
       return;
     }
     if (!confirm('Enhance all report sections with AI?\n\nThis will rewrite all text sections into professional clinical narratives. You can undo individual sections afterwards.')) {
@@ -1523,15 +1521,15 @@ export default function ClinicalReportEditor() {
   const recsAbortRef = useRef<AbortController | null>(null);
 
   const handleAiRecommendations = useCallback(async () => {
-    if (!isAnyAiAvailable()) {
+    if (!isAiConfigured()) {
       toast('AI not configured', {
-        description: 'Download the Local AI model in Settings, or add an OpenRouter API key for cloud AI.',
+        description: 'Add your OpenRouter API key in Settings → AI Settings to enable AI Enhance.',
         duration: 6000,
       });
       return;
     }
-    if (!isLocalModelReady() && !isOnline()) {
-      toast.error('No internet connection and local AI model not loaded. Download the Local AI model in Settings for offline use.');
+    if (!isOnline()) {
+      toast.error('No internet connection. AI Enhance requires an internet connection.');
       return;
     }
 

@@ -1,15 +1,9 @@
 /**
  * AI Enhance — rewrites raw clinical text into professional OT narrative style.
  *
- * Hybrid approach:
- *   1. If local model is loaded → use it (offline, free, unlimited)
- *   2. Otherwise → fall back to OpenRouter cloud API
- *
- * The local model is managed by localLLM.ts (wllama WebAssembly).
- * The cloud API key is stored in localStorage and configured via the Settings page.
+ * Uses OpenRouter cloud API with free and paid model options.
+ * The API key is stored in localStorage and configured via the Settings page.
  */
-
-import { isLocalModelReady, localChatCompletion } from '@/lib/localLLM';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -75,14 +69,9 @@ export function setSelectedModel(modelId: AiModelId): void {
   }
 }
 
-/** Check if cloud AI is configured (has an API key) */
+/** Check if AI is configured (has an API key) */
 export function isAiConfigured(): boolean {
   return getApiKey().length > 0;
-}
-
-/** Check if ANY AI is available (local or cloud) */
-export function isAnyAiAvailable(): boolean {
-  return isLocalModelReady() || isAiConfigured();
 }
 
 /** System prompt that instructs the LLM to behave as a clinical report writer */
@@ -118,8 +107,6 @@ export interface AiEnhanceResult {
   enhanced?: string;
   error?: string;
   needsSetup?: boolean;
-  /** Which backend was used */
-  source?: 'local' | 'cloud';
 }
 
 /**
@@ -186,13 +173,13 @@ async function callCloudAPI(
   if (!apiKey) {
     return {
       success: false,
-      error: 'OpenRouter API key not configured. Please add your API key in Settings → Cloud AI Settings, or download the Local AI model for offline use.',
+      error: 'OpenRouter API key not configured. Go to Settings → AI Settings to add your API key.',
       needsSetup: true,
     };
   }
 
   if (!isOnline()) {
-    return { success: false, error: 'No internet connection. Download the Local AI model in Settings for offline use.' };
+    return { success: false, error: 'No internet connection. AI Enhance requires an internet connection.' };
   }
 
   const model = getSelectedModel();
@@ -220,16 +207,16 @@ async function callCloudAPI(
 
     if (!response.ok) {
       const errBody = await response.text().catch(() => '');
-      console.error('[AI Cloud] API error:', response.status, errBody);
+      console.error('[AI] API error:', response.status, errBody);
 
       if (response.status === 401 || response.status === 403) {
         return { success: false, error: 'Invalid API key. Please check your OpenRouter API key in Settings.', needsSetup: true };
       }
       if (response.status === 402) {
-        return { success: false, error: 'Insufficient credits for this model. Switch to a free model in Settings → Cloud AI Settings.' };
+        return { success: false, error: 'Insufficient credits for this model. Switch to a free model in Settings → AI Settings.' };
       }
       if (response.status === 429) {
-        return { success: false, error: 'Rate limit reached. Please wait a moment and try again, or download the Local AI model for unlimited use.' };
+        return { success: false, error: 'Rate limit reached. Please wait a moment and try again, or switch to a different free model.' };
       }
       return { success: false, error: `AI service error (${response.status}). Please try again later.` };
     }
@@ -241,45 +228,20 @@ async function callCloudAPI(
       return { success: false, error: 'AI returned an empty response. Please try again.' };
     }
 
-    return { success: true, enhanced, source: 'cloud' };
+    return { success: true, enhanced };
   } catch (err: any) {
     if (err?.name === 'AbortError') {
       return { success: false, error: 'AI enhancement was cancelled.' };
     }
-    console.error('[AI Cloud] Network error:', err);
-    return { success: false, error: 'Could not reach the AI service. Please check your internet connection or download the Local AI model for offline use.' };
+    console.error('[AI] Network error:', err);
+    return { success: false, error: 'Could not reach the AI service. Please check your internet connection.' };
   }
-}
-
-// ─── Local model helper ───────────────────────────────────────────────────────
-
-async function callLocalModel(
-  systemPrompt: string,
-  userMessage: string,
-  options: { signal?: AbortSignal; maxTokens?: number; temperature?: number }
-): Promise<AiEnhanceResult> {
-  console.log('[AI Local] Using local model for inference...');
-
-  const result = await localChatCompletion({
-    systemPrompt,
-    userMessage,
-    maxTokens: options.maxTokens ?? 2048,
-    temperature: options.temperature ?? 0.4,
-    signal: options.signal,
-  });
-
-  if (result.success && result.text) {
-    return { success: true, enhanced: result.text, source: 'local' };
-  }
-
-  return { success: false, error: result.error || 'Local model inference failed.' };
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
  * Generate clinical recommendations based on assessment findings.
- * Uses local model if available, falls back to cloud.
  */
 export async function generateRecommendations(options: GenerateRecommendationsOptions): Promise<AiEnhanceResult> {
   const {
@@ -316,24 +278,10 @@ export async function generateRecommendations(options: GenerateRecommendationsOp
 
   const userMessage = userParts.join('\n');
 
-  // Try local model first
-  if (isLocalModelReady()) {
-    const result = await callLocalModel(RECOMMENDATIONS_SYSTEM_PROMPT, userMessage, {
-      signal, maxTokens: 2048, temperature: 0.5,
-    });
-    if (result.success) return result;
-    console.warn('[AI] Local model failed, falling back to cloud:', result.error);
-  }
-
-  // Fall back to cloud
-  if (!isOnline()) {
-    return { success: false, error: 'No internet connection and local AI model not available. Download the Local AI model in Settings for offline use.' };
-  }
-
   if (!isAiConfigured()) {
     return {
       success: false,
-      error: 'No AI available. Either download the Local AI model in Settings, or add an OpenRouter API key for cloud AI.',
+      error: 'OpenRouter API key not configured. Go to Settings → AI Settings to add your API key.',
       needsSetup: true,
     };
   }
@@ -345,7 +293,6 @@ export async function generateRecommendations(options: GenerateRecommendationsOp
 
 /**
  * Enhance clinical text using AI.
- * Uses local model if available, falls back to cloud.
  */
 export async function enhanceWithAI(options: AiEnhanceOptions): Promise<AiEnhanceResult> {
   const { text, sectionContext, childName, signal } = options;
@@ -362,24 +309,10 @@ export async function enhanceWithAI(options: AiEnhanceOptions): Promise<AiEnhanc
     text,
   ].filter(Boolean).join('\n');
 
-  // Try local model first
-  if (isLocalModelReady()) {
-    const result = await callLocalModel(SYSTEM_PROMPT, userMessage, {
-      signal, maxTokens: 2048, temperature: 0.4,
-    });
-    if (result.success) return result;
-    console.warn('[AI] Local model failed, falling back to cloud:', result.error);
-  }
-
-  // Fall back to cloud
-  if (!isOnline()) {
-    return { success: false, error: 'No internet connection and local AI model not available. Download the Local AI model in Settings for offline use.' };
-  }
-
   if (!isAiConfigured()) {
     return {
       success: false,
-      error: 'No AI available. Either download the Local AI model in Settings, or add an OpenRouter API key for cloud AI.',
+      error: 'OpenRouter API key not configured. Go to Settings → AI Settings to add your API key.',
       needsSetup: true,
     };
   }
