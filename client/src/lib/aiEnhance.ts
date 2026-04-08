@@ -9,10 +9,11 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 /** Available models — ordered by quality for clinical writing */
 export const AI_MODELS = [
-  { id: 'anthropic/claude-3.5-haiku', label: 'Claude 3.5 Haiku (Recommended)', description: 'Fast, high quality clinical writing' },
-  { id: 'openai/gpt-4o-mini', label: 'GPT-4o Mini', description: 'Good quality, very affordable' },
-  { id: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B', description: 'Open source, good quality' },
-  { id: 'google/gemini-2.0-flash-001', label: 'Gemini 2.0 Flash', description: 'Fast and capable' },
+  { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B (Free)', description: 'Great quality, completely free' },
+  { id: 'google/gemini-2.0-flash-001:free', label: 'Gemini 2.0 Flash (Free)', description: 'Fast and capable, completely free' },
+  { id: 'nvidia/llama-3.1-nemotron-70b-instruct:free', label: 'Nemotron 70B (Free)', description: 'Strong reasoning, completely free' },
+  { id: 'anthropic/claude-3.5-haiku', label: 'Claude 3.5 Haiku (Paid)', description: 'Best quality, requires credits (~$0.01/use)' },
+  { id: 'openai/gpt-4o-mini', label: 'GPT-4o Mini (Paid)', description: 'Good quality, requires credits (~$0.01/use)' },
 ] as const;
 
 export type AiModelId = typeof AI_MODELS[number]['id'];
@@ -239,7 +240,7 @@ export async function generateRecommendations(options: GenerateRecommendationsOp
         return { success: false, error: 'Invalid API key. Please check your OpenRouter API key in Settings.', needsSetup: true };
       }
       if (response.status === 402) {
-        return { success: false, error: 'Insufficient credits on your OpenRouter account.' };
+        return { success: false, error: 'Insufficient credits for this model. Switch to a free model (Llama 3.3 70B or Gemini Flash) in Settings → AI Settings.' };
       }
       if (response.status === 429) {
         return { success: false, error: 'Rate limit reached. Please wait a moment and try again.' };
@@ -327,7 +328,7 @@ export async function enhanceWithAI(options: AiEnhanceOptions): Promise<AiEnhanc
         };
       }
       if (response.status === 402) {
-        return { success: false, error: 'Insufficient credits on your OpenRouter account. Please add credits at openrouter.ai.' };
+        return { success: false, error: 'Insufficient credits for this model. Switch to a free model (Llama 3.3 70B or Gemini Flash) in Settings → AI Settings.' };
       }
       if (response.status === 429) {
         return { success: false, error: 'Rate limit reached. Please wait a moment and try again.' };
