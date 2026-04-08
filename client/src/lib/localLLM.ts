@@ -45,18 +45,15 @@ let lastError: string | null = null;
 type StateListener = () => void;
 const listeners = new Set<StateListener>();
 
-function notifyListeners() {
-  listeners.forEach(fn => fn());
-}
+/**
+ * Cached snapshot for useSyncExternalStore.
+ * useSyncExternalStore requires getSnapshot to return the SAME reference
+ * if state hasn't changed, otherwise it triggers infinite re-renders.
+ * We update this cached object only in notifyListeners().
+ */
+let cachedSnapshot = buildSnapshot();
 
-export function subscribeToLocalLLMState(listener: StateListener): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-// ─── State Getters ────────────────────────────────────────────────────────────
-
-export function getLocalLLMState() {
+function buildSnapshot() {
   return {
     isModelLoaded,
     isDownloading,
@@ -67,6 +64,23 @@ export function getLocalLLMState() {
     isModelDownloaded: isLocalModelDownloaded(),
     isLocalAIEnabled: isLocalAIEnabled(),
   };
+}
+
+function notifyListeners() {
+  cachedSnapshot = buildSnapshot();
+  listeners.forEach(fn => fn());
+}
+
+export function subscribeToLocalLLMState(listener: StateListener): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+// ─── State Getters ────────────────────────────────────────────────────────────
+
+/** Returns a stable snapshot reference for useSyncExternalStore */
+export function getLocalLLMState() {
+  return cachedSnapshot;
 }
 
 export function isLocalAIEnabled(): boolean {
