@@ -7,11 +7,15 @@
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-/** Available models — ordered by quality for clinical writing */
+/** Available models — ordered by quality for clinical writing.
+ *  Free model IDs verified against OpenRouter /api/v1/models on 2026-04-08. */
 export const AI_MODELS = [
-  { id: 'meta-llama/llama-3.3-70b-instruct:free', label: 'Llama 3.3 70B (Free)', description: 'Great quality, completely free' },
-  { id: 'google/gemini-2.0-flash-001:free', label: 'Gemini 2.0 Flash (Free)', description: 'Fast and capable, completely free' },
-  { id: 'nvidia/llama-3.1-nemotron-70b-instruct:free', label: 'Nemotron 70B (Free)', description: 'Strong reasoning, completely free' },
+  { id: 'google/gemma-4-31b-it:free', label: 'Gemma 4 31B (Free)', description: 'High quality, completely free' },
+  { id: 'stepfun/step-3.5-flash:free', label: 'Step 3.5 Flash (Free)', description: 'Fast reasoning model, completely free' },
+  { id: 'nvidia/nemotron-3-super-120b-a12b:free', label: 'Nemotron 3 Super 120B (Free)', description: 'Strong reasoning, completely free' },
+  { id: 'google/gemma-4-26b-a4b-it:free', label: 'Gemma 4 26B (Free)', description: 'Good quality, completely free' },
+  { id: 'minimax/minimax-m2.5:free', label: 'MiniMax M2.5 (Free)', description: 'Capable model, completely free' },
+  { id: 'openai/gpt-oss-120b:free', label: 'GPT-OSS 120B (Free)', description: 'OpenAI open-source, completely free' },
   { id: 'anthropic/claude-3.5-haiku', label: 'Claude 3.5 Haiku (Paid)', description: 'Best quality, requires credits (~$0.01/use)' },
   { id: 'openai/gpt-4o-mini', label: 'GPT-4o Mini (Paid)', description: 'Good quality, requires credits (~$0.01/use)' },
 ] as const;
