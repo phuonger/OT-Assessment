@@ -2108,24 +2108,7 @@ export default function ClinicalReportEditor() {
                                   <EditableCell value={row.percentDelay || '—'} overrideKey={`bayley4_${row.domainLocalId}_percentDelay`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
                                 </tr>
                               ))}
-                              {bayleyCogComposite && (
-                                <tr className="bg-blue-50 font-semibold">
-                                  <td className="border border-slate-400 px-3 py-2">Cognitive Composite</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">—</td>
-                                  <EditableCell value={bayleyCogComposite.scaledScore} overrideKey="bayley4_cogComposite_scaledScore" overrides={scoreOverrides} setOverrides={setScoreOverrides} />
-                                  <EditableCell value={`SS: ${bayleyCogComposite.standardScore}`} overrideKey="bayley4_cogComposite_standardScore" overrides={scoreOverrides} setOverrides={setScoreOverrides} />
-                                  <EditableCell value={`PR: ${bayleyCogComposite.percentile}`} overrideKey="bayley4_cogComposite_percentile" overrides={scoreOverrides} setOverrides={setScoreOverrides} />
-                                </tr>
-                              )}
-                              {bayleyMotorComposite && (
-                                <tr className="bg-green-50 font-semibold">
-                                  <td className="border border-slate-400 px-3 py-2">Motor Composite</td>
-                                  <td className="border border-slate-400 px-3 py-2 text-center">—</td>
-                                  <EditableCell value={bayleyMotorComposite.sumScaled} overrideKey="bayley4_motorComposite_scaledScore" overrides={scoreOverrides} setOverrides={setScoreOverrides} />
-                                  <EditableCell value={`SS: ${bayleyMotorComposite.standardScore}`} overrideKey="bayley4_motorComposite_standardScore" overrides={scoreOverrides} setOverrides={setScoreOverrides} />
-                                  <EditableCell value={`PR: ${bayleyMotorComposite.percentile}`} overrideKey="bayley4_motorComposite_percentile" overrides={scoreOverrides} setOverrides={setScoreOverrides} />
-                                </tr>
-                              )}
+
                             </tbody>
                           </table>
                         </div>

@@ -239,7 +239,7 @@ export const DAYC2_DOMAINS: DAYC2Domain[] = [
   },
   {
     id: 'adaptivebahavior',
-    name: 'Adaptive Bahavior',
+    name: 'Adaptive Behavior',
     items: ADAPTIVEBAHAVIOR_ITEMS,
     entryPoints: [{"label": "Birth-11 months", "startItem": 1}, {"label": "12-23 months", "startItem": 16}, {"label": "24-35 months", "startItem": 23}, {"label": "36-47 months", "startItem": 38}, {"label": "48-59 months", "startItem": 46}, {"label": "60+ months", "startItem": 51}],
   },
