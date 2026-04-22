@@ -129,7 +129,7 @@ const dayc2Form: FormDefinition = {
   domains: buildDayc2Domains(),
   getStartItem: getDayc2StartItem,
   hasStartPoints: true,
-  discontinueRule: { consecutiveZeros: 3 },
+  discontinueRule: { consecutiveZeros: 3, threshold: 1 },
   basalRule: { consecutiveMax: 5 },
 };
 
@@ -162,7 +162,7 @@ const dayc2SpForm: FormDefinition = {
   domains: buildDayc2SpDomains(),
   getStartItem: getDayc2SpStartItem,
   hasStartPoints: true,
-  discontinueRule: { consecutiveZeros: 3 },
+  discontinueRule: { consecutiveZeros: 3, threshold: 1 },
   basalRule: { consecutiveMax: 5 },
 };
 
