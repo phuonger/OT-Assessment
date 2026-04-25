@@ -61,3 +61,8 @@
 - [ ] Add route and navigation entry point from assessment completion
 - [ ] Create generateOTFeedingDocx function matching template format
 - [ ] Test and checkpoint
+
+## Sensory Profile 2 Fixes (Current)
+- [ ] Sidebar: Only show selected SP2 version (not all 3) based on child age / user selection
+- [ ] Clinical Report: Pull actual SP2 quadrant and section scores into the report tables
+- [ ] Clinical Report: Generate meaningful narratives from SP2 scored items (not generic placeholders)

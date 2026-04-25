@@ -181,9 +181,23 @@ export default function MultiStepSetup() {
         ? autoSelectAgeRange(formId, age.months, age.days, age.totalDays, form)
         : form.ageRanges[0]?.label || '';
 
+      // For SP2, auto-select only the matching version domain (not all 3)
+      let selectedDomainIds = form.domains.map(d => d.localId);
+      if (formId === 'sp2') {
+        const sectionMap: Record<string, string> = {
+          'Birth to 6 months': 'birth6mo',
+          '7+ months (English)': 'english',
+          '7+ months (Spanish)': 'spanish',
+        };
+        const matchedDomain = sectionMap[ageLabel];
+        if (matchedDomain) {
+          selectedDomainIds = [matchedDomain];
+        }
+      }
+
       return {
         formId,
-        selectedDomainIds: form.domains.map(d => d.localId),
+        selectedDomainIds,
         ageRangeLabel: ageLabel,
       };
     });

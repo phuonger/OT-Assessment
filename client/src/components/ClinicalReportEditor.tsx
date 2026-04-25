@@ -598,6 +598,7 @@ const SECTION_LABELS: Record<string, string> = {
   touch: 'Touch Processing',
   movement: 'Movement Processing',
   oral: 'Oral-Sensory Processing',
+  oralsensory: 'Oral-Sensory Processing',
   behavioral: 'Behavioral Responses',
 };
 
@@ -630,17 +631,18 @@ function computeSP2Scores(
   for (const item of domain.items) {
     const score = ds.scores[item.number];
     if (score === null || score === undefined) continue;
-    // Items have a quadrant field from the SP2 data
-    const quadrantAbbr = (item as any).quadrant || '';
+    const quadrantAbbr = item.quadrant || '';
     const quadrantKey = SP2_QUADRANT_MAP[quadrantAbbr] || SP2_QUADRANT_MAP[quadrantAbbr.replace(/\./g, '')] || '';
     if (quadrantKey && quadrantKey !== 'none' && quadrantTotals[quadrantKey] !== undefined) {
       quadrantTotals[quadrantKey] += score;
     }
   }
 
-  // Compute section scores by item number ranges (Toddler SP2 standard ranges)
+  // Compute section scores by item number ranges
+  // Birth-6mo: 25 items total, English/Spanish: 54 items total
+  // Note: Birth-6mo uses 'oralsensory' key in cutoffs, English uses 'oral'
   const sectionRanges: Record<string, [number, number]> = isBirth6mo
-    ? { general: [1, 10], auditory: [11, 16], visual: [17, 22], touch: [23, 28], movement: [29, 33], oral: [34, 38], behavioral: [39, 44] }
+    ? { general: [1, 10], auditory: [11, 16], visual: [17, 19], touch: [20, 21], movement: [22, 23], oralsensory: [24, 25] }
     : { general: [1, 10], auditory: [11, 17], visual: [18, 23], touch: [24, 29], movement: [30, 34], oral: [35, 41], behavioral: [42, 48] };
 
   const quadrants: SP2QuadrantScore[] = [];
@@ -654,12 +656,13 @@ function computeSP2Scores(
   }
 
   const sections: SP2SectionScore[] = [];
-  const sCutoffs = (cutoffsData as any).sections || {};
-  for (const [key, label] of Object.entries(SECTION_LABELS)) {
-    const range = sectionRanges[key];
-    if (!range) continue;
+  // For Birth-6mo, cutoffs are flat (no .sections wrapper); for English they're under .sections
+  const sCutoffs = isBirth6mo ? (cutoffsData as any) : (cutoffsData as any).sections || {};
+  // Iterate over the section ranges (which are version-specific) rather than fixed SECTION_LABELS
+  for (const [key, range] of Object.entries(sectionRanges)) {
+    const label = SECTION_LABELS[key] || key;
     let raw = 0;
-    for (let n = range[0]; n <= range[1]; n++) {
+    for (let n = (range as [number, number])[0]; n <= (range as [number, number])[1]; n++) {
       const score = ds.scores[n];
       if (score !== null && score !== undefined) raw += score;
     }
@@ -2627,7 +2630,21 @@ export default function ClinicalReportEditor() {
                         {/* Quadrant Narratives */}
                         <div className="space-y-3">
                           {sp2Scores.quadrants.map(q => {
-                            const defaultNarrative = `${firstName} ${q.description.toLowerCase().includes('just like') ? 'uses sensory input just like the majority of others' : q.description.toLowerCase().includes('more') ? `demonstrates ${q.description.toLowerCase()} sensory ${q.key} behaviors compared to peers` : `demonstrates ${q.description.toLowerCase()} sensory ${q.key} behaviors`} to ${q.key === 'seeking' ? 'gather information necessary for participation' : q.key === 'avoiding' ? 'manage sensory input for participation' : q.key === 'sensitivity' ? 'detect sensory input that enables participation' : 'notice sensory input to support participation'}.`;
+                            // Build clinically meaningful default narrative based on quadrant score and description
+                            const quadrantPurpose = q.key === 'seeking' ? 'gather information necessary for participation' : q.key === 'avoiding' ? 'manage sensory input for participation' : q.key === 'sensitivity' ? 'detect sensory input that enables participation' : 'notice sensory input to support participation';
+                            const isTypical = q.description.toLowerCase().includes('just like');
+                            const isMore = q.description.toLowerCase().includes('more');
+                            const isLess = q.description.toLowerCase().includes('less');
+                            let defaultNarrative: string;
+                            if (isTypical) {
+                              defaultNarrative = `${firstName} scored in the "Just Like the Majority of Others" range for ${q.name} (${q.rawScore}/${q.maxScore}), indicating ${pronoun(gender, 'subject')} ${q.key === 'seeking' ? 'seeks sensory experiences' : q.key === 'avoiding' ? 'avoids sensory input' : q.key === 'sensitivity' ? 'responds to sensory input' : 'registers sensory input'} at a rate comparable to same-aged peers to ${quadrantPurpose}.`;
+                            } else if (isMore) {
+                              defaultNarrative = `${firstName} scored in the "${q.description}" range for ${q.name} (${q.rawScore}/${q.maxScore}), suggesting ${pronoun(gender, 'subject')} demonstrates a heightened pattern of sensory ${q.key} behaviors compared to same-aged peers. This may impact ${pronoun(gender, 'possessive')} ability to ${quadrantPurpose} in daily activities and routines.`;
+                            } else if (isLess) {
+                              defaultNarrative = `${firstName} scored in the "${q.description}" range for ${q.name} (${q.rawScore}/${q.maxScore}), suggesting ${pronoun(gender, 'subject')} demonstrates fewer sensory ${q.key} behaviors compared to same-aged peers. This pattern may affect ${pronoun(gender, 'possessive')} engagement in activities that require ${q.key === 'seeking' ? 'active exploration of the environment' : q.key === 'avoiding' ? 'managing overwhelming sensory experiences' : q.key === 'sensitivity' ? 'noticing and responding to sensory changes' : 'awareness of sensory input in the environment'}.`;
+                            } else {
+                              defaultNarrative = `${firstName} demonstrates sensory ${q.key} behaviors (${q.rawScore}/${q.maxScore}) to ${quadrantPurpose}.`;
+                            }
                             const currentNarrative = quadrantNarratives[q.key] ?? defaultNarrative;
                             return (
                               <div key={q.key} className="border-l-2 border-red-400 pl-3">
@@ -2672,7 +2689,19 @@ export default function ClinicalReportEditor() {
                         {/* Section Narratives */}
                         <div className="space-y-3">
                           {sp2Scores.sections.map(s => {
-                            const defaultNarrative = `(${s.description}) ${firstName}'s ${s.name.toLowerCase()} processing appears to be ${s.description.toLowerCase().includes('just like') ? 'within functional limits' : s.description.toLowerCase().includes('more') ? 'an area of concern' : 'within expected range'}.`;
+                            const isTypical = s.description.toLowerCase().includes('just like');
+                            const isMore = s.description.toLowerCase().includes('more');
+                            const isLess = s.description.toLowerCase().includes('less');
+                            let defaultNarrative: string;
+                            if (isTypical) {
+                              defaultNarrative = `${firstName}'s ${s.name.toLowerCase()} skills scored in the "Just Like the Majority of Others" range (${s.rawScore}/${s.maxScore}), indicating ${pronoun(gender, 'possessive')} ${s.name.toLowerCase()} abilities are within functional limits compared to same-aged peers.`;
+                            } else if (isMore) {
+                              defaultNarrative = `${firstName}'s ${s.name.toLowerCase()} skills scored in the "${s.description}" range (${s.rawScore}/${s.maxScore}), suggesting this is an area of concern. ${Pronoun(gender, 'subject')} may demonstrate heightened or increased responses to ${s.key === 'general' ? 'everyday sensory experiences' : s.key === 'auditory' ? 'auditory input such as sounds and voices' : s.key === 'visual' ? 'visual stimuli in the environment' : s.key === 'touch' ? 'tactile input and textures' : s.key === 'movement' ? 'vestibular and movement-based activities' : s.key === 'oral' || s.key === 'oralsensory' ? 'oral-sensory input related to feeding and oral exploration' : 'behavioral regulation and emotional responses'} that may impact daily participation.`;
+                            } else if (isLess) {
+                              defaultNarrative = `${firstName}'s ${s.name.toLowerCase()} skills scored in the "${s.description}" range (${s.rawScore}/${s.maxScore}), indicating ${pronoun(gender, 'subject')} may show reduced responsiveness to ${s.key === 'general' ? 'everyday sensory experiences' : s.key === 'auditory' ? 'auditory input' : s.key === 'visual' ? 'visual stimuli' : s.key === 'touch' ? 'tactile input' : s.key === 'movement' ? 'movement-based activities' : s.key === 'oral' || s.key === 'oralsensory' ? 'oral-sensory input' : 'behavioral cues'} compared to same-aged peers.`;
+                            } else {
+                              defaultNarrative = `${firstName}'s ${s.name.toLowerCase()} processing (${s.rawScore}/${s.maxScore}) appears to be within expected range.`;
+                            }
                             const currentNarrative = sectionNarratives[s.key] ?? defaultNarrative;
                             return (
                               <div key={s.key} className="border-l-2 border-red-400 pl-3">

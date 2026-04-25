@@ -23,6 +23,7 @@ export interface UnifiedItem {
   caregiverQuestion?: string;
   scoringCriteria?: { score: number; label: string; description: string }[];
   sectionId?: string; // for Sensory Profile grouping
+  quadrant?: string;  // for Sensory Profile 2 quadrant mapping (e.g. 'S.K.', 'A.V.', 'S.N.', 'R.G.')
 }
 
 export interface UnifiedDomain {
@@ -213,6 +214,7 @@ function buildSP2Domains(): UnifiedDomain[] {
       number: item.number,
       description: item.description,
       sectionId: section.id,
+      quadrant: item.quadrant,
     })),
     scoringType: 'likert5' as ScoringType,
     maxScorePerItem: 5,
