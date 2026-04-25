@@ -1779,8 +1779,49 @@ export default function ClinicalReportEditor() {
         validityStatement,
         sp2Quadrants: sp2Scores.quadrants,
         sp2Sections: sp2Scores.sections,
-        quadrantNarratives,
-        sectionNarratives,
+        quadrantNarratives: (() => {
+          // Build default narratives for any quadrant not manually edited
+          const merged: Record<string, string> = { ...quadrantNarratives };
+          for (const q of sp2Scores.quadrants) {
+            if (!merged[q.key]) {
+              const quadrantPurpose = q.key === 'seeking' ? 'gather information necessary for participation' : q.key === 'avoiding' ? 'manage sensory input for participation' : q.key === 'sensitivity' ? 'detect sensory input that enables participation' : 'notice sensory input to support participation';
+              const isTypical = q.description.toLowerCase().includes('just like');
+              const isMore = q.description.toLowerCase().includes('more');
+              const isLess = q.description.toLowerCase().includes('less');
+              if (isTypical) {
+                merged[q.key] = `${firstName} scored in the "Just Like the Majority of Others" range for ${q.name} (${q.rawScore}/${q.maxScore}), indicating ${pronoun(gender, 'subject')} ${q.key === 'seeking' ? 'seeks sensory experiences' : q.key === 'avoiding' ? 'avoids sensory input' : q.key === 'sensitivity' ? 'responds to sensory input' : 'registers sensory input'} at a rate comparable to same-aged peers to ${quadrantPurpose}.`;
+              } else if (isMore) {
+                merged[q.key] = `${firstName} scored in the "${q.description}" range for ${q.name} (${q.rawScore}/${q.maxScore}), suggesting ${pronoun(gender, 'subject')} demonstrates a heightened pattern of sensory ${q.key} behaviors compared to same-aged peers. This may impact ${pronoun(gender, 'possessive')} ability to ${quadrantPurpose} in daily activities and routines.`;
+              } else if (isLess) {
+                merged[q.key] = `${firstName} scored in the "${q.description}" range for ${q.name} (${q.rawScore}/${q.maxScore}), suggesting ${pronoun(gender, 'subject')} demonstrates fewer sensory ${q.key} behaviors compared to same-aged peers. This pattern may affect ${pronoun(gender, 'possessive')} engagement in activities that require ${q.key === 'seeking' ? 'active exploration of the environment' : q.key === 'avoiding' ? 'managing overwhelming sensory experiences' : q.key === 'sensitivity' ? 'noticing and responding to sensory changes' : 'awareness of sensory input in the environment'}.`;
+              } else {
+                merged[q.key] = `${firstName} demonstrates sensory ${q.key} behaviors (${q.rawScore}/${q.maxScore}) to ${quadrantPurpose}.`;
+              }
+            }
+          }
+          return merged;
+        })(),
+        sectionNarratives: (() => {
+          // Build default narratives for any section not manually edited
+          const merged: Record<string, string> = { ...sectionNarratives };
+          for (const s of sp2Scores.sections) {
+            if (!merged[s.key]) {
+              const isTypical = s.description.toLowerCase().includes('just like');
+              const isMore = s.description.toLowerCase().includes('more');
+              const isLess = s.description.toLowerCase().includes('less');
+              if (isTypical) {
+                merged[s.key] = `${firstName}'s ${s.name.toLowerCase()} skills scored in the "Just Like the Majority of Others" range (${s.rawScore}/${s.maxScore}), indicating ${pronoun(gender, 'possessive')} ${s.name.toLowerCase()} abilities are within functional limits compared to same-aged peers.`;
+              } else if (isMore) {
+                merged[s.key] = `${firstName}'s ${s.name.toLowerCase()} skills scored in the "${s.description}" range (${s.rawScore}/${s.maxScore}), suggesting this is an area of concern. ${Pronoun(gender, 'subject')} may demonstrate heightened or increased responses to ${s.key === 'general' ? 'everyday sensory experiences' : s.key === 'auditory' ? 'auditory input such as sounds and voices' : s.key === 'visual' ? 'visual stimuli in the environment' : s.key === 'touch' ? 'tactile input and textures' : s.key === 'movement' ? 'vestibular and movement-based activities' : s.key === 'oral' || s.key === 'oralsensory' ? 'oral-sensory input related to feeding and oral exploration' : 'behavioral regulation and emotional responses'} that may impact daily participation.`;
+              } else if (isLess) {
+                merged[s.key] = `${firstName}'s ${s.name.toLowerCase()} skills scored in the "${s.description}" range (${s.rawScore}/${s.maxScore}), indicating ${pronoun(gender, 'subject')} may show reduced responsiveness to ${s.key === 'general' ? 'everyday sensory experiences' : s.key === 'auditory' ? 'auditory input' : s.key === 'visual' ? 'visual stimuli' : s.key === 'touch' ? 'tactile input' : s.key === 'movement' ? 'movement-based activities' : s.key === 'oral' || s.key === 'oralsensory' ? 'oral-sensory input' : 'behavioral cues'} compared to same-aged peers.`;
+              } else {
+                merged[s.key] = `${firstName}'s ${s.name.toLowerCase()} processing (${s.rawScore}/${s.maxScore}) appears to be within expected range.`;
+              }
+            }
+          }
+          return merged;
+        })(),
 
         // Feeding template
         feedingTestingConditions,
