@@ -643,7 +643,7 @@ function computeSP2Scores(
   // Note: Birth-6mo uses 'oralsensory' key in cutoffs, English uses 'oral'
   const sectionRanges: Record<string, [number, number]> = isBirth6mo
     ? { general: [1, 10], auditory: [11, 16], visual: [17, 19], touch: [20, 21], movement: [22, 23], oralsensory: [24, 25] }
-    : { general: [1, 10], auditory: [11, 17], visual: [18, 23], touch: [24, 29], movement: [30, 34], oral: [35, 41], behavioral: [42, 48] };
+    : { general: [1, 10], auditory: [11, 17], visual: [18, 23], touch: [26, 31], movement: [36, 40], oral: [42, 48], behavioral: [49, 54] };
 
   const quadrants: SP2QuadrantScore[] = [];
   const qCutoffs = (cutoffsData as any).quadrants || {};
