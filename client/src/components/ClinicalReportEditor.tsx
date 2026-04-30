@@ -1388,11 +1388,27 @@ export default function ClinicalReportEditor() {
         onAfterCapture: () => setCollapsedSections(prevCollapsed),
       });
       toast.success('PDF downloaded successfully');
+
+      // Auto-save session as completed so it appears in history/dashboard
+      try {
+        const { getAllMultiSessions } = await import('@/lib/multiSessionStorage');
+        const existingSessions = getAllMultiSessions();
+        const cName = [state.childInfo.firstName, state.childInfo.lastName].filter(Boolean).join(' ').trim();
+        const recentCompleted = existingSessions.find(
+          (s: any) => s.status === 'completed' && s.childName === cName && s.testDate === state.childInfo.testDate
+            && (Date.now() - new Date(s.savedAt).getTime()) < 300000
+        );
+        if (!recentCompleted) {
+          saveMultiSession(state, 'completed', `Report exported ${new Date().toLocaleDateString()}`);
+        }
+      } catch (saveErr) {
+        console.error('Auto-save after PDF export failed:', saveErr);
+      }
     } catch (err) {
       console.error('PDF export error:', err);
       toast.error('Failed to generate PDF');
     }
-  }, [collapsedSections, childName, template]);
+  }, [collapsedSections, childName, template, state]);
 
   const handleManualSave = useCallback(() => {
     saveReport();
@@ -1865,6 +1881,23 @@ export default function ClinicalReportEditor() {
 
       await generateDocxReport(data);
       toast.success('Word document downloaded successfully');
+
+      // Auto-save session as completed so it appears in history/dashboard
+      // Only save if not already saved recently (avoid duplicates)
+      try {
+        const { getAllMultiSessions } = await import('@/lib/multiSessionStorage');
+        const existingSessions = getAllMultiSessions();
+        const childName = [state.childInfo.firstName, state.childInfo.lastName].filter(Boolean).join(' ').trim();
+        const recentCompleted = existingSessions.find(
+          (s: any) => s.status === 'completed' && s.childName === childName && s.testDate === state.childInfo.testDate
+            && (Date.now() - new Date(s.savedAt).getTime()) < 300000 // within last 5 minutes
+        );
+        if (!recentCompleted) {
+          saveMultiSession(state, 'completed', `Report exported ${new Date().toLocaleDateString()}`);
+        }
+      } catch (saveErr) {
+        console.error('Auto-save after export failed:', saveErr);
+      }
     } catch (err) {
       console.error('DOCX export error:', err);
       toast.error('Failed to generate Word document');
@@ -1987,13 +2020,8 @@ export default function ClinicalReportEditor() {
                 dispatch({ type: 'NEW_ASSESSMENT' });
                 return;
               }
-              if (confirm('Start a new assessment?\n\nThe current assessment will be auto-saved to your history before starting a new one.')) {
-                try {
-                  saveMultiSession(state, 'in-progress', 'Auto-saved before new assessment');
-                  toast.success('Current assessment auto-saved to history');
-                } catch (e) {
-                  console.error('Auto-save failed:', e);
-                }
+              if (confirm('Start a new assessment?')) {
+                // Skip auto-save: user is on report page, assessment is already completed/saved
                 dispatch({ type: 'NEW_ASSESSMENT' });
               }
             }} className="text-teal-700">

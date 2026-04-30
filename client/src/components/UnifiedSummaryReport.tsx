@@ -132,11 +132,15 @@ export default function UnifiedSummaryReport() {
     );
     if (choice) {
       // Auto-save current assessment before clearing
-      try {
-        saveMultiSession(state, 'in-progress', 'Auto-saved before new assessment');
-        toast.success('Current assessment auto-saved to history');
-      } catch (e) {
-        console.error('Auto-save failed:', e);
+      // Skip if the assessment was already saved as completed (avoid duplicates)
+      const isAlreadySaved = state.phase === 'summary' || state.phase === 'report';
+      if (!isAlreadySaved) {
+        try {
+          saveMultiSession(state, 'in-progress', 'Auto-saved before new assessment');
+          toast.success('Current assessment auto-saved to history');
+        } catch (e) {
+          console.error('Auto-save failed:', e);
+        }
       }
       dispatch({ type: 'NEW_ASSESSMENT' });
     }

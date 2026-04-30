@@ -135,7 +135,18 @@ export default function AllAssessments() {
   const handleLoadSession = (session: SavedMultiSession) => {
     if (selectMode) return;
     if (session.stateSnapshot) {
-      dispatch({ type: 'LOAD_STATE', payload: { ...session.stateSnapshot, timerRunning: false } });
+      // Determine the correct phase to navigate to:
+      // - Completed sessions → summary (so user can view/export report)
+      // - In-progress sessions → assessment (so user can continue scoring)
+      // Never restore to 'dashboard', 'welcome', 'allAssessments' as that appears unresponsive
+      let targetPhase = session.stateSnapshot.phase;
+      if (session.status === 'completed') {
+        targetPhase = 'summary';
+      } else if (targetPhase === 'dashboard' || targetPhase === 'welcome' || targetPhase === 'allAssessments') {
+        const hasFormData = Object.keys(session.stateSnapshot.formStates || {}).length > 0;
+        targetPhase = hasFormData ? 'assessment' : 'childInfo';
+      }
+      dispatch({ type: 'LOAD_STATE', payload: { ...session.stateSnapshot, phase: targetPhase, timerRunning: false } });
     }
   };
 
@@ -208,12 +219,22 @@ export default function AllAssessments() {
 
   const handleNewAssessment = () => {
     // Auto-save current in-progress assessment if it has data
+    // Skip if already on summary/report (assessment already completed, avoid duplicates)
     const hasData = state.childInfo.firstName || state.childInfo.lastName;
-    if (hasData) {
-      try {
-        saveMultiSession(state, 'in-progress', 'Auto-saved before new assessment');
-      } catch (e) {
-        console.error('Auto-save failed:', e);
+    const isAlreadySaved = state.phase === 'summary' || state.phase === 'report';
+    if (hasData && !isAlreadySaved) {
+      // Check if a completed session for this child+date already exists recently
+      const childName = [state.childInfo.firstName, state.childInfo.lastName].filter(Boolean).join(' ').trim();
+      const recentCompleted = sessions.find(
+        s => s.status === 'completed' && s.childName === childName && s.testDate === state.childInfo.testDate
+          && (Date.now() - new Date(s.savedAt).getTime()) < 120000
+      );
+      if (!recentCompleted) {
+        try {
+          saveMultiSession(state, 'in-progress', 'Auto-saved before new assessment');
+        } catch (e) {
+          console.error('Auto-save failed:', e);
+        }
       }
     }
     dispatch({ type: 'NEW_ASSESSMENT' });

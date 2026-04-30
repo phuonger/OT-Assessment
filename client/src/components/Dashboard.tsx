@@ -81,19 +81,37 @@ export default function Dashboard() {
   const recentSessions = useMemo(() => sessions.slice(0, 5), [sessions]);
   const hasMore = sessions.length > 5;
 
-  // Refresh sessions list whenever the component re-renders (e.g., after navigation)
+  // Refresh sessions list whenever the component mounts or phase changes
+  // This ensures the list is always fresh when returning to the dashboard
   useEffect(() => {
     setSessions(getAllMultiSessions());
   }, [state.phase]);
 
+  // Also refresh on window focus (in case save happened in another context)
+  useEffect(() => {
+    const handleFocus = () => setSessions(getAllMultiSessions());
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
+
   const handleNewAssessment = () => {
     // Auto-save current in-progress assessment if it has data
+    // BUT skip if the user already saved this assessment as completed (avoid duplicates)
     const hasData = state.childInfo.firstName || state.childInfo.lastName;
-    if (hasData) {
-      try {
-        saveMultiSession(state, 'in-progress', 'Auto-saved before new assessment');
-      } catch (e) {
-        console.error('Auto-save failed:', e);
+    const isAlreadySaved = state.phase === 'summary' || state.phase === 'report';
+    if (hasData && !isAlreadySaved) {
+      // Also check if a completed session for this child+date already exists recently
+      const childName = [state.childInfo.firstName, state.childInfo.lastName].filter(Boolean).join(' ').trim();
+      const recentCompleted = sessions.find(
+        s => s.status === 'completed' && s.childName === childName && s.testDate === state.childInfo.testDate
+          && (Date.now() - new Date(s.savedAt).getTime()) < 120000 // within last 2 minutes
+      );
+      if (!recentCompleted) {
+        try {
+          saveMultiSession(state, 'in-progress', 'Auto-saved before new assessment');
+        } catch (e) {
+          console.error('Auto-save failed:', e);
+        }
       }
     }
     dispatch({ type: 'NEW_ASSESSMENT' });
@@ -103,7 +121,19 @@ export default function Dashboard() {
 
   const handleLoadSession = (session: SavedMultiSession) => {
     if (session.stateSnapshot) {
-      dispatch({ type: 'LOAD_STATE', payload: { ...session.stateSnapshot, timerRunning: false } });
+      // Determine the correct phase to navigate to:
+      // - Completed sessions → summary (so user can view/export report)
+      // - In-progress sessions → assessment (so user can continue scoring)
+      // Never restore to 'dashboard', 'welcome', 'allAssessments' as that appears unresponsive
+      let targetPhase = session.stateSnapshot.phase;
+      if (session.status === 'completed') {
+        targetPhase = 'summary';
+      } else if (targetPhase === 'dashboard' || targetPhase === 'welcome' || targetPhase === 'allAssessments') {
+        // In-progress session saved from dashboard context — go to assessment if it has form data
+        const hasFormData = Object.keys(session.stateSnapshot.formStates || {}).length > 0;
+        targetPhase = hasFormData ? 'assessment' : 'childInfo';
+      }
+      dispatch({ type: 'LOAD_STATE', payload: { ...session.stateSnapshot, phase: targetPhase, timerRunning: false } });
     }
   };
 
