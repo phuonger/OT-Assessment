@@ -158,6 +158,13 @@ export interface DocxReportData {
   quadrantNarratives: Record<string, string>;
   sectionNarratives: Record<string, string>;
 
+  // Signature / credentials
+  signatureName?: string;
+  signatureTitle?: string;
+  signatureLicense?: string;
+  signatureEmail?: string;
+  signatureImage?: string; // base64 data URI
+
   // Feeding template
   feedingTestingConditions?: string;
   feedingOralStructures?: string;
@@ -1502,77 +1509,8 @@ export async function generateDocxReport(data: DocxReportData): Promise<void> {
       children.push(bodyParagraph(data.feedingDrinking));
     }
 
-    // VII. Sensory Processing
-    children.push(heading('Sensory Processing', 'VII'));
-
-    // a. Vestibular
-    children.push(
-      new Paragraph({
-        spacing: { before: 200, after: 60 },
-        children: [new TextRun({ text: 'a. Vestibular Processing and Modulation', bold: true, font: FONT, size: FONT_SIZE })],
-      })
-    );
-    children.push(
-      bodyParagraph(
-        'The vestibular system is located in the inner ear and has the primary function of giving the brain information about head position and movement in relation to gravity. It is responsible in part for head stability, muscle tone, postural control, balance and equilibrium reaction and the development of eye-hand coordination and bilateral integration.',
-        { italic: true }
-      )
-    );
-    children.push(bodyParagraph(data.feedingVestibular || ''));
-
-    // b. Proprioceptive
-    children.push(
-      new Paragraph({
-        spacing: { before: 200, after: 60 },
-        children: [new TextRun({ text: 'b. Proprioceptive Processing and Modulation', bold: true, font: FONT, size: FONT_SIZE })],
-      })
-    );
-    children.push(
-      bodyParagraph(
-        'The proprioceptive system is a system of receptors found in the joints and muscle tissues that gives an internal awareness of limb and body position, position relative to the environment, information about joint and muscle movement, as well as the force and speed at which the muscles are moving.',
-        { italic: true }
-      )
-    );
-    children.push(bodyParagraph(data.feedingProprioceptive || ''));
-
-    // c. Tactile
-    children.push(
-      new Paragraph({
-        spacing: { before: 200, after: 60 },
-        children: [new TextRun({ text: 'c. Tactile Processing and Modulation', bold: true, font: FONT, size: FONT_SIZE })],
-      })
-    );
-    children.push(
-      bodyParagraph(
-        'The sense of touch. The tactile system is involved with the identification and localization of touch and the discrimination of shapes, sizes, and textures of materials.',
-        { italic: true }
-      )
-    );
-    children.push(bodyParagraph(data.feedingTactile || ''));
-
-    // VIII. Neuromuscular / Musculoskeletal
-    children.push(heading('Neuromuscular / Musculoskeletal', 'VIII'));
-
-    const neuroItems = [
-      { label: 'Range of Motion', value: data.feedingROM || 'Within Functional Limits' },
-      { label: 'Muscle Strength Based on Clinical Observation During Play', value: data.feedingMuscleStrength || 'Within Functional Limits' },
-      { label: 'Muscle Tone', value: data.feedingMuscleTone || '' },
-      { label: 'Postural Stability', value: data.feedingPosturalStability || '' },
-    ];
-    for (const item of neuroItems) {
-      children.push(
-        new Paragraph({
-          spacing: { before: 80, after: 80 },
-          children: [
-            new TextRun({ text: `${item.label}: `, bold: true, font: FONT, size: FONT_SIZE }),
-            new TextRun({ text: item.value, font: FONT, size: FONT_SIZE }),
-          ],
-        })
-      );
-    }
-
-    // IX. Summary
-    children.push(heading('Summary', 'IX'));
+    // VII. Summary and Recommendations
+    children.push(heading('Summary and Recommendations', 'VII'));
     children.push(bodyParagraph(data.feedingSummary || ''));
 
     // Appendix: Feeding Evaluation Checklist Data
@@ -1855,46 +1793,85 @@ export async function generateDocxReport(data: DocxReportData): Promise<void> {
   );
   children.push(bodyParagraph(data.closingNote));
 
-  // ===== SIGNATURE =====
+  // ===== SIGNATURE & CREDENTIALS =====
   children.push(new Paragraph({ spacing: { before: 400 }, children: [] }));
+
+  // Signature line (blank line for hand-signing)
   children.push(
     new Paragraph({
       spacing: { before: 200, after: 20 },
-      border: { top: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC', space: 8 } },
-      children: [
-        new TextRun({
-          text: data.examinerName,
-          font: FONT,
-          size: FONT_SIZE,
-        }),
-      ],
+      border: { bottom: { style: BorderStyle.SINGLE, size: 1, color: '999999', space: 8 } },
+      children: [new TextRun({ text: '\t\t\t\t\t\t\t', font: FONT, size: FONT_SIZE })],
     })
   );
+
+  // Name + credentials
+  const sigName = data.signatureName || data.examinerName;
+  const sigTitle = data.signatureTitle || data.examinerTitle;
   children.push(
     new Paragraph({
-      spacing: { after: 20 },
+      spacing: { before: 100, after: 20 },
       children: [
         new TextRun({
-          text: data.examinerTitle,
+          text: sigTitle ? `${sigName}, ${sigTitle}` : sigName,
           font: FONT,
           size: FONT_SIZE,
-          color: '666666',
+          bold: true,
         }),
       ],
     })
   );
-  children.push(
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: data.examinerAgency,
-          font: FONT,
-          size: FONT_SIZE,
-          color: '666666',
-        }),
-      ],
-    })
-  );
+
+  // License number
+  if (data.signatureLicense) {
+    children.push(
+      new Paragraph({
+        spacing: { after: 20 },
+        children: [
+          new TextRun({
+            text: data.signatureLicense,
+            font: FONT,
+            size: FONT_SIZE,
+            color: '666666',
+          }),
+        ],
+      })
+    );
+  }
+
+  // Email
+  if (data.signatureEmail) {
+    children.push(
+      new Paragraph({
+        spacing: { after: 20 },
+        children: [
+          new TextRun({
+            text: data.signatureEmail,
+            font: FONT,
+            size: FONT_SIZE,
+            color: '666666',
+          }),
+        ],
+      })
+    );
+  }
+
+  // Fallback: agency if no signature fields configured
+  if (!data.signatureName && !data.signatureTitle && !data.signatureLicense) {
+    children.push(
+      new Paragraph({
+        spacing: { after: 20 },
+        children: [
+          new TextRun({
+            text: data.examinerAgency,
+            font: FONT,
+            size: FONT_SIZE,
+            color: '666666',
+          }),
+        ],
+      })
+    );
+  }
 
   // ===== CREATE DOCUMENT =====
   const doc = new Document({

@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   ArrowLeft, Settings, Building2, Stethoscope, FileText,
   Save, RotateCcw, ImagePlus, Trash2, Check, Plus, GripVertical,
-  BookmarkPlus, Pencil, Sparkles, Eye, EyeOff, ExternalLink
+  BookmarkPlus, Pencil, Sparkles, Eye, EyeOff, ExternalLink, PenLine
 } from 'lucide-react';
 import {
   getApiKey, setApiKey as saveApiKey,
@@ -49,6 +49,13 @@ export interface AppSettings {
   defaultExaminerTitle: string;
   defaultExaminerAgency: string;
 
+  // Signature / credentials block (end of report)
+  signatureName: string;
+  signatureTitle: string; // e.g., "OTR/L"
+  signatureLicense: string; // e.g., "CA License #12345"
+  signatureEmail: string;
+  signatureImage: string; // base64 data URI or empty (uploaded signature image)
+
   // Report preferences
   defaultReportTemplate: 'developmental' | 'sensory' | 'auto';
 
@@ -70,6 +77,11 @@ const defaultSettings: AppSettings = {
   defaultExaminerName: '',
   defaultExaminerTitle: '',
   defaultExaminerAgency: '',
+  signatureName: '',
+  signatureTitle: '',
+  signatureLicense: '',
+  signatureEmail: '',
+  signatureImage: '',
   defaultReportTemplate: 'auto',
   recommendationTemplates: [],
   savedAt: '',
@@ -639,6 +651,167 @@ export default function SettingsPreferences({ onBack }: { onBack: () => void }) 
           </div>
         </section>
 
+
+        {/* Signature / Credentials */}
+        <section>
+          <div className="flex items-center gap-2 mb-4">
+            <PenLine className="w-5 h-5 text-[#0D7377]" />
+            <h2 className="text-lg font-semibold text-[#2C2C2C]">Report Signature & Credentials</h2>
+          </div>
+          <p className="text-sm text-[#6B6B6B] mb-4">
+            This information will appear at the end of every report. You can upload a signature image or leave it blank to sign by hand after printing.
+          </p>
+          <div className="bg-white rounded-lg border border-[#E5E1D8] p-6 space-y-4">
+            <div>
+              <Label htmlFor="signatureName">Full Name</Label>
+              <Input
+                id="signatureName"
+                value={settings.signatureName}
+                onChange={e => update('signatureName', e.target.value)}
+                placeholder="e.g., Jane Smith"
+                className="mt-1"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="signatureTitle">Title / Credentials</Label>
+                <Input
+                  id="signatureTitle"
+                  value={settings.signatureTitle}
+                  onChange={e => update('signatureTitle', e.target.value)}
+                  placeholder="e.g., OTR/L, OTD"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="signatureLicense">License Number</Label>
+                <Input
+                  id="signatureLicense"
+                  value={settings.signatureLicense}
+                  onChange={e => update('signatureLicense', e.target.value)}
+                  placeholder="e.g., CA OT License #12345"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="signatureEmail">Email</Label>
+              <Input
+                id="signatureEmail"
+                value={settings.signatureEmail}
+                onChange={e => update('signatureEmail', e.target.value)}
+                placeholder="e.g., jane@practice.com"
+                className="mt-1"
+              />
+            </div>
+
+            {/* Signature Image Upload */}
+            <div>
+              <Label>Signature Image (optional)</Label>
+              <p className="text-xs text-[#8B8B8B] mt-0.5 mb-2">
+                Upload a PNG or JPG of your signature (max 500 KB). Leave blank to sign by hand after printing.
+              </p>
+              <div className="flex items-start gap-4">
+                {settings.signatureImage ? (
+                  <div className="relative group">
+                    <div className="w-48 h-20 rounded-lg border border-[#E5E1D8] bg-white flex items-center justify-center overflow-hidden">
+                      <img
+                        src={settings.signatureImage}
+                        alt="Signature"
+                        className="max-w-full max-h-full object-contain p-1"
+                      />
+                    </div>
+                    <button
+                      onClick={() => update('signatureImage', '')}
+                      className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Remove signature"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.onchange = (e) => {
+                        const file = (e.target as HTMLInputElement).files?.[0];
+                        if (!file) return;
+                        if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); return; }
+                        if (file.size > 500 * 1024) { toast.error('Image must be under 500 KB'); return; }
+                        const reader = new FileReader();
+                        reader.onload = () => update('signatureImage', reader.result as string);
+                        reader.readAsDataURL(file);
+                      };
+                      input.click();
+                    }}
+                    className="w-48 h-20 rounded-lg border-2 border-dashed border-[#E5E1D8] hover:border-[#0D7377] bg-white flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer"
+                  >
+                    <ImagePlus className="w-5 h-5 text-[#8B8B8B]" />
+                    <span className="text-xs text-[#8B8B8B]">Upload Signature</span>
+                  </button>
+                )}
+                {settings.signatureImage && (
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = 'image/*';
+                        input.onchange = (e) => {
+                          const file = (e.target as HTMLInputElement).files?.[0];
+                          if (!file) return;
+                          if (!file.type.startsWith('image/')) { toast.error('Please select an image file'); return; }
+                          if (file.size > 500 * 1024) { toast.error('Image must be under 500 KB'); return; }
+                          const reader = new FileReader();
+                          reader.onload = () => update('signatureImage', reader.result as string);
+                          reader.readAsDataURL(file);
+                        };
+                        input.click();
+                      }}
+                      className="gap-1.5"
+                    >
+                      <ImagePlus className="w-3.5 h-3.5" />
+                      Change
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => update('signatureImage', '')}
+                      className="gap-1.5 text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Remove
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Preview */}
+            {(settings.signatureName || settings.signatureTitle || settings.signatureLicense || settings.signatureEmail || settings.signatureImage) && (
+              <div className="border-t border-[#E5E1D8] pt-4 mt-4">
+                <p className="text-xs font-medium text-[#8B8B8B] uppercase tracking-wide mb-2">Preview (end of report)</p>
+                <div className="bg-[#FAF9F6] rounded-md p-4 border border-[#E5E1D8] font-serif text-sm text-slate-800">
+                  {settings.signatureImage && (
+                    <div className="mb-2">
+                      <img src={settings.signatureImage} alt="Signature" className="h-12 object-contain" />
+                    </div>
+                  )}
+                  {!settings.signatureImage && (
+                    <div className="h-12 border-b border-slate-300 w-48 mb-2" />
+                  )}
+                  {settings.signatureName && <p className="font-bold">{settings.signatureName}{settings.signatureTitle ? `, ${settings.signatureTitle}` : ''}</p>}
+                  {settings.signatureLicense && <p>{settings.signatureLicense}</p>}
+                  {settings.signatureEmail && <p>{settings.signatureEmail}</p>}
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
 
         {/* AI Settings */}
         <section>

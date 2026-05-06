@@ -749,7 +749,7 @@ export default function ClinicalReportEditor() {
   // ============================================================
   const [referralInfo, setReferralInfo] = useState(() =>
     savedReport?.referralInfo ??
-    `${childName} was referred to the regional center due to concerns regarding ${pronoun(gender, 'possessive')} overall development. A developmental assessment is being completed to obtain present levels of performance and to determine eligibility for early intervention services.`
+    `${firstName} was referred to the regional center due to concerns regarding ${pronoun(gender, 'possessive')} overall development. A developmental assessment is being completed to obtain present levels of performance and to determine eligibility for early intervention services.`
   );
   const [medicalHistory, setMedicalHistory] = useState(() => savedReport?.medicalHistory ?? '');
   const [parentConcerns, setParentConcerns] = useState(() => savedReport?.parentConcerns ?? '');
@@ -757,12 +757,12 @@ export default function ClinicalReportEditor() {
   const [feedingOralMotor, setFeedingOralMotor] = useState(() => savedReport?.feedingOralMotor ?? '');
   const [sensoryNarrative, setSensoryNarrative] = useState(() => {
     if (savedReport?.sensoryNarrative) return savedReport.sensoryNarrative;
-    return `Auditory System: Appears to be within functional limits. ${childName} responded to auditory stimulus by turning ${pronoun(gender, 'possessive')} head toward sound.\n\nVisual System: Appears to be within functional limits. ${childName} demonstrated fair eye contact with the evaluator.\n\nTactile System: Appears to be within functional limits. ${childName} is able to tolerate a wide variety of textures at this time.\n\nProprioceptive System: Appears to be within functional limits. ${childName} demonstrates good motor planning skills.\n\nVestibular System: Appears to be within functional limits. ${childName} demonstrated good righting reactions during play.`;
+    return `Auditory System: Appears to be within functional limits. ${firstName} responded to auditory stimulus by turning ${pronoun(gender, 'possessive')} head toward sound.\n\nVisual System: Appears to be within functional limits. ${firstName} demonstrated fair eye contact with the evaluator.\n\nTactile System: Appears to be within functional limits. ${firstName} is able to tolerate a wide variety of textures at this time.\n\nProprioceptive System: Appears to be within functional limits. ${firstName} demonstrates good motor planning skills.\n\nVestibular System: Appears to be within functional limits. ${firstName} demonstrated good righting reactions during play.`;
   });
   const [recommendations, setRecommendations] = useState(() => savedReport?.recommendations ?? '');
   const [closingNote, setClosingNote] = useState(() =>
     savedReport?.closingNote ??
-    `Thank you for this referral. It was a pleasure to work with ${childName} and ${pronoun(gender, 'possessive')} family. Please feel free to contact me with any additional questions and/or concerns.`
+    `Thank you for this referral. It was a pleasure to work with ${firstName} and ${pronoun(gender, 'possessive')} family. Please feel free to contact me with any additional questions and/or concerns.`
   );
   const [practiceName, setPracticeName] = useState(() => savedReport?.practiceName ?? (appSettings.practiceName || examinerInfo.agency || 'Practice Name'));
   const [reportTitle, setReportTitle] = useState(() => savedReport?.reportTitle ?? TEMPLATE_INFO[template].title);
@@ -774,7 +774,7 @@ export default function ClinicalReportEditor() {
   // SI-specific editable sections
   const [testingConditions, setTestingConditions] = useState(() =>
     savedReport?.testingConditions ??
-    `The assessment was completed in-home with ${childName} and ${pronoun(gender, 'possessive')} caregiver present. ${childName} made good eye contact with evaluating therapist during the evaluation. ${Pronoun(gender, 'subject')} responded to ${pronoun(gender, 'possessive')} name, followed simple directions, and engaged with assessment tools.`
+    `The assessment was completed in-home with ${firstName} and ${pronoun(gender, 'possessive')} caregiver present. ${firstName} made good eye contact with evaluating therapist during the evaluation. ${Pronoun(gender, 'subject')} responded to ${pronoun(gender, 'possessive')} name, followed simple directions, and engaged with assessment tools.`
   );
   const [validityStatement, setValidityStatement] = useState(() =>
     savedReport?.validityStatement ??
@@ -790,7 +790,7 @@ export default function ClinicalReportEditor() {
   );
   const [feedingOralStructures, setFeedingOralStructures] = useState(() =>
     savedReport?.feedingOralStructures ??
-    `${childName}'s facial structures are symmetrical. ${Pronoun(gender, 'possessive')} oral structures appear to be healthy and grossly intact as observed while ${pronoun(gender, 'subject')} was engaging in feeding.`
+    `${firstName}'s facial structures are symmetrical. ${Pronoun(gender, 'possessive')} oral structures appear to be healthy and grossly intact as observed while ${pronoun(gender, 'subject')} was engaging in feeding.`
   );
   const [feedingBehaviors, setFeedingBehaviors] = useState(() => savedReport?.feedingBehaviors ?? '');
   const [feedingOralMotorCoord, setFeedingOralMotorCoord] = useState(() => savedReport?.feedingOralMotorCoord ?? '');
@@ -800,15 +800,15 @@ export default function ClinicalReportEditor() {
   const [feedingDrinking, setFeedingDrinking] = useState(() => savedReport?.feedingDrinking ?? '');
   const [feedingVestibular, setFeedingVestibular] = useState(() =>
     savedReport?.feedingVestibular ??
-    `The vestibular system is located in the inner ear and has the primary function of giving the brain information about head position and movement in relation to gravity. Information received from this sensory system interacts with other sensory systems to give children their perception of space and position as well as orientation within that space. It is responsible in part for head stability, muscle tone, postural control, balance and equilibrium reaction and the development of eye-hand coordination and bilateral integration. It also has influence over arousal level, which affects the ability to learn and initiate tasks.\n\n${childName} demonstrated overall adequate trunk control when navigating ${pronoun(gender, 'possessive')} environment.`
+    `The vestibular system is located in the inner ear and has the primary function of giving the brain information about head position and movement in relation to gravity. Information received from this sensory system interacts with other sensory systems to give children their perception of space and position as well as orientation within that space. It is responsible in part for head stability, muscle tone, postural control, balance and equilibrium reaction and the development of eye-hand coordination and bilateral integration. It also has influence over arousal level, which affects the ability to learn and initiate tasks.\n\n${firstName} demonstrated overall adequate trunk control when navigating ${pronoun(gender, 'possessive')} environment.`
   );
   const [feedingProprioceptive, setFeedingProprioceptive] = useState(() =>
     savedReport?.feedingProprioceptive ??
-    `The proprioceptive system is a system of receptors found in the joints and muscle tissues that gives an internal awareness of limb and body position, position relative to the environment, information about joint and muscle movement, as well as the force and speed at which the muscles are moving.\n\n${childName} demonstrates adequate proprioceptive processing at this time.`
+    `The proprioceptive system is a system of receptors found in the joints and muscle tissues that gives an internal awareness of limb and body position, position relative to the environment, information about joint and muscle movement, as well as the force and speed at which the muscles are moving.\n\n${firstName} demonstrates adequate proprioceptive processing at this time.`
   );
   const [feedingTactile, setFeedingTactile] = useState(() =>
     savedReport?.feedingTactile ??
-    `The sense of touch. The tactile system is involved with the identification and localization of touch and the discrimination of shapes, sizes, and textures of materials.\n\n${childName} appears to tolerate a variety of textures at this time.`
+    `The sense of touch. The tactile system is involved with the identification and localization of touch and the discrimination of shapes, sizes, and textures of materials.\n\n${firstName} appears to tolerate a variety of textures at this time.`
   );
   const [feedingROM, setFeedingROM] = useState(() => savedReport?.feedingROM ?? 'Within Functional Limits');
   const [feedingMuscleStrength, setFeedingMuscleStrength] = useState(() => savedReport?.feedingMuscleStrength ?? 'Within Functional Limits');
@@ -1277,7 +1277,7 @@ export default function ClinicalReportEditor() {
 
     if (template === 'sensory') {
       // SI-specific recommendations
-      let rec = `${childName} is a friendly and happy ${chronAge} old ${genderWord} who is being evaluated for services at this time.`;
+      let rec = `${firstName} is a friendly and happy ${chronAge} old ${genderWord} who is being evaluated for services at this time.`;
       const concerning = sp2Scores.sections.filter(s => s.description.toLowerCase().includes('more'));
       if (concerning.length > 0) {
         rec += ` ${firstName} scored "${concerning[0].description.toLowerCase()}" in the ${concerning.map(s => s.name).join(', ')} section(s).`;
@@ -1285,7 +1285,7 @@ export default function ClinicalReportEditor() {
       rec += `\n\nIt is recommended that the IFSP team consider the following, however, regional center to make the final determination of eligibility and services:\n\n1. Please consider Occupational therapy as ${pronoun(gender, 'subject')} demonstrates some concerns with sensory processing skills at this time.`;
       setRecommendations(rec);
     } else {
-      let rec = `${childName} is a ${chronAge} old ${genderWord} who was referred due to concerns about ${pronoun(gender, 'possessive')} developmental milestones.`;
+      let rec = `${firstName} is a ${chronAge} old ${genderWord} who was referred due to concerns about ${pronoun(gender, 'possessive')} developmental milestones.`;
       if (quarterDelay > 0) rec += ` A ¼ delay would be considered ${quarterDelay} months.`;
       if (belowQuarter.length > 0) rec += ` ${firstName} is below the ¼ delay in the following areas: ${belowQuarter.join(', ')}.`;
       if (borderlineQuarter.length > 0) rec += ` ${Pronoun(gender, 'subject')} has a borderline ¼ delay in the following areas: ${borderlineQuarter.join(', ')}.`;
@@ -1716,6 +1716,11 @@ export default function ClinicalReportEditor() {
         examinerName: examinerInfo.name,
         examinerTitle: examinerInfo.title,
         examinerAgency: examinerInfo.agency,
+        signatureName: appSettings.signatureName,
+        signatureTitle: appSettings.signatureTitle,
+        signatureLicense: appSettings.signatureLicense,
+        signatureEmail: appSettings.signatureEmail,
+        signatureImage: appSettings.signatureImage,
         childName,
         firstName,
         testDate: formatDate(childInfo.testDate),
@@ -2139,7 +2144,7 @@ export default function ClinicalReportEditor() {
                 {!collapsedSections.tools && (
                   <div className="mb-4">
                     <p className="text-sm font-serif text-slate-800 leading-relaxed mb-2">
-                      The following assessments were completed in English with {childName} and {pronoun(gender, 'possessive')} caregiver present in {pronoun(gender, 'possessive')} home environment. Per parent report, participation, behavior, and performance observed during the assessment are reported to be typical. Therefore, this assessment is believed to be reliable and valid in regards to the client's present level of function.
+                      The following assessments were completed in English with {firstName} and {pronoun(gender, 'possessive')} caregiver present in {pronoun(gender, 'possessive')} home environment. Per parent report, participation, behavior, and performance observed during the assessment are reported to be typical. Therefore, this assessment is believed to be reliable and valid in regards to the client's present level of function.
                     </p>
                     <ul className="list-disc list-inside text-sm font-serif text-slate-800 space-y-1 ml-4">
                       {assessmentTools.map((tool, i) => <li key={i}>{tool}</li>)}
@@ -2636,7 +2641,7 @@ export default function ClinicalReportEditor() {
 
                 <SectionHeader title="Testing Conditions and Behavior During Evaluation" sectionKey="si_testing" collapsed={collapsedSections} toggle={toggleSection} number="V" />
                 {!collapsedSections.si_testing && (
-                  <EditableSection label="" value={testingConditions} onChange={setTestingConditions} childName={firstName} placeholder={`The assessment was completed in-home with ${childName} and caregiver present...`} rows={5} />
+                  <EditableSection label="" value={testingConditions} onChange={setTestingConditions} childName={firstName} placeholder={`The assessment was completed in-home with ${firstName} and caregiver present...`} rows={5} />
                 )}
 
                 <SectionHeader title="Validity of Assessment Findings" sectionKey="si_validity" collapsed={collapsedSections} toggle={toggleSection} number="VI" />
@@ -3097,56 +3102,7 @@ export default function ClinicalReportEditor() {
                   </div>
                 )}
 
-                <SectionHeader title="Sensory Processing" sectionKey="fd_sensory" collapsed={collapsedSections} toggle={toggleSection} number="VII" />
-                {!collapsedSections.fd_sensory && (
-                  <div className="space-y-5 mb-6">
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-700 mb-1">a. Vestibular Processing and Modulation</h4>
-                      <div className="bg-slate-50 border border-slate-200 rounded-md p-3 text-xs font-serif text-slate-600 mb-2 leading-relaxed">
-                        The vestibular system is located in the inner ear and has the primary function of giving the brain information about head position and movement in relation to gravity. It is responsible in part for head stability, muscle tone, postural control, balance and equilibrium reaction and the development of eye-hand coordination and bilateral integration.
-                      </div>
-                      <EditableSection label="" value={feedingVestibular} onChange={setFeedingVestibular} childName={firstName} placeholder={`${firstName} demonstrated [describe vestibular processing observations, trunk control, balance, etc.].`} rows={3} />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-700 mb-1">b. Proprioceptive Processing and Modulation</h4>
-                      <div className="bg-slate-50 border border-slate-200 rounded-md p-3 text-xs font-serif text-slate-600 mb-2 leading-relaxed">
-                        The proprioceptive system is a system of receptors found in the joints and muscle tissues that gives an internal awareness of limb and body position, position relative to the environment, information about joint and muscle movement, as well as the force and speed at which the muscles are moving.
-                      </div>
-                      <EditableSection label="" value={feedingProprioceptive} onChange={setFeedingProprioceptive} childName={firstName} placeholder={`${firstName} demonstrates [describe proprioceptive processing, grading of force, body awareness, impact on feeding].`} rows={3} />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-700 mb-1">c. Tactile Processing and Modulation</h4>
-                      <div className="bg-slate-50 border border-slate-200 rounded-md p-3 text-xs font-serif text-slate-600 mb-2 leading-relaxed">
-                        The sense of touch. The tactile system is involved with the identification and localization of touch and the discrimination of shapes, sizes, and textures of materials.
-                      </div>
-                      <EditableSection label="" value={feedingTactile} onChange={setFeedingTactile} childName={firstName} placeholder={`Per caregiver report, ${firstName} [describe tactile processing, messy play tolerance, texture sensitivity, etc.].`} rows={3} />
-                    </div>
-                  </div>
-                )}
-
-                <SectionHeader title="Neuromuscular / Musculoskeletal" sectionKey="fd_neuro" collapsed={collapsedSections} toggle={toggleSection} number="VIII" />
-                {!collapsedSections.fd_neuro && (
-                  <div className="space-y-3 mb-6">
-                    <div className="grid grid-cols-[180px_1fr] gap-2 text-sm font-serif">
-                      <span className="font-bold text-slate-700">Range of Motion:</span>
-                      <EditableSection label="" value={feedingROM} onChange={setFeedingROM} childName={firstName} rows={1} />
-                    </div>
-                    <div className="grid grid-cols-[180px_1fr] gap-2 text-sm font-serif">
-                      <span className="font-bold text-slate-700">Muscle Strength:</span>
-                      <EditableSection label="" value={feedingMuscleStrength} onChange={setFeedingMuscleStrength} childName={firstName} rows={1} />
-                    </div>
-                    <div className="grid grid-cols-[180px_1fr] gap-2 text-sm font-serif">
-                      <span className="font-bold text-slate-700">Muscle Tone:</span>
-                      <EditableSection label="" value={feedingMuscleTone} onChange={setFeedingMuscleTone} childName={firstName} rows={1} />
-                    </div>
-                    <div className="grid grid-cols-[180px_1fr] gap-2 text-sm font-serif">
-                      <span className="font-bold text-slate-700">Postural Stability:</span>
-                      <EditableSection label="" value={feedingPosturalStability} onChange={setFeedingPosturalStability} childName={firstName} rows={1} />
-                    </div>
-                  </div>
-                )}
-
-                <SectionHeader title="Summary" sectionKey="fd_summary" collapsed={collapsedSections} toggle={toggleSection} number="IX" />
+                <SectionHeader title="Summary and Recommendations" sectionKey="fd_summary" collapsed={collapsedSections} toggle={toggleSection} number="VII" />
                 {!collapsedSections.fd_summary && (
                   <>
                     <div className="mb-2 flex flex-wrap gap-2 no-print">
@@ -3258,11 +3214,34 @@ export default function ClinicalReportEditor() {
               <EditableSection label="" value={closingNote} onChange={setClosingNote} childName={firstName} rows={2} />
             </div>
 
-            {/* ===== SIGNATURE ===== */}
+            {/* ===== SIGNATURE & CREDENTIALS ===== */}
             <div className="mt-8 pt-4 border-t border-slate-300">
-              <p className="text-sm font-serif text-slate-800">{examinerInfo.name}</p>
-              <p className="text-sm font-serif text-slate-600">{examinerInfo.title}</p>
-              <p className="text-sm font-serif text-slate-600">{examinerInfo.agency}</p>
+              {/* Signature image or blank line for hand-signing */}
+              {appSettings.signatureImage ? (
+                <div className="mb-2">
+                  <img src={appSettings.signatureImage} alt="Signature" className="h-14 object-contain" />
+                </div>
+              ) : (
+                <div className="h-14 border-b border-slate-400 w-56 mb-2" />
+              )}
+              {/* Name and credentials */}
+              <p className="text-sm font-serif font-bold text-slate-800">
+                {appSettings.signatureName || examinerInfo.name}
+                {(appSettings.signatureTitle || examinerInfo.title) && `, ${appSettings.signatureTitle || examinerInfo.title}`}
+              </p>
+              {appSettings.signatureLicense && (
+                <p className="text-sm font-serif text-slate-600">{appSettings.signatureLicense}</p>
+              )}
+              {(appSettings.signatureEmail || appSettings.signatureName) && (
+                <p className="text-sm font-serif text-slate-600">{appSettings.signatureEmail}</p>
+              )}
+              {(!appSettings.signatureName && !appSettings.signatureTitle && !appSettings.signatureLicense) && (
+                <>
+                  <p className="text-sm font-serif text-slate-800">{examinerInfo.name}</p>
+                  <p className="text-sm font-serif text-slate-600">{examinerInfo.title}</p>
+                  <p className="text-sm font-serif text-slate-600">{examinerInfo.agency}</p>
+                </>
+              )}
             </div>
 
           </div>
