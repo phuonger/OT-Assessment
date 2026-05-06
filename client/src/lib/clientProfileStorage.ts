@@ -12,7 +12,7 @@
 export interface ClientGoal {
   id: string;
   text: string;
-  status: 'met' | 'in-progress' | 'not-met';
+  status: 'not-started' | 'met' | 'in-progress' | 'not-met';
   goalDate?: string; // ISO date string (optional)
   dateMet?: string; // ISO date string (optional)
   createdAt: string; // ISO date string
@@ -174,7 +174,7 @@ export function addGoal(profileId: string, text: string, goalDate?: string): Cli
   const goal: ClientGoal = {
     id: generateGoalId(),
     text,
-    status: 'in-progress',
+    status: 'not-started',
     goalDate: goalDate || undefined,
     createdAt: new Date().toISOString(),
   };

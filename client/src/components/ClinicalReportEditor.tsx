@@ -81,9 +81,11 @@ function GoalsReportSection({ profileId }: { profileId: string }) {
     setAllSelected(!allSelected);
   };
 
-  const handleStatusChange = (goalId: string, status: ClientGoal['status']) => {
-    updateGoal(profileId, goalId, { status });
-    setGoals(prev => prev.map(g => g.id === goalId ? { ...g, status } : g));
+  const handleStatusChange = (goalId: string, newStatus: ClientGoal['status'], currentStatus: ClientGoal['status']) => {
+    // If clicking the already-active status, toggle back to 'not-started'
+    const finalStatus = newStatus === currentStatus ? 'not-started' : newStatus;
+    updateGoal(profileId, goalId, { status: finalStatus });
+    setGoals(prev => prev.map(g => g.id === goalId ? { ...g, status: finalStatus } : g));
   };
 
   const visibleGoals = goals.filter(g => selectedGoalIds.has(g.id));
@@ -93,6 +95,7 @@ function GoalsReportSection({ profileId }: { profileId: string }) {
       case 'met': return 'Met';
       case 'in-progress': return 'In Progress';
       case 'not-met': return 'Not Met';
+      case 'not-started': return 'Not Started';
     }
   };
   const statusColor = (s: ClientGoal['status']) => {
@@ -100,6 +103,7 @@ function GoalsReportSection({ profileId }: { profileId: string }) {
       case 'met': return 'bg-green-100 text-green-700 border-green-200';
       case 'in-progress': return 'bg-amber-100 text-amber-700 border-amber-200';
       case 'not-met': return 'bg-red-100 text-red-700 border-red-200';
+      case 'not-started': return 'bg-slate-100 text-slate-600 border-slate-200';
     }
   };
 
@@ -158,7 +162,7 @@ function GoalsReportSection({ profileId }: { profileId: string }) {
                     {(['in-progress', 'met', 'not-met'] as const).map(s => (
                       <button
                         key={s}
-                        onClick={() => handleStatusChange(goal.id, s)}
+                        onClick={() => handleStatusChange(goal.id, s, goal.status)}
                         className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
                           goal.status === s ? statusColor(s) : 'border-slate-200 text-slate-400 hover:border-slate-300'
                         }`}

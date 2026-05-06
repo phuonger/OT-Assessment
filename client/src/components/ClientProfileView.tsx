@@ -113,8 +113,10 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
     toast.success('Goal added');
   };
 
-  const handleGoalStatusChange = (goalId: string, status: ClientGoal['status']) => {
-    updateGoal(profileId, goalId, { status });
+  const handleGoalStatusChange = (goalId: string, newStatus: ClientGoal['status'], currentStatus: ClientGoal['status']) => {
+    // If clicking the already-active status, toggle back to 'not-started'
+    const finalStatus = newStatus === currentStatus ? 'not-started' : newStatus;
+    updateGoal(profileId, goalId, { status: finalStatus });
     refreshProfile();
   };
 
@@ -140,6 +142,7 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
       case 'met': return <CheckCircle2 className="w-4 h-4 text-green-600" />;
       case 'in-progress': return <Clock className="w-4 h-4 text-amber-500" />;
       case 'not-met': return <XCircle className="w-4 h-4 text-red-500" />;
+      case 'not-started': return <Target className="w-4 h-4 text-slate-400" />;
     }
   };
 
@@ -148,6 +151,7 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
       case 'met': return 'Met';
       case 'in-progress': return 'In Progress';
       case 'not-met': return 'Not Met';
+      case 'not-started': return 'Not Started';
     }
   };
 
@@ -156,6 +160,7 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
       case 'met': return 'bg-green-50 border-green-200 text-green-700';
       case 'in-progress': return 'bg-amber-50 border-amber-200 text-amber-700';
       case 'not-met': return 'bg-red-50 border-red-200 text-red-700';
+      case 'not-started': return 'bg-slate-50 border-slate-200 text-slate-600';
     }
   };
 
@@ -366,7 +371,7 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
                       {(['in-progress', 'met', 'not-met'] as const).map(status => (
                         <button
                           key={status}
-                          onClick={() => handleGoalStatusChange(goal.id, status)}
+                          onClick={() => handleGoalStatusChange(goal.id, status, goal.status)}
                           className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
                             goal.status === status
                               ? statusColor(status)
