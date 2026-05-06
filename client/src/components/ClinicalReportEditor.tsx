@@ -22,7 +22,7 @@ import { lookupDAYC2WithBayley4AB, computeDAYC2BayleyComposites, getScaledScoreC
 import { lookupREEL3AbilityScore, lookupREEL3PercentileRank, lookupREEL3DescriptiveTerm } from '@/lib/reel3ScoringTables';
 import { SP2_ENGLISH_CUTOFFS, SP2_BIRTH6MO_CUTOFFS, SP2_QUADRANT_MAP, getSP2Description } from '@/lib/sensoryProfileData';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Download, Printer, FileText, ChevronDown, ChevronUp, Pencil, Check, RotateCcw, Save, Eye, EyeOff, LayoutTemplate, FileDown, BookmarkPlus, FileOutput, WandSparkles, Loader2, Undo2 } from 'lucide-react';
+import { ArrowLeft, Download, Printer, FileText, ChevronDown, ChevronUp, Pencil, Check, RotateCcw, Save, Eye, EyeOff, LayoutTemplate, FileDown, BookmarkPlus, FileOutput, WandSparkles, Loader2, Undo2, Target } from 'lucide-react';
 import { generateDocxReport, type DocxReportData, type DomainNarrativeData as DocxDomainNarrative } from '@/lib/generateDocx';
 import { generatePdfReport } from '@/lib/generateReportPdf';
 import { loadAppSettings, type RecommendationTemplate } from '@/components/SettingsPreferences';
@@ -49,7 +49,7 @@ import { enhanceWithAI, generateRecommendations, isOnline, isAiConfigured } from
 
 function GoalsReportSection({ profileId }: { profileId: string }) {
   const [goals, setGoals] = useState<ClientGoal[]>([]);
-  const [showGoals, setShowGoals] = useState(true);
+  const [enabled, setEnabled] = useState(false);
   const [selectedGoalIds, setSelectedGoalIds] = useState<Set<string>>(new Set());
   const [allSelected, setAllSelected] = useState(true);
 
@@ -82,7 +82,6 @@ function GoalsReportSection({ profileId }: { profileId: string }) {
   };
 
   const handleStatusChange = (goalId: string, newStatus: ClientGoal['status'], currentStatus: ClientGoal['status']) => {
-    // If clicking the already-active status, toggle back to 'not-started'
     const finalStatus = newStatus === currentStatus ? 'not-started' : newStatus;
     updateGoal(profileId, goalId, { status: finalStatus });
     setGoals(prev => prev.map(g => g.id === goalId ? { ...g, status: finalStatus } : g));
@@ -107,75 +106,88 @@ function GoalsReportSection({ profileId }: { profileId: string }) {
     }
   };
 
+  // Not enabled yet — show the opt-in button
+  if (!enabled) {
+    return (
+      <div className="mt-6 border-t border-slate-300 pt-4">
+        <button
+          onClick={() => setEnabled(true)}
+          className="w-full py-3 border-2 border-dashed border-[#0D7377]/30 rounded-lg text-sm font-medium text-[#0D7377] hover:bg-[#0D7377]/5 hover:border-[#0D7377]/50 transition-colors flex items-center justify-center gap-2"
+        >
+          <Target className="w-4 h-4" />
+          Add Goals to Report
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-6 border-t border-slate-300 pt-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-base font-bold font-serif text-slate-800 flex items-center gap-2">
           Goals
-          <button
-            onClick={() => setShowGoals(!showGoals)}
-            className="text-xs text-slate-400 hover:text-slate-600"
-          >
-            {showGoals ? '(hide)' : '(show)'}
-          </button>
         </h3>
-        <button
-          onClick={toggleAll}
-          className="text-xs text-[#0D7377] hover:underline"
-        >
-          {allSelected ? 'Deselect All' : 'Select All'}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={toggleAll}
+            className="text-xs text-[#0D7377] hover:underline"
+          >
+            {allSelected ? 'Deselect All' : 'Select All'}
+          </button>
+          <button
+            onClick={() => setEnabled(false)}
+            className="text-xs text-red-500 hover:underline"
+          >
+            Remove Goals
+          </button>
+        </div>
       </div>
 
-      {showGoals && (
-        <>
-          {/* Goal selection checkboxes */}
-          <div className="mb-3 space-y-1.5">
-            {goals.map(goal => (
-              <label key={goal.id} className="flex items-start gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selectedGoalIds.has(goal.id)}
-                  onChange={() => toggleGoal(goal.id)}
-                  className="mt-0.5 accent-[#0D7377]"
-                />
-                <span className={selectedGoalIds.has(goal.id) ? 'text-slate-800' : 'text-slate-400 line-through'}>
-                  {goal.text}
-                </span>
-              </label>
-            ))}
-          </div>
+      {/* Goal selection checkboxes */}
+      <div className="mb-3 space-y-1.5">
+        {goals.map(goal => (
+          <label key={goal.id} className="flex items-start gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={selectedGoalIds.has(goal.id)}
+              onChange={() => toggleGoal(goal.id)}
+              className="mt-0.5 accent-[#0D7377]"
+            />
+            <span className={selectedGoalIds.has(goal.id) ? 'text-slate-800' : 'text-slate-400 line-through'}>
+              {goal.text}
+            </span>
+          </label>
+        ))}
+      </div>
 
-          {/* Rendered goals for report */}
-          {visibleGoals.length > 0 && (
-            <div className="bg-slate-50 border border-slate-200 rounded-md p-4 space-y-2">
-              {visibleGoals.map((goal, idx) => (
-                <div key={goal.id} className="flex items-start gap-3">
-                  <span className="text-sm font-serif text-slate-600 mt-0.5">{idx + 1}.</span>
-                  <div className="flex-1">
-                    <p className="text-sm font-serif text-slate-800">{goal.text}</p>
-                    {goal.goalDate && (
-                      <p className="text-xs text-slate-500 mt-0.5">Target: {new Date(goal.goalDate).toLocaleDateString()}</p>
-                    )}
-                  </div>
-                  <div className="flex gap-1">
-                    {(['in-progress', 'met', 'not-met'] as const).map(s => (
-                      <button
-                        key={s}
-                        onClick={() => handleStatusChange(goal.id, s, goal.status)}
-                        className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
-                          goal.status === s ? statusColor(s) : 'border-slate-200 text-slate-400 hover:border-slate-300'
-                        }`}
-                      >
-                        {statusLabel(s)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
+      {/* Rendered goals for report */}
+      {visibleGoals.length > 0 && (
+        <div className="bg-slate-50 border border-slate-200 rounded-md p-4 space-y-2">
+          {visibleGoals.map((goal, idx) => (
+            <div key={goal.id} className="flex items-start gap-3">
+              <span className="text-sm font-serif text-slate-600 mt-0.5">{idx + 1}.</span>
+              <div className="flex-1">
+                <p className="text-sm font-serif text-slate-800">{goal.text}</p>
+                {goal.goalDate && (
+                  <p className="text-xs text-slate-500 mt-0.5">Target: {new Date(goal.goalDate).toLocaleDateString()}</p>
+                )}
+              </div>
+              <div className="flex gap-1">
+                {(['in-progress', 'met', 'not-met'] as const).map(s => (
+                  <button
+                    key={s}
+                    onClick={() => handleStatusChange(goal.id, s, goal.status)}
+                    className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
+                      goal.status === s ? statusColor(s) : 'border-slate-200 text-slate-400 hover:border-slate-300'
+                    }`}
+                  >
+                    {statusLabel(s)}
+                  </button>
+                ))}
+              </div>
             </div>
-          )}
-        </>
+          ))}
+        </div>
       )}
     </div>
   );
