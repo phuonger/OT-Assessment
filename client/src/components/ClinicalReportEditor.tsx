@@ -29,6 +29,7 @@ import { loadAppSettings, type RecommendationTemplate } from '@/components/Setti
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { saveMultiSession } from '@/lib/multiSessionStorage';
+import { linkAssessment, getProfile, updateGoal, type ClientGoal } from '@/lib/clientProfileStorage';
 import { FeedingPerformanceChecklist, ASPIRATION_SIGN_LABELS } from '@/components/FeedingPerformanceChecklist';
 import type { FeedingChecklistDataType } from '@/components/FeedingPerformanceChecklist';
 import type { FeedingChecklistExportData } from '@/lib/generateDocx';
@@ -41,6 +42,140 @@ import type { DrinkingData } from '@/components/DrinkingChecklist';
 import { generateAllChecklistsPdf } from '@/lib/generateAllChecklistsPdf';
 import { parseLocalDate, formatDateLocal, calculateAge } from '@/lib/dateUtils';
 import { enhanceWithAI, generateRecommendations, isOnline, isAiConfigured } from '@/lib/aiEnhance';
+
+// ============================================================
+// GoalsReportSection — inline component for rendering goals in report
+// ============================================================
+
+function GoalsReportSection({ profileId }: { profileId: string }) {
+  const [goals, setGoals] = useState<ClientGoal[]>([]);
+  const [showGoals, setShowGoals] = useState(true);
+  const [selectedGoalIds, setSelectedGoalIds] = useState<Set<string>>(new Set());
+  const [allSelected, setAllSelected] = useState(true);
+
+  useEffect(() => {
+    const profile = getProfile(profileId);
+    if (profile && profile.goals.length > 0) {
+      setGoals(profile.goals);
+      setSelectedGoalIds(new Set(profile.goals.map(g => g.id)));
+    }
+  }, [profileId]);
+
+  if (goals.length === 0) return null;
+
+  const toggleGoal = (id: string) => {
+    setSelectedGoalIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelectedGoalIds(new Set());
+    } else {
+      setSelectedGoalIds(new Set(goals.map(g => g.id)));
+    }
+    setAllSelected(!allSelected);
+  };
+
+  const handleStatusChange = (goalId: string, status: ClientGoal['status']) => {
+    updateGoal(profileId, goalId, { status });
+    setGoals(prev => prev.map(g => g.id === goalId ? { ...g, status } : g));
+  };
+
+  const visibleGoals = goals.filter(g => selectedGoalIds.has(g.id));
+
+  const statusLabel = (s: ClientGoal['status']) => {
+    switch (s) {
+      case 'met': return 'Met';
+      case 'in-progress': return 'In Progress';
+      case 'not-met': return 'Not Met';
+    }
+  };
+  const statusColor = (s: ClientGoal['status']) => {
+    switch (s) {
+      case 'met': return 'bg-green-100 text-green-700 border-green-200';
+      case 'in-progress': return 'bg-amber-100 text-amber-700 border-amber-200';
+      case 'not-met': return 'bg-red-100 text-red-700 border-red-200';
+    }
+  };
+
+  return (
+    <div className="mt-6 border-t border-slate-300 pt-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-base font-bold font-serif text-slate-800 flex items-center gap-2">
+          Goals
+          <button
+            onClick={() => setShowGoals(!showGoals)}
+            className="text-xs text-slate-400 hover:text-slate-600"
+          >
+            {showGoals ? '(hide)' : '(show)'}
+          </button>
+        </h3>
+        <button
+          onClick={toggleAll}
+          className="text-xs text-[#0D7377] hover:underline"
+        >
+          {allSelected ? 'Deselect All' : 'Select All'}
+        </button>
+      </div>
+
+      {showGoals && (
+        <>
+          {/* Goal selection checkboxes */}
+          <div className="mb-3 space-y-1.5">
+            {goals.map(goal => (
+              <label key={goal.id} className="flex items-start gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedGoalIds.has(goal.id)}
+                  onChange={() => toggleGoal(goal.id)}
+                  className="mt-0.5 accent-[#0D7377]"
+                />
+                <span className={selectedGoalIds.has(goal.id) ? 'text-slate-800' : 'text-slate-400 line-through'}>
+                  {goal.text}
+                </span>
+              </label>
+            ))}
+          </div>
+
+          {/* Rendered goals for report */}
+          {visibleGoals.length > 0 && (
+            <div className="bg-slate-50 border border-slate-200 rounded-md p-4 space-y-2">
+              {visibleGoals.map((goal, idx) => (
+                <div key={goal.id} className="flex items-start gap-3">
+                  <span className="text-sm font-serif text-slate-600 mt-0.5">{idx + 1}.</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-serif text-slate-800">{goal.text}</p>
+                    {goal.goalDate && (
+                      <p className="text-xs text-slate-500 mt-0.5">Target: {new Date(goal.goalDate).toLocaleDateString()}</p>
+                    )}
+                  </div>
+                  <div className="flex gap-1">
+                    {(['in-progress', 'met', 'not-met'] as const).map(s => (
+                      <button
+                        key={s}
+                        onClick={() => handleStatusChange(goal.id, s)}
+                        className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
+                          goal.status === s ? statusColor(s) : 'border-slate-200 text-slate-400 hover:border-slate-300'
+                        }`}
+                      >
+                        {statusLabel(s)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 // ============================================================
 // Types & Constants
@@ -1399,7 +1534,8 @@ export default function ClinicalReportEditor() {
             && (Date.now() - new Date(s.savedAt).getTime()) < 300000
         );
         if (!recentCompleted) {
-          saveMultiSession(state, 'completed', `Report exported ${new Date().toLocaleDateString()}`);
+          const saved = saveMultiSession(state, 'completed', `Report exported ${new Date().toLocaleDateString()}`);
+          if (state.activeProfileId) linkAssessment(state.activeProfileId, saved.id);
         }
       } catch (saveErr) {
         console.error('Auto-save after PDF export failed:', saveErr);
@@ -1898,7 +2034,8 @@ export default function ClinicalReportEditor() {
             && (Date.now() - new Date(s.savedAt).getTime()) < 300000 // within last 5 minutes
         );
         if (!recentCompleted) {
-          saveMultiSession(state, 'completed', `Report exported ${new Date().toLocaleDateString()}`);
+          const saved = saveMultiSession(state, 'completed', `Report exported ${new Date().toLocaleDateString()}`);
+          if (state.activeProfileId) linkAssessment(state.activeProfileId, saved.id);
         }
       } catch (saveErr) {
         console.error('Auto-save after export failed:', saveErr);
@@ -2016,7 +2153,7 @@ export default function ClinicalReportEditor() {
               <Printer className="w-4 h-4 mr-1" /> Print
             </Button>
             <div className="h-5 w-px bg-slate-300" />
-            <Button variant="ghost" size="sm" onClick={() => dispatch({ type: 'GO_TO_PHASE', phase: 'dashboard' })} className="text-slate-600">
+             <Button variant="ghost" size="sm" onClick={() => dispatch({ type: 'GO_TO_PHASE', phase: state.activeProfileId ? 'profileView' : 'profiles' })} className="text-slate-600">
               Dashboard
             </Button>
             <Button variant="ghost" size="sm" onClick={() => {
@@ -3207,6 +3344,11 @@ export default function ClinicalReportEditor() {
                   <p className="text-[10px] text-slate-400 mt-1.5">Exports Oral Motor, Feeding Behaviors, Self-Feeding, and Drinking checklists into a single multi-page PDF.</p>
                 </div>
               </>
+            )}
+
+            {/* ===== GOALS (from client profile) ===== */}
+            {state.activeProfileId && (
+              <GoalsReportSection profileId={state.activeProfileId} />
             )}
 
             {/* ===== CLOSING (both templates) ===== */}

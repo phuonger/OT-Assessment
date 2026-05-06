@@ -420,9 +420,9 @@ export default function MultiStepSetup() {
             </div>
 
             <div className="flex justify-between">
-              <Button variant="outline" onClick={() => dispatch({ type: 'GO_TO_PHASE', phase: 'dashboard' })} className="gap-2">
+              <Button variant="outline" onClick={() => dispatch({ type: 'GO_TO_PHASE', phase: state.activeProfileId ? 'profileView' : 'profiles' })} className="gap-2">
                 <ArrowLeft className="w-4 h-4" />
-                Back to Dashboard
+                Back
               </Button>
               <Button
                 onClick={() => setStep(2)}

@@ -52,7 +52,7 @@ export interface FormState {
   ageRangeLabel: string;
 }
 
-export type AppPhase = 'welcome' | 'dashboard' | 'allAssessments' | 'childInfo' | 'examinerInfo' | 'formSelection' | 'assessment' | 'summary' | 'report' | 'history' | 'backup' | 'settings';
+export type AppPhase = 'welcome' | 'profiles' | 'profileView' | 'dashboard' | 'allAssessments' | 'childInfo' | 'examinerInfo' | 'formSelection' | 'assessment' | 'summary' | 'report' | 'history' | 'backup' | 'settings';
 
 export interface MultiAssessmentState {
   phase: AppPhase;
@@ -65,6 +65,7 @@ export interface MultiAssessmentState {
   timerRunning: boolean;
   sessionStartTime: number | null;
   totalElapsedSeconds: number;
+  activeProfileId: string | null;  // linked client profile
 }
 
 // ============================================================
@@ -122,6 +123,7 @@ const initialState: MultiAssessmentState = {
   timerRunning: false,
   sessionStartTime: null,
   totalElapsedSeconds: 0,
+  activeProfileId: null,
 };
 
 // ============================================================
@@ -489,7 +491,7 @@ function reducer(state: MultiAssessmentState, action: Action): MultiAssessmentSt
 
     case 'RESET_ALL':
       localStorage.removeItem('bayley4-multi-assessment');
-      return { ...initialState, phase: 'dashboard' };
+      return { ...initialState, phase: 'profiles' };
 
     case 'NEW_ASSESSMENT':
       localStorage.removeItem('bayley4-multi-assessment');
@@ -534,8 +536,8 @@ export function MultiAssessmentProvider({ children }: { children: React.ReactNod
   const saveRef = useRef(state);
   saveRef.current = state;
   useEffect(() => {
-    // Only auto-save if we're in an active assessment phase (not welcome/dashboard)
-    if (state.phase === 'welcome' || state.phase === 'dashboard' || state.phase === 'allAssessments') return;
+    // Only auto-save if we're in an active assessment phase (not welcome/dashboard/profiles)
+    if (state.phase === 'welcome' || state.phase === 'dashboard' || state.phase === 'profiles' || state.phase === 'profileView' || state.phase === 'allAssessments') return;
     const timeout = setTimeout(() => {
       try {
         localStorage.setItem('bayley4-multi-assessment', JSON.stringify(saveRef.current));

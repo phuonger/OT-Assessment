@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, Download, Printer, RotateCcw, Clock, FileText, Save, History, Shield, Settings, Home, Plus } from 'lucide-react';
 import { useMemo, useCallback, useState } from 'react';
 import { saveMultiSession } from '@/lib/multiSessionStorage';
+import { linkAssessment } from '@/lib/clientProfileStorage';
 import { parseLocalDate, calculateAge } from '@/lib/dateUtils';
 import { toast } from 'sonner';
 
@@ -115,7 +116,11 @@ export default function UnifiedSummaryReport() {
   }, []);
 
   const confirmSaveSession = useCallback(() => {
-    saveMultiSession(state, 'completed', saveLabel || undefined);
+    const saved = saveMultiSession(state, 'completed', saveLabel || undefined);
+    // Link to active profile if one is set
+    if (state.activeProfileId) {
+      linkAssessment(state.activeProfileId, saved.id);
+    }
     setShowSaveDialog(false);
     setSaveLabel('');
     toast.success('Assessment saved to history');
@@ -147,8 +152,8 @@ export default function UnifiedSummaryReport() {
   }, [dispatch, state]);
 
   const handleBackToDashboard = useCallback(() => {
-    dispatch({ type: 'GO_TO_PHASE', phase: 'dashboard' });
-  }, [dispatch]);
+    dispatch({ type: 'GO_TO_PHASE', phase: state.activeProfileId ? 'profileView' : 'profiles' });
+  }, [dispatch, state.activeProfileId]);
 
   return (
     <div className="min-h-screen bg-[#FAF9F6] print:bg-white">

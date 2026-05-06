@@ -24,7 +24,7 @@ export default function WelcomePage() {
   }, []);
 
   const handleGetStarted = () => {
-    dispatch({ type: 'GO_TO_PHASE', phase: 'dashboard' });
+    dispatch({ type: 'GO_TO_PHASE', phase: 'profiles' });
   };
 
   return (

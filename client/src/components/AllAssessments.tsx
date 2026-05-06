@@ -27,10 +27,13 @@ import {
   Square,
   Play,
   Copy,
+  Link2,
+  X,
 } from 'lucide-react';
 import { useState, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
 import { parseLocalDate } from '@/lib/dateUtils';
+import { loadAllProfiles, linkAssessment, type ClientProfile } from '@/lib/clientProfileStorage';
 
 type StatusFilter = 'all' | 'in-progress' | 'completed';
 type SortOption = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
@@ -213,8 +216,34 @@ export default function AllAssessments() {
     setSelectedIds(new Set());
   };
 
+  // Link-to-profile state
+  const [linkDialogSessionId, setLinkDialogSessionId] = useState<string | null>(null);
+  const [profileSearchQuery, setProfileSearchQuery] = useState('');
+  const allProfiles = useMemo(() => loadAllProfiles(), []);
+  const filteredProfiles = useMemo(() => {
+    if (!profileSearchQuery.trim()) return allProfiles.slice(0, 10);
+    const q = profileSearchQuery.toLowerCase();
+    return allProfiles.filter((p: ClientProfile) =>
+      `${p.firstName} ${p.lastName}`.toLowerCase().includes(q)
+    ).slice(0, 10);
+  }, [allProfiles, profileSearchQuery]);
+
+  const handleLinkToProfile = (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation();
+    setLinkDialogSessionId(sessionId);
+    setProfileSearchQuery('');
+  };
+
+  const confirmLinkToProfile = (profile: ClientProfile): void => {
+    if (linkDialogSessionId) {
+      linkAssessment(profile.id, linkDialogSessionId);
+      toast.success(`Linked to ${profile.firstName} ${profile.lastName}'s profile`);
+      setLinkDialogSessionId(null);
+    }
+  };
+
   const handleBack = () => {
-    dispatch({ type: 'GO_TO_PHASE', phase: 'dashboard' });
+    dispatch({ type: 'GO_TO_PHASE', phase: 'profiles' });
   };
 
   const handleNewAssessment = () => {
@@ -489,6 +518,15 @@ export default function AllAssessments() {
                       </span>
                       {!selectMode && (
                         <button
+                          onClick={(e) => handleLinkToProfile(e, session.id)}
+                          className="p-1.5 rounded-md text-[#D4D0C8] hover:text-[#0D7377] hover:bg-[#0D7377]/5 transition-colors opacity-0 group-hover:opacity-100"
+                          title="Link to client profile"
+                        >
+                          <Link2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {!selectMode && (
+                        <button
                           onClick={(e) => handleDuplicate(e, session.id)}
                           className="p-1.5 rounded-md text-[#D4D0C8] hover:text-[#0D7377] hover:bg-[#0D7377]/5 transition-colors opacity-0 group-hover:opacity-100"
                           title="Duplicate assessment (new eval, same child)"
@@ -533,6 +571,51 @@ export default function AllAssessments() {
           </div>
         )}
       </main>
+
+      {/* Link to Profile Dialog */}
+      {linkDialogSessionId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-[#2C2825]">Link to Client Profile</h3>
+              <button
+                onClick={() => setLinkDialogSessionId(null)}
+                className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <Input
+              value={profileSearchQuery}
+              onChange={(e) => setProfileSearchQuery(e.target.value)}
+              placeholder="Search profiles..."
+              className="mb-3"
+              autoFocus
+            />
+            <div className="max-h-48 overflow-y-auto space-y-1">
+              {filteredProfiles.length === 0 ? (
+                <p className="text-xs text-[#8B8B8B] text-center py-4">No profiles found. Create one from the Profiles page.</p>
+              ) : (
+                filteredProfiles.map(profile => (
+                  <button
+                    key={profile.id}
+                    onClick={() => confirmLinkToProfile(profile)}
+                    className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-[#0D7377]/5 transition-colors flex items-center gap-3"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-[#0D7377]/10 flex items-center justify-center flex-shrink-0">
+                      <User className="w-4 h-4 text-[#0D7377]" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-[#2C2825]">{profile.firstName} {profile.lastName}</p>
+                      <p className="text-[10px] text-[#8B8B8B]">DOB: {profile.dob ? new Date(profile.dob + 'T00:00:00').toLocaleDateString() : 'N/A'}</p>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
