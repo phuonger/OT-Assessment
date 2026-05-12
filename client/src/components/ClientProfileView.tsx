@@ -2,8 +2,8 @@
  * ClientProfileView
  *
  * Design: Clinical Precision / Swiss Medical
- * Shows a single client's profile dashboard with their info, goals, assessment history,
- * and ability to start a new assessment.
+ * Shows a single client's profile dashboard with their info, categorized goals,
+ * assessment history, and ability to start a new assessment.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -14,12 +14,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   ArrowLeft, Plus, Pencil, Trash2, Save, X, Play, Calendar,
-  Target, CheckCircle2, Clock, XCircle, FileText, User, Baby, ChevronDown, ChevronUp
+  Target, CheckCircle2, Clock, XCircle, FileText, User, Baby,
+  ChevronDown, ChevronUp, FolderPlus, MessageSquare, Milestone as MilestoneIcon
 } from 'lucide-react';
 import {
   getProfile, updateProfile, deleteProfile, touchProfile,
-  addGoal, updateGoal, deleteGoal, linkAssessment,
-  type ClientProfile, type ClientGoal
+  addGoalCategory, updateGoalCategory, deleteGoalCategory,
+  addGoal, updateGoal, deleteGoal,
+  updateMilestone, addMilestone, removeMilestone,
+  CATEGORY_PRESETS, DEFAULT_MILESTONES,
+  type ClientProfile, type ClientGoal, type GoalCategory, type Milestone
 } from '@/lib/clientProfileStorage';
 import { getAllMultiSessions, type SavedMultiSession } from '@/lib/multiSessionStorage';
 import { toast } from 'sonner';
@@ -35,8 +39,7 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
   const [profile, setProfile] = useState<ClientProfile | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [linkedSessions, setLinkedSessions] = useState<SavedMultiSession[]>([]);
-  const [showGoalForm, setShowGoalForm] = useState(false);
-  const [expandedSection, setExpandedSection] = useState<'info' | 'goals' | 'history' | null>('goals');
+  const [expandedSection, setExpandedSection] = useState<'info' | 'milestones' | 'goals' | 'history' | null>('goals');
 
   // Edit form state
   const [editFirstName, setEditFirstName] = useState('');
@@ -47,16 +50,28 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
   const [editParentNames, setEditParentNames] = useState('');
   const [editNotes, setEditNotes] = useState('');
 
-  // Goal form state
+  // Category form state
+  const [showCategoryForm, setShowCategoryForm] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryNote, setNewCategoryNote] = useState('');
+
+  // Goal form state — tracks which category is adding a goal
+  const [addingGoalToCategoryId, setAddingGoalToCategoryId] = useState<string | null>(null);
   const [goalText, setGoalText] = useState('');
   const [goalDate, setGoalDate] = useState('');
+
+  // Editing category note
+  const [editingCategoryNoteId, setEditingCategoryNoteId] = useState<string | null>(null);
+  const [editCategoryNote, setEditCategoryNote] = useState('');
+
+  // Milestone state
+  const [newMilestoneLabel, setNewMilestoneLabel] = useState('');
 
   const refreshProfile = useCallback(() => {
     const p = getProfile(profileId);
     if (p) {
       setProfile(p);
       touchProfile(profileId);
-      // Load linked sessions
       const allSessions = getAllMultiSessions();
       const linked = allSessions.filter((s: SavedMultiSession) => p.linkedAssessmentIds.includes(s.id));
       setLinkedSessions(linked);
@@ -103,18 +118,43 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
     onBack();
   };
 
-  const handleAddGoal = () => {
+  // ---- Category handlers ----
+  const handleAddCategory = () => {
+    if (!newCategoryName.trim()) { toast.error('Category name is required'); return; }
+    addGoalCategory(profileId, newCategoryName.trim(), newCategoryNote.trim() || undefined);
+    setNewCategoryName('');
+    setNewCategoryNote('');
+    setShowCategoryForm(false);
+    refreshProfile();
+    toast.success('Category added');
+  };
+
+  const handleDeleteCategory = (categoryId: string, categoryName: string) => {
+    if (!confirm(`Delete "${categoryName}" and all its goals? This cannot be undone.`)) return;
+    deleteGoalCategory(profileId, categoryId);
+    refreshProfile();
+    toast.success('Category deleted');
+  };
+
+  const handleSaveCategoryNote = (categoryId: string) => {
+    updateGoalCategory(profileId, categoryId, { note: editCategoryNote.trim() || undefined });
+    setEditingCategoryNoteId(null);
+    setEditCategoryNote('');
+    refreshProfile();
+  };
+
+  // ---- Goal handlers ----
+  const handleAddGoal = (categoryId: string) => {
     if (!goalText.trim()) { toast.error('Goal text is required'); return; }
-    addGoal(profileId, goalText.trim(), goalDate || undefined);
+    addGoal(profileId, categoryId, goalText.trim(), goalDate || undefined);
     setGoalText('');
     setGoalDate('');
-    setShowGoalForm(false);
+    setAddingGoalToCategoryId(null);
     refreshProfile();
     toast.success('Goal added');
   };
 
   const handleGoalStatusChange = (goalId: string, newStatus: ClientGoal['status'], currentStatus: ClientGoal['status']) => {
-    // If clicking the already-active status, toggle back to 'not-started'
     const finalStatus = newStatus === currentStatus ? 'not-started' : newStatus;
     updateGoal(profileId, goalId, { status: finalStatus });
     refreshProfile();
@@ -163,6 +203,16 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
       case 'not-started': return 'bg-slate-50 border-slate-200 text-slate-600';
     }
   };
+
+  // Count total goals across all categories
+  const totalGoals = profile?.goalCategories.reduce((sum, cat) => sum + cat.goals.length, 0) ?? 0;
+  const activeGoals = profile?.goalCategories.reduce(
+    (sum, cat) => sum + cat.goals.filter(g => g.status === 'in-progress' || g.status === 'not-started').length, 0
+  ) ?? 0;
+
+  // Get existing category names to filter presets
+  const existingCategoryNames = profile?.goalCategories.map(c => c.name.toLowerCase()) ?? [];
+  const availablePresets = CATEGORY_PRESETS.filter(p => !existingCategoryNames.includes(p.toLowerCase()));
 
   if (!profile) {
     return (
@@ -253,7 +303,7 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
                   </div>
                   <div>
                     <Label>Notes</Label>
-                    <Textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={3} className="mt-1" />
+                    <Textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={3} className="mt-1" placeholder="Any additional notes..." />
                   </div>
                   <div className="flex items-center gap-2 justify-end">
                     <Button variant="outline" size="sm" onClick={() => setEditingProfile(false)}>Cancel</Button>
@@ -314,7 +364,89 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
           )}
         </section>
 
-        {/* ===== GOALS SECTION ===== */}
+        {/* ===== MILESTONES SECTION ===== */}
+        <section className="bg-white rounded-xl border border-[#E5E1D8] overflow-hidden">
+          <button
+            onClick={() => setExpandedSection(expandedSection === 'milestones' ? null : 'milestones')}
+            className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-[#FAF9F6] transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <MilestoneIcon className="w-4 h-4 text-[#0D7377]" />
+              <span className="text-sm font-semibold text-[#2C2C2C]">Developmental Milestones</span>
+              {profile.milestones.filter(m => m.ageAchieved).length > 0 && (
+                <span className="text-xs bg-[#0D7377]/10 text-[#0D7377] px-2 py-0.5 rounded-full font-medium">
+                  {profile.milestones.filter(m => m.ageAchieved).length}/{profile.milestones.length} recorded
+                </span>
+              )}
+            </div>
+            {expandedSection === 'milestones' ? <ChevronUp className="w-4 h-4 text-[#8B8B8B]" /> : <ChevronDown className="w-4 h-4 text-[#8B8B8B]" />}
+          </button>
+
+          {expandedSection === 'milestones' && (
+            <div className="px-5 pb-5 border-t border-[#E5E1D8]">
+              <div className="pt-4 space-y-2">
+                {profile.milestones.map((milestone, idx) => (
+                  <div key={milestone.label} className="flex items-center gap-3">
+                    <span className="text-sm text-[#2C2C2C] font-medium w-28 flex-shrink-0">{milestone.label}:</span>
+                    <Input
+                      value={milestone.ageAchieved}
+                      onChange={e => {
+                        updateMilestone(profileId, milestone.label, e.target.value);
+                        refreshProfile();
+                      }}
+                      placeholder="e.g., 6 months"
+                      className="flex-1 h-8 text-sm"
+                    />
+                    {/* Only allow removing custom milestones (not the 6 defaults) */}
+                    {!DEFAULT_MILESTONES.some(d => d.label === milestone.label) && (
+                      <button
+                        onClick={() => { removeMilestone(profileId, milestone.label); refreshProfile(); }}
+                        className="p-1 text-[#C0BDB6] hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+
+                {/* Add custom milestone */}
+                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#E5E1D8]">
+                  <Input
+                    value={newMilestoneLabel}
+                    onChange={e => setNewMilestoneLabel(e.target.value)}
+                    placeholder="Add custom milestone..."
+                    className="flex-1 h-8 text-sm"
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && newMilestoneLabel.trim()) {
+                        addMilestone(profileId, newMilestoneLabel.trim());
+                        setNewMilestoneLabel('');
+                        refreshProfile();
+                        toast.success('Milestone added');
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (newMilestoneLabel.trim()) {
+                        addMilestone(profileId, newMilestoneLabel.trim());
+                        setNewMilestoneLabel('');
+                        refreshProfile();
+                        toast.success('Milestone added');
+                      }
+                    }}
+                    className="h-8 gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* ===== GOALS SECTION (CATEGORIZED) ===== */}
         <section className="bg-white rounded-xl border border-[#E5E1D8] overflow-hidden">
           <button
             onClick={() => setExpandedSection(expandedSection === 'goals' ? null : 'goals')}
@@ -323,9 +455,9 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
             <div className="flex items-center gap-2">
               <Target className="w-4 h-4 text-[#0D7377]" />
               <span className="text-sm font-semibold text-[#2C2C2C]">Goals</span>
-              {profile.goals.length > 0 && (
+              {totalGoals > 0 && (
                 <span className="text-xs bg-[#0D7377]/10 text-[#0D7377] px-2 py-0.5 rounded-full font-medium">
-                  {profile.goals.filter(g => g.status === 'in-progress').length} active
+                  {activeGoals} active
                 </span>
               )}
             </div>
@@ -334,86 +466,206 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
 
           {expandedSection === 'goals' && (
             <div className="px-5 pb-5 border-t border-[#E5E1D8]">
-              <div className="pt-4 space-y-3">
-                {profile.goals.length === 0 && !showGoalForm && (
-                  <p className="text-sm text-[#8B8B8B] italic">No goals set yet. Add goals to track progress.</p>
+              <div className="pt-4 space-y-4">
+                {profile.goalCategories.length === 0 && !showCategoryForm && (
+                  <p className="text-sm text-[#8B8B8B] italic">No goal categories set yet. Add a category to start tracking goals.</p>
                 )}
 
-                {/* Goal List */}
-                {profile.goals.map(goal => (
-                  <div key={goal.id} className="border border-[#E5E1D8] rounded-lg p-3 space-y-2">
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5">{statusIcon(goal.status)}</div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-[#2C2C2C]">{goal.text}</p>
-                        <div className="flex items-center gap-3 mt-1.5">
-                          {goal.goalDate && (
-                            <span className="text-xs text-[#8B8B8B]">
-                              Target: {new Date(goal.goalDate).toLocaleDateString()}
-                            </span>
-                          )}
-                          {goal.dateMet && (
-                            <span className="text-xs text-green-600">
-                              Met: {new Date(goal.dateMet).toLocaleDateString()}
-                            </span>
-                          )}
+                {/* Category List */}
+                {profile.goalCategories.map(category => (
+                  <div key={category.id} className="border border-[#E5E1D8] rounded-lg overflow-hidden">
+                    {/* Category Header */}
+                    <div className="bg-[#FAF9F6] px-4 py-2.5 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-[#2C2C2C] uppercase tracking-wide">{category.name}</h4>
+                        <span className="text-xs text-[#8B8B8B]">({category.goals.length} goal{category.goals.length !== 1 ? 's' : ''})</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => {
+                            if (editingCategoryNoteId === category.id) {
+                              setEditingCategoryNoteId(null);
+                            } else {
+                              setEditingCategoryNoteId(category.id);
+                              setEditCategoryNote(category.note || '');
+                            }
+                          }}
+                          className="p-1.5 rounded hover:bg-[#E5E1D8] transition-colors"
+                          title="Add/edit note"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5 text-[#8B8B8B]" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCategory(category.id, category.name)}
+                          className="p-1.5 rounded hover:bg-red-50 transition-colors"
+                          title="Delete category"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-[#C0BDB6] hover:text-red-500" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Category Note (edit or display) */}
+                    {editingCategoryNoteId === category.id && (
+                      <div className="px-4 py-2 bg-[#FAF9F6] border-t border-[#E5E1D8]">
+                        <Textarea
+                          value={editCategoryNote}
+                          onChange={e => setEditCategoryNote(e.target.value)}
+                          placeholder="Add a note for this category (e.g., *Child receives PT services through private insurance)"
+                          rows={2}
+                          className="text-sm"
+                          autoFocus
+                        />
+                        <div className="flex gap-2 mt-2 justify-end">
+                          <Button variant="outline" size="sm" onClick={() => setEditingCategoryNoteId(null)}>Cancel</Button>
+                          <Button size="sm" onClick={() => handleSaveCategoryNote(category.id)} className="bg-[#0D7377] hover:bg-[#0a5c5f] text-white">Save Note</Button>
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleDeleteGoal(goal.id)}
-                        className="p-1 text-[#C0BDB6] hover:text-red-500 transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    {/* Status toggle buttons */}
-                    <div className="flex items-center gap-2 ml-7">
-                      {(['in-progress', 'met', 'not-met'] as const).map(status => (
-                        <button
-                          key={status}
-                          onClick={() => handleGoalStatusChange(goal.id, status, goal.status)}
-                          className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                            goal.status === status
-                              ? statusColor(status)
-                              : 'border-[#E5E1D8] text-[#8B8B8B] hover:border-[#0D7377]/30'
-                          }`}
-                        >
-                          {statusLabel(status)}
-                        </button>
+                    )}
+                    {!editingCategoryNoteId && category.note && (
+                      <div className="px-4 py-2 bg-[#FAF9F6] border-t border-[#E5E1D8]">
+                        <p className="text-xs text-[#6B6B6B] italic">*{category.note}</p>
+                      </div>
+                    )}
+
+                    {/* Goals within this category */}
+                    <div className="divide-y divide-[#E5E1D8]">
+                      {category.goals.map(goal => (
+                        <div key={goal.id} className="px-4 py-3 space-y-2">
+                          <div className="flex items-start gap-3">
+                            <div className="mt-0.5">{statusIcon(goal.status)}</div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-[#2C2C2C]">{goal.text}</p>
+                              <div className="flex items-center gap-3 mt-1">
+                                {goal.goalDate && (
+                                  <span className="text-xs text-[#8B8B8B]">
+                                    Target: {new Date(goal.goalDate).toLocaleDateString()}
+                                  </span>
+                                )}
+                                {goal.dateMet && goal.status === 'met' && (
+                                  <span className="text-xs text-green-600">
+                                    Met: {new Date(goal.dateMet).toLocaleDateString()}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleDeleteGoal(goal.id)}
+                              className="p-1 text-[#C0BDB6] hover:text-red-500 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          {/* Status toggle buttons */}
+                          <div className="flex items-center gap-2 ml-7">
+                            {(['in-progress', 'met', 'not-met'] as const).map(status => (
+                              <button
+                                key={status}
+                                onClick={() => handleGoalStatusChange(goal.id, status, goal.status)}
+                                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                                  goal.status === status
+                                    ? statusColor(status)
+                                    : 'border-[#E5E1D8] text-[#8B8B8B] hover:border-[#0D7377]/30'
+                                }`}
+                              >
+                                {statusLabel(status)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       ))}
                     </div>
+
+                    {/* Add Goal to this category */}
+                    {addingGoalToCategoryId === category.id ? (
+                      <div className="px-4 py-3 border-t border-[#E5E1D8] bg-[#0D7377]/[0.02] space-y-3">
+                        <div>
+                          <Label className="text-xs">Goal Description *</Label>
+                          <Textarea
+                            value={goalText}
+                            onChange={e => setGoalText(e.target.value)}
+                            placeholder={`e.g., ${profile.firstName} will exhibit improved ${category.name.toLowerCase()} skills...`}
+                            rows={2}
+                            className="mt-1 text-sm"
+                            autoFocus
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Target Date (optional)</Label>
+                          <Input
+                            type="date"
+                            value={goalDate}
+                            onChange={e => setGoalDate(e.target.value)}
+                            className="mt-1 w-48 text-sm"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2 justify-end">
+                          <Button variant="outline" size="sm" onClick={() => { setAddingGoalToCategoryId(null); setGoalText(''); setGoalDate(''); }}>
+                            Cancel
+                          </Button>
+                          <Button size="sm" onClick={() => handleAddGoal(category.id)} className="bg-[#0D7377] hover:bg-[#0a5c5f] text-white gap-1.5">
+                            <Plus className="w-3.5 h-3.5" /> Add Goal
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => { setAddingGoalToCategoryId(category.id); setGoalText(''); setGoalDate(''); }}
+                        className="w-full px-4 py-2.5 border-t border-[#E5E1D8] text-xs text-[#0D7377] hover:bg-[#0D7377]/5 transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Add Goal
+                      </button>
+                    )}
                   </div>
                 ))}
 
-                {/* Add Goal Form */}
-                {showGoalForm ? (
+                {/* Add Category Form */}
+                {showCategoryForm ? (
                   <div className="border-2 border-dashed border-[#0D7377]/30 rounded-lg p-4 space-y-3 bg-[#0D7377]/[0.02]">
                     <div>
-                      <Label>Goal Description *</Label>
-                      <Textarea
-                        value={goalText}
-                        onChange={e => setGoalText(e.target.value)}
-                        placeholder="e.g., Improve bilateral hand coordination for self-feeding tasks"
-                        rows={2}
+                      <Label className="text-xs">Category Name *</Label>
+                      <Input
+                        value={newCategoryName}
+                        onChange={e => setNewCategoryName(e.target.value)}
+                        placeholder="e.g., Fine Motor"
                         className="mt-1"
                         autoFocus
                       />
+                      {/* Quick preset buttons */}
+                      {availablePresets.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {availablePresets.map(preset => (
+                            <button
+                              key={preset}
+                              onClick={() => setNewCategoryName(preset)}
+                              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                                newCategoryName === preset
+                                  ? 'bg-[#0D7377] text-white border-[#0D7377]'
+                                  : 'border-[#E5E1D8] text-[#6B6B6B] hover:border-[#0D7377]/40 hover:text-[#0D7377]'
+                              }`}
+                            >
+                              {preset}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div>
-                      <Label>Target Date (optional)</Label>
-                      <Input
-                        type="date"
-                        value={goalDate}
-                        onChange={e => setGoalDate(e.target.value)}
-                        className="mt-1 w-48"
+                      <Label className="text-xs">Category Note (optional)</Label>
+                      <Textarea
+                        value={newCategoryNote}
+                        onChange={e => setNewCategoryNote(e.target.value)}
+                        placeholder="e.g., Child receives physical therapy services through private insurance"
+                        rows={2}
+                        className="mt-1 text-sm"
                       />
                     </div>
                     <div className="flex items-center gap-2 justify-end">
-                      <Button variant="outline" size="sm" onClick={() => { setShowGoalForm(false); setGoalText(''); setGoalDate(''); }}>
+                      <Button variant="outline" size="sm" onClick={() => { setShowCategoryForm(false); setNewCategoryName(''); setNewCategoryNote(''); }}>
                         Cancel
                       </Button>
-                      <Button size="sm" onClick={handleAddGoal} className="bg-[#0D7377] hover:bg-[#0a5c5f] text-white gap-1.5">
-                        <Plus className="w-3.5 h-3.5" /> Add Goal
+                      <Button size="sm" onClick={handleAddCategory} className="bg-[#0D7377] hover:bg-[#0a5c5f] text-white gap-1.5">
+                        <FolderPlus className="w-3.5 h-3.5" /> Add Category
                       </Button>
                     </div>
                   </div>
@@ -421,10 +673,10 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setShowGoalForm(true)}
+                    onClick={() => setShowCategoryForm(true)}
                     className="gap-1.5 w-full border-dashed"
                   >
-                    <Plus className="w-3.5 h-3.5" /> Add Goal
+                    <FolderPlus className="w-3.5 h-3.5" /> Add Goal Category
                   </Button>
                 )}
               </div>

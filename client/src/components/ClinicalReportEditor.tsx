@@ -16,20 +16,19 @@
 import { useMultiAssessment, type ChildInfo, type ExaminerInfo } from '@/contexts/MultiAssessmentContext';
 import { getFormById, type FormDefinition, type UnifiedDomain } from '@/lib/formRegistry';
 import { lookupScaledScore, lookupAgeEquivalent, lookupGrowthScaleValue, lookupStandardScore } from '@/lib/scoringTables';
-import { REEL3_AGE_EQUIVALENT } from '@/lib/reel3Data';
 import { lookupDAYC2StandardScore, lookupDAYC2AgeEquivalent, lookupDAYC2PercentileRank, lookupDAYC2DescriptiveTerm } from '@/lib/dayc2ScoringTables';
 import { lookupDAYC2WithBayley4AB, computeDAYC2BayleyComposites, getScaledScoreClassification, getCompositeClassification, type CompositeResult } from '@/lib/bayley4AdaptiveSE';
-import { lookupREEL3AbilityScore, lookupREEL3PercentileRank, lookupREEL3DescriptiveTerm } from '@/lib/reel3ScoringTables';
+import { lookupREEL3AgeEquivalent, lookupREEL3AbilityScore, lookupREEL3PercentileRank, lookupREEL3DescriptiveTerm, lookupREEL3LanguageAbility } from '@/lib/reel3ScoringTables';
 import { SP2_ENGLISH_CUTOFFS, SP2_BIRTH6MO_CUTOFFS, SP2_QUADRANT_MAP, getSP2Description } from '@/lib/sensoryProfileData';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Download, Printer, FileText, ChevronDown, ChevronUp, Pencil, Check, RotateCcw, Save, Eye, EyeOff, LayoutTemplate, FileDown, BookmarkPlus, FileOutput, WandSparkles, Loader2, Undo2, Target } from 'lucide-react';
+import { ArrowLeft, Download, Printer, FileText, ChevronDown, ChevronUp, Pencil, Check, RotateCcw, Save, Eye, EyeOff, LayoutTemplate, FileDown, BookmarkPlus, FileOutput, WandSparkles, Loader2, Undo2, Target, Milestone as MilestoneIcon } from 'lucide-react';
 import { generateDocxReport, type DocxReportData, type DomainNarrativeData as DocxDomainNarrative } from '@/lib/generateDocx';
 import { generatePdfReport } from '@/lib/generateReportPdf';
 import { loadAppSettings, type RecommendationTemplate } from '@/components/SettingsPreferences';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { saveMultiSession } from '@/lib/multiSessionStorage';
-import { linkAssessment, getProfile, updateGoal, type ClientGoal } from '@/lib/clientProfileStorage';
+import { linkAssessment, getProfile, updateGoal, type ClientGoal, type GoalCategory, type Milestone } from '@/lib/clientProfileStorage';
 import { FeedingPerformanceChecklist, ASPIRATION_SIGN_LABELS } from '@/components/FeedingPerformanceChecklist';
 import type { FeedingChecklistDataType } from '@/components/FeedingPerformanceChecklist';
 import type { FeedingChecklistExportData } from '@/lib/generateDocx';
@@ -48,20 +47,42 @@ import { enhanceWithAI, generateRecommendations, isOnline, isAiConfigured } from
 // ============================================================
 
 function GoalsReportSection({ profileId }: { profileId: string }) {
-  const [goals, setGoals] = useState<ClientGoal[]>([]);
+  const [categories, setCategories] = useState<GoalCategory[]>([]);
   const [enabled, setEnabled] = useState(false);
   const [selectedGoalIds, setSelectedGoalIds] = useState<Set<string>>(new Set());
-  const [allSelected, setAllSelected] = useState(true);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const profile = getProfile(profileId);
-    if (profile && profile.goals.length > 0) {
-      setGoals(profile.goals);
-      setSelectedGoalIds(new Set(profile.goals.map(g => g.id)));
+    if (profile && profile.goalCategories && profile.goalCategories.length > 0) {
+      setCategories(profile.goalCategories);
+      // Select all categories and goals by default
+      setSelectedCategoryIds(new Set(profile.goalCategories.map(c => c.id)));
+      const allGoalIds = new Set<string>();
+      profile.goalCategories.forEach(c => c.goals.forEach(g => allGoalIds.add(g.id)));
+      setSelectedGoalIds(allGoalIds);
     }
   }, [profileId]);
 
-  if (goals.length === 0) return null;
+  const totalGoals = categories.reduce((sum, c) => sum + c.goals.length, 0);
+  if (totalGoals === 0) return null;
+
+  const toggleCategory = (catId: string) => {
+    setSelectedCategoryIds(prev => {
+      const next = new Set(prev);
+      const cat = categories.find(c => c.id === catId);
+      if (next.has(catId)) {
+        next.delete(catId);
+        // Also deselect all goals in this category
+        cat?.goals.forEach(g => setSelectedGoalIds(p => { const n = new Set(p); n.delete(g.id); return n; }));
+      } else {
+        next.add(catId);
+        // Also select all goals in this category
+        cat?.goals.forEach(g => setSelectedGoalIds(p => { const n = new Set(p); n.add(g.id); return n; }));
+      }
+      return next;
+    });
+  };
 
   const toggleGoal = (id: string) => {
     setSelectedGoalIds(prev => {
@@ -72,22 +93,27 @@ function GoalsReportSection({ profileId }: { profileId: string }) {
     });
   };
 
+  const allSelected = selectedGoalIds.size === totalGoals;
   const toggleAll = () => {
     if (allSelected) {
       setSelectedGoalIds(new Set());
+      setSelectedCategoryIds(new Set());
     } else {
-      setSelectedGoalIds(new Set(goals.map(g => g.id)));
+      const allGoalIds = new Set<string>();
+      categories.forEach(c => c.goals.forEach(g => allGoalIds.add(g.id)));
+      setSelectedGoalIds(allGoalIds);
+      setSelectedCategoryIds(new Set(categories.map(c => c.id)));
     }
-    setAllSelected(!allSelected);
   };
 
   const handleStatusChange = (goalId: string, newStatus: ClientGoal['status'], currentStatus: ClientGoal['status']) => {
     const finalStatus = newStatus === currentStatus ? 'not-started' : newStatus;
     updateGoal(profileId, goalId, { status: finalStatus });
-    setGoals(prev => prev.map(g => g.id === goalId ? { ...g, status: finalStatus } : g));
+    setCategories(prev => prev.map(cat => ({
+      ...cat,
+      goals: cat.goals.map(g => g.id === goalId ? { ...g, status: finalStatus } : g)
+    })));
   };
-
-  const visibleGoals = goals.filter(g => selectedGoalIds.has(g.id));
 
   const statusLabel = (s: ClientGoal['status']) => {
     switch (s) {
@@ -121,6 +147,12 @@ function GoalsReportSection({ profileId }: { profileId: string }) {
     );
   }
 
+  // Filter to visible categories/goals
+  const visibleCategories = categories
+    .filter(c => selectedCategoryIds.has(c.id))
+    .map(c => ({ ...c, goals: c.goals.filter(g => selectedGoalIds.has(g.id)) }))
+    .filter(c => c.goals.length > 0);
+
   return (
     <div className="mt-6 border-t border-slate-300 pt-4">
       <div className="flex items-center justify-between mb-3">
@@ -143,52 +175,149 @@ function GoalsReportSection({ profileId }: { profileId: string }) {
         </div>
       </div>
 
-      {/* Goal selection checkboxes */}
-      <div className="mb-3 space-y-1.5">
-        {goals.map(goal => (
-          <label key={goal.id} className="flex items-start gap-2 text-sm cursor-pointer">
-            <input
-              type="checkbox"
-              checked={selectedGoalIds.has(goal.id)}
-              onChange={() => toggleGoal(goal.id)}
-              className="mt-0.5 accent-[#0D7377]"
-            />
-            <span className={selectedGoalIds.has(goal.id) ? 'text-slate-800' : 'text-slate-400 line-through'}>
-              {goal.text}
-            </span>
-          </label>
+      {/* Category & goal selection checkboxes */}
+      <div className="mb-3 space-y-2">
+        {categories.map(cat => (
+          <div key={cat.id}>
+            <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer text-slate-700">
+              <input
+                type="checkbox"
+                checked={selectedCategoryIds.has(cat.id)}
+                onChange={() => toggleCategory(cat.id)}
+                className="accent-[#0D7377]"
+              />
+              {cat.name}
+            </label>
+            {selectedCategoryIds.has(cat.id) && (
+              <div className="ml-5 mt-1 space-y-1">
+                {cat.goals.map(goal => (
+                  <label key={goal.id} className="flex items-start gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedGoalIds.has(goal.id)}
+                      onChange={() => toggleGoal(goal.id)}
+                      className="mt-0.5 accent-[#0D7377]"
+                    />
+                    <span className={selectedGoalIds.has(goal.id) ? 'text-slate-800' : 'text-slate-400 line-through'}>
+                      {goal.text}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
         ))}
       </div>
 
-      {/* Rendered goals for report */}
-      {visibleGoals.length > 0 && (
-        <div className="bg-slate-50 border border-slate-200 rounded-md p-4 space-y-2">
-          {visibleGoals.map((goal, idx) => (
-            <div key={goal.id} className="flex items-start gap-3">
-              <span className="text-sm font-serif text-slate-600 mt-0.5">{idx + 1}.</span>
-              <div className="flex-1">
-                <p className="text-sm font-serif text-slate-800">{goal.text}</p>
-                {goal.goalDate && (
-                  <p className="text-xs text-slate-500 mt-0.5">Target: {new Date(goal.goalDate).toLocaleDateString()}</p>
-                )}
-              </div>
-              <div className="flex gap-1">
-                {(['in-progress', 'met', 'not-met'] as const).map(s => (
-                  <button
-                    key={s}
-                    onClick={() => handleStatusChange(goal.id, s, goal.status)}
-                    className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
-                      goal.status === s ? statusColor(s) : 'border-slate-200 text-slate-400 hover:border-slate-300'
-                    }`}
-                  >
-                    {statusLabel(s)}
-                  </button>
+      {/* Rendered goals for report — grouped by category */}
+      {visibleCategories.length > 0 && (
+        <div className="bg-slate-50 border border-slate-200 rounded-md p-4 space-y-4">
+          {visibleCategories.map(cat => (
+            <div key={cat.id}>
+              <h4 className="text-sm font-bold font-serif text-slate-800 underline decoration-1 underline-offset-2 mb-1.5">
+                {cat.name.toUpperCase()}
+              </h4>
+              {cat.note && (
+                <p className="text-xs font-serif text-slate-600 italic mb-1.5">*{cat.note}</p>
+              )}
+              <div className="space-y-1.5">
+                {cat.goals.map((goal, idx) => (
+                  <div key={goal.id} className="flex items-start gap-3">
+                    <span className="text-sm font-serif text-slate-600 mt-0.5 w-5 text-right flex-shrink-0">{idx + 1}.</span>
+                    <div className="flex-1">
+                      <p className="text-sm font-serif text-slate-800">{goal.text}</p>
+                      {goal.goalDate && (
+                        <p className="text-xs text-slate-500 mt-0.5">Target: {new Date(goal.goalDate).toLocaleDateString()}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
+                      {(['in-progress', 'met', 'not-met'] as const).map(s => (
+                        <button
+                          key={s}
+                          onClick={() => handleStatusChange(goal.id, s, goal.status)}
+                          className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
+                            goal.status === s ? statusColor(s) : 'border-slate-200 text-slate-400 hover:border-slate-300'
+                          }`}
+                        >
+                          {statusLabel(s)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ============================================================
+// MilestonesReportSection — opt-in component for rendering milestones in report
+// ============================================================
+
+function MilestonesReportSection({ profileId }: { profileId: string }) {
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    const profile = getProfile(profileId);
+    if (profile && profile.milestones && profile.milestones.length > 0) {
+      setMilestones(profile.milestones);
+    }
+  }, [profileId]);
+
+  if (milestones.length === 0) return null;
+
+  // Not enabled yet — show the opt-in button
+  if (!enabled) {
+    return (
+      <div className="mt-6 border-t border-slate-300 pt-4">
+        <button
+          onClick={() => setEnabled(true)}
+          className="w-full py-3 border-2 border-dashed border-[#0D7377]/30 rounded-lg text-sm font-medium text-[#0D7377] hover:bg-[#0D7377]/5 hover:border-[#0D7377]/50 transition-colors flex items-center justify-center gap-2"
+        >
+          <MilestoneIcon className="w-4 h-4" />
+          Add Milestones to Report
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-6 border-t border-slate-300 pt-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-base font-bold font-serif text-slate-800 flex items-center gap-2">
+          Developmental Milestones
+        </h3>
+        <button
+          onClick={() => setEnabled(false)}
+          className="text-xs text-red-500 hover:underline"
+        >
+          Remove Milestones
+        </button>
+      </div>
+
+      <div className="bg-slate-50 border border-slate-200 rounded-md p-4">
+        <table className="w-full text-sm font-serif">
+          <thead>
+            <tr className="border-b border-slate-300">
+              <th className="text-left py-1.5 font-semibold text-slate-700 w-1/3">Milestone</th>
+              <th className="text-left py-1.5 font-semibold text-slate-700">Age Achieved</th>
+            </tr>
+          </thead>
+          <tbody>
+            {milestones.map(m => (
+              <tr key={m.label} className="border-b border-slate-100">
+                <td className="py-1.5 text-slate-700 font-medium">{m.label}</td>
+                <td className="py-1.5 text-slate-800">{m.ageAchieved || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -284,6 +413,11 @@ interface SavedReportState {
   scoreOverrides?: Record<string, string>; // e.g. "bayley4_cognitive_scaledScore" → "8"
   uciNumber?: string;
   regionalCenter?: string;
+  // Evaluation Period
+  evalPeriodMode?: 'range' | 'text';
+  evalPeriodText?: string;
+  evalPeriodStart?: string;
+  evalPeriodEnd?: string;
   // SI-specific
   testingConditions: string;
   validityStatement: string;
@@ -922,6 +1056,12 @@ export default function ClinicalReportEditor() {
   const [uciNumber, setUciNumber] = useState(() => savedReport?.uciNumber ?? '');
   const [regionalCenter, setRegionalCenter] = useState(() => savedReport?.regionalCenter ?? '');
 
+  // Evaluation Period
+  const [evalPeriodMode, setEvalPeriodMode] = useState<'range' | 'text'>(() => savedReport?.evalPeriodMode ?? 'text');
+  const [evalPeriodText, setEvalPeriodText] = useState(() => savedReport?.evalPeriodText ?? '');
+  const [evalPeriodStart, setEvalPeriodStart] = useState(() => savedReport?.evalPeriodStart ?? '');
+  const [evalPeriodEnd, setEvalPeriodEnd] = useState(() => savedReport?.evalPeriodEnd ?? '');
+
   // SI-specific editable sections
   const [testingConditions, setTestingConditions] = useState(() =>
     savedReport?.testingConditions ??
@@ -977,6 +1117,7 @@ export default function ClinicalReportEditor() {
       template, referralInfo, medicalHistory, parentConcerns, clinicalObservation,
       feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName,
       reportTitle, domainOverrides, scoreOverrides, uciNumber, regionalCenter,
+      evalPeriodMode, evalPeriodText, evalPeriodStart, evalPeriodEnd,
       testingConditions, validityStatement,
       quadrantNarratives, sectionNarratives, siSummary, childKey,
       feedingTestingConditions, feedingOralStructures, feedingBehaviors, feedingOralMotorCoord,
@@ -990,9 +1131,9 @@ export default function ClinicalReportEditor() {
       setLastSavedAt(reportState.savedAt);
       setIsDirty(false);
     } catch { /* localStorage full */ }
-  }, [template, referralInfo, medicalHistory, parentConcerns, clinicalObservation, feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName, reportTitle, domainOverrides, scoreOverrides, uciNumber, regionalCenter, testingConditions, validityStatement, quadrantNarratives, sectionNarratives, siSummary, childKey, feedingTestingConditions, feedingOralStructures, feedingBehaviors, feedingOralMotorCoord, feedingFoodRepertoire, feedingSelfFeeding, feedingPreviousHistory, feedingDrinking, feedingVestibular, feedingProprioceptive, feedingTactile, feedingROM, feedingMuscleStrength, feedingMuscleTone, feedingPosturalStability, feedingSummary]);
+  }, [template, referralInfo, medicalHistory, parentConcerns, clinicalObservation, feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName, reportTitle, domainOverrides, scoreOverrides, uciNumber, regionalCenter, evalPeriodMode, evalPeriodText, evalPeriodStart, evalPeriodEnd, testingConditions, validityStatement, quadrantNarratives, sectionNarratives, siSummary, childKey, feedingTestingConditions, feedingOralStructures, feedingBehaviors, feedingOralMotorCoord, feedingFoodRepertoire, feedingSelfFeeding, feedingPreviousHistory, feedingDrinking, feedingVestibular, feedingProprioceptive, feedingTactile, feedingROM, feedingMuscleStrength, feedingMuscleTone, feedingPosturalStability, feedingSummary]);
 
-  useEffect(() => { setIsDirty(true); }, [template, referralInfo, medicalHistory, parentConcerns, clinicalObservation, feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName, reportTitle, domainOverrides, scoreOverrides, uciNumber, regionalCenter, testingConditions, validityStatement, quadrantNarratives, sectionNarratives, siSummary, feedingTestingConditions, feedingOralStructures, feedingBehaviors, feedingOralMotorCoord, feedingFoodRepertoire, feedingSelfFeeding, feedingPreviousHistory, feedingDrinking, feedingVestibular, feedingProprioceptive, feedingTactile, feedingROM, feedingMuscleStrength, feedingMuscleTone, feedingPosturalStability, feedingSummary]);
+  useEffect(() => { setIsDirty(true); }, [template, referralInfo, medicalHistory, parentConcerns, clinicalObservation, feedingOralMotor, sensoryNarrative, recommendations, closingNote, practiceName, reportTitle, domainOverrides, scoreOverrides, uciNumber, regionalCenter, evalPeriodMode, evalPeriodText, evalPeriodStart, evalPeriodEnd, testingConditions, validityStatement, quadrantNarratives, sectionNarratives, siSummary, feedingTestingConditions, feedingOralStructures, feedingBehaviors, feedingOralMotorCoord, feedingFoodRepertoire, feedingSelfFeeding, feedingPreviousHistory, feedingDrinking, feedingVestibular, feedingProprioceptive, feedingTactile, feedingROM, feedingMuscleStrength, feedingMuscleTone, feedingPosturalStability, feedingSummary]);
 
   useEffect(() => {
     if (!isDirty) return;
@@ -1106,11 +1247,8 @@ export default function ClinicalReportEditor() {
       const ds = formState.domains[domainLocalId];
       if (!ds) return null;
       const rawScore = Object.values(ds.scores).reduce((sum: number, s) => sum + (s || 0), 0);
-      const aeEntry = REEL3_AGE_EQUIVALENT.find(e => {
-        const key = domainLocalId === 'receptive' ? 'receptive' : 'expressive';
-        return (e as any)[key] === rawScore;
-      });
-      const aeMonths = aeEntry ? (aeEntry as any).ageMonths : null;
+      const scoringKey = domainLocalId === 'receptive' ? 'receptive' as const : 'expressive' as const;
+      const aeMonths = lookupREEL3AgeEquivalent(rawScore, scoringKey);
       const ageEq = aeMonths !== null ? `${aeMonths} months` : 'N/A';
       // % delay using Excel formula: ((aeMonths*30) / (childMonths*30 + childDays)) - 1
       let pctDelay = '';
@@ -1130,7 +1268,6 @@ export default function ClinicalReportEditor() {
       }
 
       // Ability score lookup
-      const scoringKey = domainLocalId === 'receptive' ? 'receptive' as const : 'expressive' as const;
       const abilityScore = lookupREEL3AbilityScore(rawScore, ageMonthsVal, scoringKey);
       const percentileRank = abilityScore !== null ? (lookupREEL3PercentileRank(abilityScore) ?? '—') : '—';
       const descriptiveTerm = abilityScore !== null ? lookupREEL3DescriptiveTerm(abilityScore) : '—';
@@ -1881,6 +2018,10 @@ export default function ClinicalReportEditor() {
         adjAge,
         uciNumber,
         regionalCenter,
+        evalPeriodMode,
+        evalPeriodText,
+        evalPeriodStart,
+        evalPeriodEnd,
 
         referralInfo,
         medicalHistory,
@@ -2244,6 +2385,56 @@ export default function ClinicalReportEditor() {
                     <td className="px-4 py-2 text-slate-900">{formatDate(childInfo.testDate)}</td>
                   </tr>
                   <tr className="border-b border-slate-200">
+                    <td className="px-4 py-2 font-bold text-slate-700 bg-slate-50">EVALUATION PERIOD:</td>
+                    <td className="px-4 py-2 text-slate-900">
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 mr-2">
+                          <button
+                            onClick={() => setEvalPeriodMode('text')}
+                            className={`text-xs px-2 py-0.5 rounded border transition-colors ${
+                              evalPeriodMode === 'text' ? 'bg-[#0D7377] text-white border-[#0D7377]' : 'border-slate-300 text-slate-500 hover:border-slate-400'
+                            }`}
+                          >
+                            Text
+                          </button>
+                          <button
+                            onClick={() => setEvalPeriodMode('range')}
+                            className={`text-xs px-2 py-0.5 rounded border transition-colors ${
+                              evalPeriodMode === 'range' ? 'bg-[#0D7377] text-white border-[#0D7377]' : 'border-slate-300 text-slate-500 hover:border-slate-400'
+                            }`}
+                          >
+                            Date Range
+                          </button>
+                        </div>
+                        {evalPeriodMode === 'text' ? (
+                          <input
+                            type="text"
+                            value={evalPeriodText}
+                            onChange={e => setEvalPeriodText(e.target.value)}
+                            placeholder="e.g., May 2026"
+                            className="flex-1 bg-transparent border-none outline-none text-slate-900 placeholder:text-slate-400 placeholder:italic text-sm p-0 focus:ring-0"
+                          />
+                        ) : (
+                          <div className="flex items-center gap-1 text-sm">
+                            <input
+                              type="date"
+                              value={evalPeriodStart}
+                              onChange={e => setEvalPeriodStart(e.target.value)}
+                              className="bg-transparent border border-slate-200 rounded px-1.5 py-0.5 text-sm text-slate-900 focus:ring-1 focus:ring-[#0D7377]"
+                            />
+                            <span className="text-slate-400">to</span>
+                            <input
+                              type="date"
+                              value={evalPeriodEnd}
+                              onChange={e => setEvalPeriodEnd(e.target.value)}
+                              className="bg-transparent border border-slate-200 rounded px-1.5 py-0.5 text-sm text-slate-900 focus:ring-1 focus:ring-[#0D7377]"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  <tr className="border-b border-slate-200">
                     <td className="px-4 py-2 font-bold text-slate-700 bg-slate-50">DATE OF BIRTH:</td>
                     <td className="px-4 py-2 text-slate-900">{formatDate(childInfo.dob)}</td>
                   </tr>
@@ -2587,10 +2778,33 @@ export default function ClinicalReportEditor() {
                                     <EditableCell value={row.percentileRank} overrideKey={`reel3_${domKey}_percentileRank`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
                                     <EditableCell value={row.descriptiveTerm} overrideKey={`reel3_${domKey}_descriptiveTerm`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
                                     <EditableCell value={row.ageEquivalent} overrideKey={`reel3_${domKey}_ageEquivalent`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
-                                    <EditableCell value={row.percentDelay || '—'} overrideKey={`reel3_${domKey}_percentDelay`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
+                                    <EditableCell value={row.percentDelay || '\u2014'} overrideKey={`reel3_${domKey}_percentDelay`} overrides={scoreOverrides} setOverrides={setScoreOverrides} />
                                   </tr>
                                 );
                               })}
+                              {/* Language Ability Composite */}
+                              {(() => {
+                                const recRow = reel3Scores.find(r => r.domain.toLowerCase().includes('receptive'));
+                                const expRow = reel3Scores.find(r => r.domain.toLowerCase().includes('expressive'));
+                                if (recRow?.abilityScore != null && expRow?.abilityScore != null) {
+                                  const sumAbility = recRow.abilityScore + expRow.abilityScore;
+                                  const langAbility = lookupREEL3LanguageAbility(sumAbility);
+                                  const langPercentile = langAbility !== null ? (lookupREEL3PercentileRank(langAbility) ?? '\u2014') : '\u2014';
+                                  const langDesc = langAbility !== null ? lookupREEL3DescriptiveTerm(langAbility) : '\u2014';
+                                  return (
+                                    <tr className="bg-slate-50 font-semibold border-t-2 border-slate-500">
+                                      <td className="border border-slate-400 px-3 py-2">Language Ability (Composite)</td>
+                                      <td className="border border-slate-400 px-3 py-2 text-center">{sumAbility}</td>
+                                      <EditableCell value={langAbility ?? '\u2014'} overrideKey="reel3_languageability_abilityScore" overrides={scoreOverrides} setOverrides={setScoreOverrides} />
+                                      <EditableCell value={langPercentile} overrideKey="reel3_languageability_percentileRank" overrides={scoreOverrides} setOverrides={setScoreOverrides} />
+                                      <EditableCell value={langDesc} overrideKey="reel3_languageability_descriptiveTerm" overrides={scoreOverrides} setOverrides={setScoreOverrides} />
+                                      <td className="border border-slate-400 px-3 py-2 text-center text-slate-400">\u2014</td>
+                                      <td className="border border-slate-400 px-3 py-2 text-center text-slate-400">\u2014</td>
+                                    </tr>
+                                  );
+                                }
+                                return null;
+                              })()}
                             </tbody>
                           </table>
                         </div>
@@ -3360,6 +3574,11 @@ export default function ClinicalReportEditor() {
                   <p className="text-[10px] text-slate-400 mt-1.5">Exports Oral Motor, Feeding Behaviors, Self-Feeding, and Drinking checklists into a single multi-page PDF.</p>
                 </div>
               </>
+            )}
+
+            {/* ===== MILESTONES (from client profile) ===== */}
+            {state.activeProfileId && (
+              <MilestonesReportSection profileId={state.activeProfileId} />
             )}
 
             {/* ===== GOALS (from client profile) ===== */}

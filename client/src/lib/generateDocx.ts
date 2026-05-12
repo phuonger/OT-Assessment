@@ -128,6 +128,10 @@ export interface DocxReportData {
   adjAge: string | null;
   uciNumber?: string;
   regionalCenter?: string;
+  evalPeriodMode?: 'text' | 'range';
+  evalPeriodText?: string;
+  evalPeriodStart?: string;
+  evalPeriodEnd?: string;
 
   // Shared sections
   referralInfo: string;
@@ -448,6 +452,7 @@ function createInfoTable(data: DocxReportData): Table {
     { label: "CLIENT'S NAME:", value: data.childName.toUpperCase() },
     { label: 'UCI:', value: data.uciNumber || '' },
     { label: 'DATE OF EVALUATION:', value: data.testDate },
+    { label: 'EVALUATION PERIOD:', value: data.evalPeriodMode === 'range' && data.evalPeriodStart ? `${data.evalPeriodStart}${data.evalPeriodEnd ? ' to ' + data.evalPeriodEnd : ''}` : (data.evalPeriodText || '') },
     { label: 'DATE OF BIRTH:', value: data.dob },
     { label: 'CHRONOLOGICAL AGE:', value: data.chronAge },
   ];

@@ -334,9 +334,9 @@ export default function ClientProfiles({ onSelectProfile, onOpenSettings, onOpen
                         <Calendar className="w-3 h-3" />
                         {calculateAge(profile.dob)}
                       </span>
-                      {profile.goals.length > 0 && (
+                      {(profile.goalCategories?.reduce((sum, c) => sum + c.goals.length, 0) ?? 0) > 0 && (
                         <span className="text-xs text-[#8B8B8B]">
-                          {profile.goals.filter(g => g.status === 'in-progress').length} active goals
+                          {profile.goalCategories?.reduce((sum, c) => sum + c.goals.filter(g => g.status === 'in-progress' || g.status === 'not-started').length, 0) ?? 0} active goals
                         </span>
                       )}
                       {profile.linkedAssessmentIds.length > 0 && (
