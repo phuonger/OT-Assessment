@@ -41,6 +41,7 @@ import type { DrinkingData } from '@/components/DrinkingChecklist';
 import { generateAllChecklistsPdf } from '@/lib/generateAllChecklistsPdf';
 import { parseLocalDate, formatDateLocal, calculateAge } from '@/lib/dateUtils';
 import { enhanceWithAI, generateRecommendations, isOnline, isAiConfigured } from '@/lib/aiEnhance';
+import RecommendationsBuilder from '@/components/RecommendationsBuilder';
 
 // ============================================================
 // GoalsReportSection — inline component for rendering goals in report
@@ -2910,7 +2911,7 @@ export default function ClinicalReportEditor() {
                 <SectionHeader title="Recommendations" sectionKey="recs" collapsed={collapsedSections} toggle={toggleSection} />
                 {!collapsedSections.recs && (
                   <>
-                    <div className="mb-2 flex flex-wrap gap-2">
+                    <div className="mb-2 flex flex-wrap gap-2 no-print">
                       <Button
                         variant="outline"
                         size="sm"
@@ -2929,38 +2930,12 @@ export default function ClinicalReportEditor() {
                           Cancel
                         </Button>
                       )}
-                    {appSettings.recommendationTemplates.length > 0 && (
-                      <div className="relative">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowRecTemplatePicker(!showRecTemplatePicker)}
-                          className="gap-1.5 text-xs"
-                        >
-                          <BookmarkPlus className="w-3.5 h-3.5" />
-                          Insert Template
-                        </Button>
-                        {showRecTemplatePicker && (
-                          <div className="absolute top-9 left-0 z-50 bg-white border border-slate-200 rounded-lg shadow-lg w-80 max-h-64 overflow-y-auto">
-                            <div className="p-2 border-b border-slate-100">
-                              <p className="text-xs font-medium text-slate-500 px-2">Click to append to recommendations</p>
-                            </div>
-                            {appSettings.recommendationTemplates.map(tpl => (
-                              <button
-                                key={tpl.id}
-                                onClick={() => insertRecTemplate(tpl)}
-                                className="w-full text-left px-3 py-2.5 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors"
-                              >
-                                <p className="text-sm font-medium text-slate-800 truncate">{tpl.title}</p>
-                                <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{tpl.text}</p>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
                     </div>
-                    <EditableSection label="" value={recommendations} onChange={setRecommendations} childName={firstName} placeholder="Enter recommendations..." rows={10} />
+                    <RecommendationsBuilder
+                      value={recommendations}
+                      onChange={setRecommendations}
+                      firstName={firstName}
+                    />
                   </>
                 )}
               </>
@@ -3165,7 +3140,7 @@ export default function ClinicalReportEditor() {
                 <SectionHeader title="Summary and Recommendations" sectionKey="si_recs" collapsed={collapsedSections} toggle={toggleSection} />
                 {!collapsedSections.si_recs && (
                   <>
-                    <div className="mb-2 flex flex-wrap gap-2">
+                    <div className="mb-2 flex flex-wrap gap-2 no-print">
                       <Button
                         variant="outline"
                         size="sm"
@@ -3184,38 +3159,12 @@ export default function ClinicalReportEditor() {
                           Cancel
                         </Button>
                       )}
-                    {appSettings.recommendationTemplates.length > 0 && (
-                      <div className="relative">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowRecTemplatePicker(!showRecTemplatePicker)}
-                          className="gap-1.5 text-xs"
-                        >
-                          <BookmarkPlus className="w-3.5 h-3.5" />
-                          Insert Template
-                        </Button>
-                        {showRecTemplatePicker && (
-                          <div className="absolute top-9 left-0 z-50 bg-white border border-slate-200 rounded-lg shadow-lg w-80 max-h-64 overflow-y-auto">
-                            <div className="p-2 border-b border-slate-100">
-                              <p className="text-xs font-medium text-slate-500 px-2">Click to append to recommendations</p>
-                            </div>
-                            {appSettings.recommendationTemplates.map(tpl => (
-                              <button
-                                key={tpl.id}
-                                onClick={() => insertRecTemplate(tpl)}
-                                className="w-full text-left px-3 py-2.5 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors"
-                              >
-                                <p className="text-sm font-medium text-slate-800 truncate">{tpl.title}</p>
-                                <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{tpl.text}</p>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
                     </div>
-                    <EditableSection label="" value={recommendations} onChange={setRecommendations} childName={firstName} placeholder="Enter summary and recommendations..." rows={10} />
+                    <RecommendationsBuilder
+                      value={recommendations}
+                      onChange={setRecommendations}
+                      firstName={firstName}
+                    />
                   </>
                 )}
               </>
@@ -3491,38 +3440,12 @@ export default function ClinicalReportEditor() {
                           Cancel
                         </Button>
                       )}
-                    {appSettings.recommendationTemplates.length > 0 && (
-                      <div className="relative">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowRecTemplatePicker(!showRecTemplatePicker)}
-                          className="gap-1.5 text-xs"
-                        >
-                          <BookmarkPlus className="w-3.5 h-3.5" />
-                          Insert Template
-                        </Button>
-                        {showRecTemplatePicker && (
-                          <div className="absolute top-9 left-0 z-50 bg-white border border-slate-200 rounded-lg shadow-lg w-80 max-h-64 overflow-y-auto">
-                            <div className="p-2 border-b border-slate-100">
-                              <p className="text-xs font-medium text-slate-500 px-2">Click to append to summary</p>
-                            </div>
-                            {appSettings.recommendationTemplates.map(tpl => (
-                              <button
-                                key={tpl.id}
-                                onClick={() => { setFeedingSummary(prev => prev ? prev + '\n\n' + tpl.text : tpl.text); setShowRecTemplatePicker(false); }}
-                                className="w-full text-left px-3 py-2.5 hover:bg-slate-50 border-b border-slate-50 last:border-0 transition-colors"
-                              >
-                                <p className="text-sm font-medium text-slate-800 truncate">{tpl.title}</p>
-                                <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{tpl.text}</p>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
                     </div>
-                    <EditableSection label="" value={feedingSummary} onChange={setFeedingSummary} childName={firstName} placeholder={`${firstName} is a [age] old [boy/girl] who was referred for difficulty with feeding development and feeding skills. Describe key findings and recommendations...\n\nIt is recommended that the IFSP team consider the following and make the final determination of eligibility and services:\n\n1. Occupational therapy feeding is recommended to address delays in oral motor skills impacting age-appropriate feeding.\n2. Occupational Therapy is recommended to work on fine motor skills and body awareness to support overall participation in adaptive skills, specifically feeding.`} rows={12} />
+                    <RecommendationsBuilder
+                      value={feedingSummary}
+                      onChange={setFeedingSummary}
+                      firstName={firstName}
+                    />
                   </>
                 )}
 
