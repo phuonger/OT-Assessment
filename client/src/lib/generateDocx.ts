@@ -169,6 +169,12 @@ export interface DocxReportData {
   signatureEmail?: string;
   signatureImage?: string; // base64 data URI
 
+  // Goals & Milestones (from client profile)
+  goalCategories?: { name: string; note?: string; goals: { text: string; status: string; goalDate?: string; dateMet?: string }[] }[];
+  milestones?: { name: string; ageAchieved: string }[];
+  showGoals?: boolean;
+  showMilestones?: boolean;
+
   // Feeding template
   feedingTestingConditions?: string;
   feedingOralStructures?: string;
@@ -1785,6 +1791,85 @@ export async function generateDocxReport(data: DocxReportData): Promise<void> {
           })
         );
       }
+    }
+  }
+
+  // ===== MILESTONES (opt-in) =====
+  if (data.showMilestones && data.milestones && data.milestones.length > 0) {
+    children.push(heading('Developmental Milestones'));
+    const milestoneRows = [
+      new TableRow({
+        tableHeader: true,
+        children: [
+          tableCell('Milestone', { bold: true, shading: 'F0F0F0', width: 50 }),
+          tableCell('Age Achieved', { bold: true, shading: 'F0F0F0', width: 50 }),
+        ],
+      }),
+      ...data.milestones.map(m =>
+        new TableRow({
+          children: [
+            tableCell(m.name, { width: 50 }),
+            tableCell(m.ageAchieved || 'N/A', { width: 50 }),
+          ],
+        })
+      ),
+    ];
+    children.push(
+      new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: milestoneRows,
+      })
+    );
+  }
+
+  // ===== GOALS (opt-in) =====
+  if (data.showGoals && data.goalCategories && data.goalCategories.length > 0) {
+    children.push(heading('Goals'));
+    for (const cat of data.goalCategories) {
+      if (cat.goals.length === 0) continue;
+      // Category heading (bold, underlined)
+      children.push(
+        new Paragraph({
+          spacing: { before: 200, after: 80 },
+          children: [
+            new TextRun({
+              text: cat.name.toUpperCase(),
+              bold: true,
+              underline: {},
+              font: FONT,
+              size: FONT_SIZE,
+            }),
+          ],
+        })
+      );
+      if (cat.note) {
+        children.push(
+          new Paragraph({
+            spacing: { before: 40, after: 80 },
+            children: [
+              new TextRun({ text: `*${cat.note}`, italics: true, font: FONT, size: FONT_SIZE }),
+            ],
+          })
+        );
+      }
+      // Numbered goals
+      cat.goals.forEach((goal, idx) => {
+        const statusLabel = goal.status === 'met' ? ' [MET]'
+          : goal.status === 'in-progress' ? ' [IN PROGRESS]'
+          : goal.status === 'not-met' ? ' [NOT MET]'
+          : '';
+        const dateInfo = goal.status === 'met' && goal.dateMet ? ` (Met: ${goal.dateMet})` : '';
+        children.push(
+          new Paragraph({
+            spacing: { before: 40, after: 40 },
+            indent: { left: 720 },
+            children: [
+              new TextRun({ text: `${idx + 1}. ${goal.text}`, font: FONT, size: FONT_SIZE }),
+              new TextRun({ text: statusLabel + dateInfo, bold: true, font: FONT, size: FONT_SIZE }),
+            ],
+          })
+        );
+      });
     }
   }
 

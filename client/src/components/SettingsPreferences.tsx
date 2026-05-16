@@ -62,6 +62,9 @@ export interface AppSettings {
   // Custom recommendation templates
   recommendationTemplates: RecommendationTemplate[];
 
+  // Preset recommendation options (shown in RecommendationsBuilder dropdown)
+  presetRecommendations: string[];
+
   // Metadata
   savedAt: string;
 }
@@ -84,6 +87,7 @@ const defaultSettings: AppSettings = {
   signatureImage: '',
   defaultReportTemplate: 'auto',
   recommendationTemplates: [],
+  presetRecommendations: [],
   savedAt: '',
 };
 
@@ -651,6 +655,117 @@ export default function SettingsPreferences({ onBack }: { onBack: () => void }) 
           </div>
         </section>
 
+
+        {/* Preset Recommendation Options */}
+        <section>
+          <div className="flex items-center gap-2 mb-4">
+            <BookmarkPlus className="w-5 h-5 text-[#0D7377]" />
+            <h2 className="text-lg font-semibold text-[#2C2C2C]">Preset Recommendation Options</h2>
+          </div>
+          <p className="text-sm text-[#6B6B6B] mb-4">
+            Manage the preset options that appear in the recommendations dropdown when building reports.
+            Add, edit, reorder, or remove options. If no custom presets are saved, the built-in defaults will be used.
+          </p>
+          <div className="bg-white rounded-lg border border-[#E5E1D8] p-6 space-y-3">
+            {(settings.presetRecommendations.length === 0) && (
+              <div className="text-center py-4 text-[#8B8B8B]">
+                <p className="text-sm">No custom presets saved. Using built-in defaults.</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    update('presetRecommendations', [
+                      'Please consider continuation of Feeding Therapy 1x/wk. until child reaches 3 years of age to address adaptive skills and oral motor strength and coordination, oral sensory processing and to provide parent education.',
+                      'Please consider the recommendation of Feeding therapy (SWC not required/required) 1x/week to work on oral motor skills, oral sensory performance, and improve overall adaptive skills.',
+                      'Please consider the recommendation of Occupational Therapy services to address skills related to cognitive, fine motor, gross motor, social emotional, adaptive behavior skills, and sensory processing skills.',
+                      'Please continue Occupational therapy services at a frequency of 1x/wk to work on progressing client toward age-appropriate skills in the areas of cognition, fine motor, gross motor, social emotional skills, and adaptive skills.',
+                      'Please refer to Speech and language pathology report for further details.',
+                      'Please refer to Physical Therapy report for further details.',
+                      'Please consider Infant Stimulation to address cognitive skills and to assist with overall development.',
+                      'Please consider psychological evaluation to determine etiology of delay.',
+                      'Please consider formal medical evaluation to determine eligibility of continuation of services through insurance.',
+                      'Please consider routine visits with pediatrician.',
+                      'Please defer to school district to assess for educationally relevant services specifically occupational therapy and speech therapy services.',
+                      'If not found eligible, caregivers recommended to seek services via private/medical insurance.',
+                    ]);
+                  }}
+                  className="mt-3 gap-1.5 text-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Load Built-in Defaults to Customize
+                </Button>
+              </div>
+            )}
+
+            {settings.presetRecommendations.map((preset, idx) => (
+              <div key={idx} className="flex items-start gap-2 group border border-[#E5E1D8] rounded-lg px-3 py-2.5 bg-[#FAF9F6]">
+                <span className="text-xs font-mono text-[#8B8B8B] mt-1.5 flex-shrink-0 w-5">{idx + 1}.</span>
+                <Textarea
+                  value={preset}
+                  onChange={e => {
+                    const updated = [...settings.presetRecommendations];
+                    updated[idx] = e.target.value;
+                    update('presetRecommendations', updated);
+                  }}
+                  rows={2}
+                  className="flex-1 text-sm resize-y min-h-[2.5rem]"
+                />
+                <div className="flex flex-col gap-0.5 flex-shrink-0">
+                  {idx > 0 && (
+                    <button
+                      onClick={() => {
+                        const updated = [...settings.presetRecommendations];
+                        [updated[idx], updated[idx - 1]] = [updated[idx - 1], updated[idx]];
+                        update('presetRecommendations', updated);
+                      }}
+                      className="p-1 text-[#8B8B8B] hover:text-[#0D7377] transition-colors"
+                      title="Move up"
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 15l-6-6-6 6"/></svg>
+                    </button>
+                  )}
+                  {idx < settings.presetRecommendations.length - 1 && (
+                    <button
+                      onClick={() => {
+                        const updated = [...settings.presetRecommendations];
+                        [updated[idx], updated[idx + 1]] = [updated[idx + 1], updated[idx]];
+                        update('presetRecommendations', updated);
+                      }}
+                      className="p-1 text-[#8B8B8B] hover:text-[#0D7377] transition-colors"
+                      title="Move down"
+                    >
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      const updated = settings.presetRecommendations.filter((_, i) => i !== idx);
+                      update('presetRecommendations', updated);
+                    }}
+                    className="p-1 text-[#8B8B8B] hover:text-red-500 transition-colors"
+                    title="Delete"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {settings.presetRecommendations.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  update('presetRecommendations', [...settings.presetRecommendations, '']);
+                }}
+                className="gap-1.5 w-full border-dashed text-xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add New Preset Option
+              </Button>
+            )}
+          </div>
+        </section>
 
         {/* Signature / Credentials */}
         <section>

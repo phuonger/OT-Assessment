@@ -1,9 +1,10 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus, X, GripVertical, ChevronDown, ChevronUp, PenLine } from 'lucide-react';
+import { loadAppSettings } from '@/components/SettingsPreferences';
 
-// ── Preset recommendation options ──────────────────────────────
-const PRESET_RECOMMENDATIONS = [
+// ── Built-in defaults (used when no custom presets in Settings) ──
+const DEFAULT_PRESET_RECOMMENDATIONS = [
   'Please consider continuation of Feeding Therapy 1x/wk. until child reaches 3 years of age to address adaptive skills and oral motor strength and coordination, oral sensory processing and to provide parent education.',
   'Please consider the recommendation of Feeding therapy (SWC not required/required) 1x/week to work on oral motor skills, oral sensory performance, and improve overall adaptive skills.',
   'Please consider the recommendation of Occupational Therapy services to address skills related to cognitive, fine motor, gross motor, social emotional, adaptive behavior skills, and sensory processing skills.',
@@ -103,6 +104,14 @@ export default function RecommendationsBuilder({ value, onChange, firstName, int
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
 
+  // Load presets from Settings (custom if saved, otherwise built-in defaults)
+  const PRESET_RECOMMENDATIONS = useMemo(() => {
+    const appSettings = loadAppSettings();
+    return appSettings.presetRecommendations && appSettings.presetRecommendations.length > 0
+      ? appSettings.presetRecommendations.filter((s: string) => s.trim())
+      : DEFAULT_PRESET_RECOMMENDATIONS;
+  }, []);
+
   // Parse the current value into structured form
   const { intro, items, closing } = parseRecommendations(value);
 
@@ -112,7 +121,7 @@ export default function RecommendationsBuilder({ value, onChange, firstName, int
   // Check which presets are already selected
   const selectedPresets = new Set(items.map(item => {
     // Normalize for comparison
-    return PRESET_RECOMMENDATIONS.find(p =>
+    return PRESET_RECOMMENDATIONS.find((p: string) =>
       item.text.trim().toLowerCase() === p.trim().toLowerCase()
     ) || null;
   }).filter(Boolean));

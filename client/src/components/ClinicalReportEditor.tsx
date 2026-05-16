@@ -47,7 +47,7 @@ import RecommendationsBuilder from '@/components/RecommendationsBuilder';
 // GoalsReportSection — inline component for rendering goals in report
 // ============================================================
 
-function GoalsReportSection({ profileId }: { profileId: string }) {
+function GoalsReportSection({ profileId, onEnabledChange }: { profileId: string; onEnabledChange?: (enabled: boolean) => void }) {
   const [categories, setCategories] = useState<GoalCategory[]>([]);
   const [enabled, setEnabled] = useState(false);
   const [selectedGoalIds, setSelectedGoalIds] = useState<Set<string>>(new Set());
@@ -137,9 +137,10 @@ function GoalsReportSection({ profileId }: { profileId: string }) {
   if (!enabled) {
     return (
       <div className="mt-6 border-t border-slate-300 pt-4">
-        <button
-          onClick={() => setEnabled(true)}
-          className="w-full py-3 border-2 border-dashed border-[#0D7377]/30 rounded-lg text-sm font-medium text-[#0D7377] hover:bg-[#0D7377]/5 hover:border-[#0D7377]/50 transition-colors flex items-center justify-center gap-2"
+         <button
+           onClick={() => { setEnabled(true); onEnabledChange?.(true); }}
+           className="w-full py-3 border-2 border-dashed border-[#0D7377]/30 rounded-lg text-sm font-medium text-[#0D7377] hover:bg-[#0D7377]/5 hover:border-[#0D7377]/50 transition-colors flex items-center justify-center gap-2"
+
         >
           <Target className="w-4 h-4" />
           Add Goals to Report
@@ -168,7 +169,7 @@ function GoalsReportSection({ profileId }: { profileId: string }) {
             {allSelected ? 'Deselect All' : 'Select All'}
           </button>
           <button
-            onClick={() => setEnabled(false)}
+            onClick={() => { setEnabled(false); onEnabledChange?.(false); }}
             className="text-xs text-red-500 hover:underline"
           >
             Remove Goals
@@ -259,7 +260,7 @@ function GoalsReportSection({ profileId }: { profileId: string }) {
 // MilestonesReportSection — opt-in component for rendering milestones in report
 // ============================================================
 
-function MilestonesReportSection({ profileId }: { profileId: string }) {
+function MilestonesReportSection({ profileId, onEnabledChange }: { profileId: string; onEnabledChange?: (enabled: boolean) => void }) {
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [enabled, setEnabled] = useState(false);
 
@@ -277,7 +278,7 @@ function MilestonesReportSection({ profileId }: { profileId: string }) {
     return (
       <div className="mt-6 border-t border-slate-300 pt-4">
         <button
-          onClick={() => setEnabled(true)}
+          onClick={() => { setEnabled(true); onEnabledChange?.(true); }}
           className="w-full py-3 border-2 border-dashed border-[#0D7377]/30 rounded-lg text-sm font-medium text-[#0D7377] hover:bg-[#0D7377]/5 hover:border-[#0D7377]/50 transition-colors flex items-center justify-center gap-2"
         >
           <MilestoneIcon className="w-4 h-4" />
@@ -294,7 +295,7 @@ function MilestonesReportSection({ profileId }: { profileId: string }) {
           Developmental Milestones
         </h3>
         <button
-          onClick={() => setEnabled(false)}
+          onClick={() => { setEnabled(false); onEnabledChange?.(false); }}
           className="text-xs text-red-500 hover:underline"
         >
           Remove Milestones
@@ -1062,6 +1063,10 @@ export default function ClinicalReportEditor() {
   const [evalPeriodText, setEvalPeriodText] = useState(() => savedReport?.evalPeriodText ?? '');
   const [evalPeriodStart, setEvalPeriodStart] = useState(() => savedReport?.evalPeriodStart ?? '');
   const [evalPeriodEnd, setEvalPeriodEnd] = useState(() => savedReport?.evalPeriodEnd ?? '');
+
+  // Goals & Milestones toggle state for DOCX export
+  const [showGoalsInReport, setShowGoalsInReport] = useState(false);
+  const [showMilestonesInReport, setShowMilestonesInReport] = useState(false);
 
   // SI-specific editable sections
   const [testingConditions, setTestingConditions] = useState(() =>
@@ -2023,6 +2028,34 @@ export default function ClinicalReportEditor() {
         evalPeriodText,
         evalPeriodStart,
         evalPeriodEnd,
+
+        // Goals & Milestones from profile
+        goalCategories: (() => {
+          const profileId = state.activeProfileId;
+          if (!profileId) return undefined;
+          const profile = getProfile(profileId);
+          return profile?.goalCategories?.filter((c: GoalCategory) => c.goals.length > 0).map((c: GoalCategory) => ({
+            name: c.name,
+            note: c.note,
+            goals: c.goals.map((g: ClientGoal) => ({
+              text: g.text,
+              status: g.status,
+              goalDate: g.goalDate,
+              dateMet: g.dateMet,
+            })),
+          }));
+        })(),
+        milestones: (() => {
+          const profileId = state.activeProfileId;
+          if (!profileId) return undefined;
+          const profile = getProfile(profileId);
+          return profile?.milestones?.filter((m: Milestone) => m.ageAchieved).map((m: Milestone) => ({
+            name: m.label,
+            ageAchieved: m.ageAchieved,
+          }));
+        })(),
+        showGoals: showGoalsInReport,
+        showMilestones: showMilestonesInReport,
 
         referralInfo,
         medicalHistory,
@@ -3501,12 +3534,12 @@ export default function ClinicalReportEditor() {
 
             {/* ===== MILESTONES (from client profile) ===== */}
             {state.activeProfileId && (
-              <MilestonesReportSection profileId={state.activeProfileId} />
+              <MilestonesReportSection profileId={state.activeProfileId} onEnabledChange={setShowMilestonesInReport} />
             )}
 
             {/* ===== GOALS (from client profile) ===== */}
             {state.activeProfileId && (
-              <GoalsReportSection profileId={state.activeProfileId} />
+              <GoalsReportSection profileId={state.activeProfileId} onEnabledChange={setShowGoalsInReport} />
             )}
 
             {/* ===== CLOSING (both templates) ===== */}
