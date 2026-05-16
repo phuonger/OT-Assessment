@@ -15,7 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   ArrowLeft, Plus, Pencil, Trash2, Save, X, Play, Calendar,
   Target, CheckCircle2, Clock, XCircle, FileText, User, Baby,
-  ChevronDown, ChevronUp, FolderPlus, MessageSquare, Milestone as MilestoneIcon
+  ChevronDown, ChevronUp, FolderPlus, MessageSquare, Milestone as MilestoneIcon,
+  Download
 } from 'lucide-react';
 import {
   getProfile, updateProfile, deleteProfile, touchProfile,
@@ -27,6 +28,7 @@ import {
 } from '@/lib/clientProfileStorage';
 import { getAllMultiSessions, type SavedMultiSession } from '@/lib/multiSessionStorage';
 import { toast } from 'sonner';
+import { generateProfileDocx } from '@/lib/generateProfileDocx';
 
 interface ClientProfileViewProps {
   profileId: string;
@@ -236,6 +238,23 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
             </h1>
             <p className="text-xs text-[#8B8B8B]">{calculateAge(profile.dob)}</p>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                await generateProfileDocx({ profile, linkedSessions });
+                toast.success('Profile summary exported');
+              } catch (err) {
+                console.error(err);
+                toast.error('Failed to export profile');
+              }
+            }}
+            className="gap-1.5"
+          >
+            <Download className="w-4 h-4" />
+            Export
+          </Button>
           <Button
             onClick={() => onStartAssessment(profile)}
             className="bg-[#0D7377] hover:bg-[#0a5c5f] text-white gap-2"
