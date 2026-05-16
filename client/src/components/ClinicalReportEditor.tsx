@@ -1548,45 +1548,8 @@ export default function ClinicalReportEditor() {
     return rows;
   }, [bayleyScores, dayc2Scores, reel3Scores, scoreOverrides]);
 
-  // Auto-generate recommendations
-  useEffect(() => {
-    if (recommendations) return;
-    const ageMonthsVal = ageInMonths(childInfo.dob, childInfo.testDate, premWeeks);
-    const quarterDelay = Math.floor(ageMonthsVal * 0.75);
-    const belowQuarter: string[] = [];
-    const borderlineQuarter: string[] = [];
-
-    for (const row of bayleyScores) {
-      if (row.ageEquivalent === 'N/A') continue;
-      const aeMonths = parseInt(row.ageEquivalent) || 0;
-      if (aeMonths < quarterDelay) belowQuarter.push(row.domain.toLowerCase());
-      else if (aeMonths <= quarterDelay + 2) borderlineQuarter.push(row.domain.toLowerCase());
-    }
-    for (const row of dayc2Scores) {
-      const aeMonths = parseInt(row.ageEquivalent) || 0;
-      if (aeMonths > 0 && aeMonths < quarterDelay) belowQuarter.push(row.domain.toLowerCase());
-    }
-
-    const genderWord = gender === 'male' || gender === 'm' ? 'boy' : gender === 'female' || gender === 'f' ? 'girl' : 'child';
-
-    if (template === 'sensory') {
-      // SI-specific recommendations
-      let rec = `${firstName} is a friendly and happy ${chronAge} old ${genderWord} who is being evaluated for services at this time.`;
-      const concerning = sp2Scores.sections.filter(s => s.description.toLowerCase().includes('more'));
-      if (concerning.length > 0) {
-        rec += ` ${firstName} scored "${concerning[0].description.toLowerCase()}" in the ${concerning.map(s => s.name).join(', ')} section(s).`;
-      }
-      rec += `\n\nIt is recommended that the IFSP team consider the following, however, regional center to make the final determination of eligibility and services:\n\n1. Please consider Occupational therapy as ${pronoun(gender, 'subject')} demonstrates some concerns with sensory processing skills at this time.`;
-      setRecommendations(rec);
-    } else {
-      let rec = `${firstName} is a ${chronAge} old ${genderWord} who was referred due to concerns about ${pronoun(gender, 'possessive')} developmental milestones.`;
-      if (quarterDelay > 0) rec += ` A ¼ delay would be considered ${quarterDelay} months.`;
-      if (belowQuarter.length > 0) rec += ` ${firstName} is below the ¼ delay in the following areas: ${belowQuarter.join(', ')}.`;
-      if (borderlineQuarter.length > 0) rec += ` ${Pronoun(gender, 'subject')} has a borderline ¼ delay in the following areas: ${borderlineQuarter.join(', ')}.`;
-      rec += `\n\nIt is recommended that the IFSP team consider the following, however, regional center to make the final determination of eligibility and services.\n\n1) Please consider the recommendation of occupational therapy services to address skills related to ${belowQuarter.length > 0 ? belowQuarter.join(', ') : 'developmental'} skills.\n2) Please consider the recommendation or referral to speech and language pathology services for communication skills.\n3) Please refer to Physical therapy report for further details regarding gross motor skills.`;
-      setRecommendations(rec);
-    }
-  }, [bayleyScores, dayc2Scores, childInfo, premWeeks, template, sp2Scores]);
+  // Recommendations are now managed by the RecommendationsBuilder component
+  // (no auto-generation — technicians use the dropdown picker to add recommendations)
 
   // Assessment tools list
   const assessmentTools = useMemo(() => {
@@ -2253,7 +2216,7 @@ export default function ClinicalReportEditor() {
     setTemplate(t);
     setReportTitle(TEMPLATE_INFO[t].title);
     setShowTemplateSelector(false);
-    // Clear recommendations so they regenerate for the new template
+    // Clear recommendations when switching templates
     setRecommendations('');
     toast.success(`Switched to ${TEMPLATE_INFO[t].label} template`);
   };
