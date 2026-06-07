@@ -9,6 +9,7 @@ import { DAYC2_DOMAINS, DAYC2_AGE_RANGES, getDayc2StartItem } from './dayc2Data'
 import { DAYC2_SPANISH_DOMAINS as DAYC2_SP_DOMAINS, DAYC2_SPANISH_AGE_RANGES as DAYC2_SP_AGE_RANGES, getDayc2SpanishStartItem as getDayc2SpStartItem } from './dayc2SpanishData';
 import { REEL3_DOMAINS, REEL3_AGE_RANGES, getReel3StartItem } from './reel3Data';
 import { SP2_SECTIONS } from './sensoryProfileData';
+import { OT_FEEDING_DOMAINS, OT_FEEDING_AGE_RANGES, getOtFeedingStartItem } from './otFeedingData';
 
 // ============================================================
 // Common types
@@ -238,6 +239,39 @@ const sp2Form: FormDefinition = {
 };
 
 // ============================================================
+// OT Feeding Assessment
+// ============================================================
+
+function buildOtFeedingDomains(): UnifiedDomain[] {
+  return OT_FEEDING_DOMAINS.map(d => ({
+    id: `otfeeding_${d.id}`,
+    localId: d.id,
+    name: d.name,
+    formType: 'otfeeding',
+    items: d.items.map(item => ({
+      number: item.number,
+      description: item.description,
+    })),
+    scoringType: 'binary' as ScoringType,
+    maxScorePerItem: 1,
+  }));
+}
+
+const otFeedingForm: FormDefinition = {
+  id: 'otfeeding',
+  name: 'OT Feeding Assessment',
+  shortName: 'OT Feeding',
+  description: 'Occupational Therapy Feeding Assessment using DAYC-2 Adaptive Behavior items plus Discrete Oral Motor Skills evaluation.',
+  color: '#E07020',
+  ageRanges: OT_FEEDING_AGE_RANGES.map(ar => ({ label: ar.label })),
+  domains: buildOtFeedingDomains(),
+  getStartItem: getOtFeedingStartItem,
+  hasStartPoints: true,
+  discontinueRule: { consecutiveZeros: 3 },
+  basalRule: { consecutiveMax: 5 },
+};
+
+// ============================================================
 // Registry
 // ============================================================
 
@@ -247,6 +281,7 @@ export const FORM_REGISTRY: FormDefinition[] = [
   dayc2SpForm,
   reel3Form,
   sp2Form,
+  otFeedingForm,
 ];
 
 export function getFormById(id: string): FormDefinition | undefined {

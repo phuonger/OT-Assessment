@@ -11,6 +11,7 @@
 import { useMultiAssessment } from '@/contexts/MultiAssessmentContext';
 import { getFormById, type UnifiedDomain } from '@/lib/formRegistry';
 import UnifiedScoringItem from './UnifiedScoringItem';
+import { DiscreteOralMotorSkills } from './DiscreteOralMotorSkills';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertTriangle, MapPin, Clock, ArrowRight, CheckCircle2, FlaskConical } from 'lucide-react';
 import { useMemo, useRef, useEffect, useCallback } from 'react';
@@ -247,6 +248,15 @@ export default function UnifiedAssessmentPanel() {
           );
         })}
       </div>
+
+      {/* Discrete Oral Motor Skills section (OT Feeding form only) */}
+      {form.id === 'otfeeding' && (
+        <div className="px-6 py-6 border-t border-border">
+          <DiscreteOralMotorSkills
+            storageKey={`${state.childInfo.firstName}-${state.childInfo.lastName}-${state.childInfo.dob}`.toLowerCase().replace(/\s+/g, '-')}
+          />
+        </div>
+      )}
 
       {/* Next Domain / Next Test Navigation */}
       {nextTarget && (

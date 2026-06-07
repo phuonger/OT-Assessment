@@ -198,6 +198,10 @@ export interface DocxReportData {
   feedingBehaviorsData?: FeedingBehaviorsExportData;
   selfFeedingData?: SelfFeedingExportData;
   drinkingData?: DrinkingExportData;
+
+  // OT Feeding Assessment
+  otFeedingScores?: { domain: string; rawScore: number; standardScore: string; descriptiveTerm: string; ageEquivalent: string; percentDelay: string }[];
+  discreteOralMotorAnswers?: { category: string; label: string; answer: string }[];
 }
 
 /** Feeding Behaviors checklist data */
@@ -1310,8 +1314,9 @@ export async function generateDocxReport(data: DocxReportData): Promise<void> {
 
     // DAYC-2 description if applicable
     const hasDayc2 = data.dayc2Scores.length > 0;
+    const hasOtFeeding = (data.otFeedingScores && data.otFeedingScores.length > 0) || false;
     const hasBayley = data.bayleyScores.length > 0;
-    if (hasDayc2) {
+    if (hasDayc2 || hasOtFeeding) {
       children.push(
         new Paragraph({
           spacing: { before: 100, after: 100 },
@@ -1518,6 +1523,68 @@ export async function generateDocxReport(data: DocxReportData): Promise<void> {
     if (data.feedingDrinking) {
       children.push(heading('Drinking'));
       children.push(bodyParagraph(data.feedingDrinking));
+    }
+
+    // OT Feeding Scores table (if OT Feeding form was used)
+    if (data.otFeedingScores && data.otFeedingScores.length > 0) {
+      children.push(
+        new Paragraph({
+          spacing: { before: 200, after: 60 },
+          children: [
+            new TextRun({ text: 'DAYC-2 (ADAPTIVE BEHAVIOR)', bold: true, font: FONT, size: SMALL_SIZE }),
+          ],
+        })
+      );
+      const otHeaders = ['Domain', 'Raw Score', 'Standard Score', 'Descriptive Term', 'Age Equivalency', '% Delay'];
+      const otHeaderRow = new TableRow({
+        children: otHeaders.map(h =>
+          tableCell(h, { bold: true, shading: 'E8E8E8', alignment: h === 'Domain' ? AlignmentType.LEFT : AlignmentType.CENTER })
+        ),
+      });
+      const otDataRows = data.otFeedingScores.map(row =>
+        new TableRow({
+          children: [
+            tableCell(row.domain),
+            tableCell(String(row.rawScore), { alignment: AlignmentType.CENTER }),
+            tableCell(row.standardScore, { alignment: AlignmentType.CENTER }),
+            tableCell(row.descriptiveTerm, { alignment: AlignmentType.CENTER }),
+            tableCell(row.ageEquivalent, { alignment: AlignmentType.CENTER }),
+            tableCell(row.percentDelay, { alignment: AlignmentType.CENTER }),
+          ],
+        })
+      );
+      children.push(
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [otHeaderRow, ...otDataRows],
+        })
+      );
+    }
+
+    // Discrete Oral Motor Skills
+    if (data.discreteOralMotorAnswers && data.discreteOralMotorAnswers.length > 0) {
+      children.push(heading('Discrete Oral Motor Skills'));
+      let currentCategory = '';
+      for (const item of data.discreteOralMotorAnswers) {
+        if (item.category !== currentCategory) {
+          currentCategory = item.category;
+          children.push(
+            new Paragraph({
+              spacing: { before: 200, after: 60 },
+              children: [new TextRun({ text: currentCategory, bold: true, font: FONT, size: FONT_SIZE })],
+            })
+          );
+        }
+        children.push(
+          new Paragraph({
+            spacing: { before: 40, after: 40 },
+            children: [
+              new TextRun({ text: `${item.label}: `, bold: true, font: FONT, size: FONT_SIZE }),
+              new TextRun({ text: item.answer, font: FONT, size: FONT_SIZE }),
+            ],
+          })
+        );
+      }
     }
 
     // VII. Summary and Recommendations

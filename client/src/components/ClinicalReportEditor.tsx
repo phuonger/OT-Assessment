@@ -42,6 +42,8 @@ import { generateAllChecklistsPdf } from '@/lib/generateAllChecklistsPdf';
 import { parseLocalDate, formatDateLocal, calculateAge } from '@/lib/dateUtils';
 import { enhanceWithAI, generateRecommendations, isOnline, isAiConfigured } from '@/lib/aiEnhance';
 import RecommendationsBuilder from '@/components/RecommendationsBuilder';
+import { loadOralMotorAnswers, isPalateEnabled } from '@/components/DiscreteOralMotorSkills';
+import { ORAL_MOTOR_QUESTIONS, ORAL_MOTOR_CATEGORIES } from '@/lib/otFeedingData';
 
 // ============================================================
 // GoalsReportSection — inline component for rendering goals in report
@@ -1007,6 +1009,7 @@ export default function ClinicalReportEditor() {
   // Template selector state
   // ============================================================
   const hasSP2 = formSelections.some(f => f.formId === 'sp2');
+  const hasOTFeeding = formSelections.some(f => f.formId === 'otfeeding');
   const appSettings = useMemo(() => loadAppSettings(), []);
   const [template, setTemplate] = useState<ReportTemplate>(() => {
     if (savedReport?.template) return savedReport.template;
@@ -1015,6 +1018,7 @@ export default function ClinicalReportEditor() {
       return appSettings.defaultReportTemplate;
     }
     // Auto-detect
+    if (hasOTFeeding) return 'feeding';
     return hasSP2 ? 'sensory' : 'developmental';
   });
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
@@ -1396,6 +1400,59 @@ export default function ClinicalReportEditor() {
     }).filter(Boolean) as Dayc2ScoreRow[];
   }, [formSelections, formStates, childInfo, premWeeks, dayc2ScoringMethod]);
 
+  // OT Feeding scores (uses DAYC-2 adaptive scoring tables)
+  const otFeedingScores = useMemo((): Dayc2ScoreRow[] => {
+    const fs = formSelections.find(f => f.formId === 'otfeeding');
+    if (!fs) return [];
+    const formState = formStates['otfeeding'];
+    if (!formState) return [];
+    const form = getFormById('otfeeding');
+    if (!form) return [];
+    const ageMonthsVal = ageInMonths(childInfo.dob, childInfo.testDate, premWeeks);
+
+    return fs.selectedDomainIds.map(domainLocalId => {
+      const domain = form.domains.find(d => d.localId === domainLocalId);
+      if (!domain) return null;
+      const ds = formState.domains[domainLocalId];
+      if (!ds) return null;
+      const rawScore = Object.values(ds.scores).reduce((sum: number, s) => sum + (s || 0), 0);
+
+      let standardScore = '\u2014';
+      let descriptiveTerm = '\u2014';
+      let percentDelay = '\u2014';
+      let ageEquivalent = '\u2014';
+
+      // Use DAYC-2 adaptive scoring tables
+      const stdScore = lookupDAYC2StandardScore(rawScore, ageMonthsVal, 'adaptive');
+      if (stdScore !== null) {
+        standardScore = String(stdScore);
+        descriptiveTerm = lookupDAYC2DescriptiveTerm(stdScore);
+        const pctRank = lookupDAYC2PercentileRank(stdScore);
+        if (pctRank) descriptiveTerm += ` (PR: ${pctRank})`;
+      }
+      const aeMonths = lookupDAYC2AgeEquivalent(rawScore, 'adaptive');
+      if (aeMonths !== null) {
+        ageEquivalent = `${aeMonths} months`;
+        if (ageInDays !== null && ageInDays > 0) {
+          const childMo = Math.floor(ageInDays / 30.44);
+          const childDaysRem = Math.round(ageInDays - childMo * 30.44);
+          const childTotalDays = childMo * 30 + childDaysRem;
+          const aeTotalDays = aeMonths * 30;
+          if (childTotalDays > 0) {
+            const delayRatio = (aeTotalDays / childTotalDays) - 1;
+            if (delayRatio < 0) {
+              percentDelay = `${Math.round(Math.abs(delayRatio) * 100)}%`;
+            } else {
+              percentDelay = '0%';
+            }
+          }
+        }
+      }
+
+      return { domain: domain.name, rawScore, standardScore, descriptiveTerm, ageEquivalent, percentDelay, scoringMethod: 'native' };
+    }).filter(Boolean) as Dayc2ScoreRow[];
+  }, [formSelections, formStates, childInfo, premWeeks]);
+
   // Bayley-4 AB Composite scores (when using Bayley-4 AB scoring for DAYC-2)
   const dayc2BayleyComposites = useMemo((): CompositeResult[] => {
     if (dayc2ScoringMethod !== 'bayley4ab') return [];
@@ -1582,6 +1639,27 @@ export default function ClinicalReportEditor() {
             const label = criteriaDesc ? `${item.description}: ${criteriaDesc}` : item.description;
             if (score === 1) demonstrated.push(label);
             else if (score === 0) notDemonstrated.push(label);
+          }
+        }
+      }
+    }
+
+    // Try OT Feeding form adaptive domain
+    if (demonstrated.length === 0 && notDemonstrated.length === 0) {
+      const otFeedingFs = formSelections.find(f => f.formId === 'otfeeding');
+      if (otFeedingFs && otFeedingFs.selectedDomainIds.includes('adaptivebehavior')) {
+        const formState = formStates['otfeeding'];
+        const form = getFormById('otfeeding');
+        if (formState && form) {
+          const adaptiveDomain = form.domains.find(d => d.localId === 'adaptivebehavior');
+          const ds = formState.domains['adaptivebehavior'];
+          if (adaptiveDomain && ds) {
+            for (const item of adaptiveDomain.items) {
+              const score = ds.scores[item.number];
+              if (score === null || score === undefined) continue;
+              if (score === 1) demonstrated.push(item.description);
+              else if (score === 0) notDemonstrated.push(item.description);
+            }
           }
         }
       }
@@ -2171,6 +2249,28 @@ export default function ClinicalReportEditor() {
             const raw = localStorage.getItem(`drinking-checklist-${childKey}`);
             return raw ? JSON.parse(raw) : undefined;
           } catch { return undefined; }
+        })(),
+        otFeedingScores: otFeedingScores.map(r => ({
+          domain: r.domain,
+          rawScore: r.rawScore,
+          standardScore: r.standardScore,
+          descriptiveTerm: r.descriptiveTerm,
+          ageEquivalent: r.ageEquivalent,
+          percentDelay: r.percentDelay,
+        })),
+        discreteOralMotorAnswers: (() => {
+          const oralMotorKey = `${childInfo.firstName}-${childInfo.lastName}-${childInfo.dob}`.toLowerCase().replace(/\s+/g, '-');
+          const answers = loadOralMotorAnswers(oralMotorKey);
+          const palateOn = isPalateEnabled(oralMotorKey);
+          const visibleQuestions = ORAL_MOTOR_QUESTIONS.filter(q => !q.optional || palateOn);
+          const result: { category: string; label: string; answer: string }[] = [];
+          for (const q of visibleQuestions) {
+            if (answers[q.id]?.trim()) {
+              const cat = ORAL_MOTOR_CATEGORIES.find(c => c.id === q.category);
+              result.push({ category: cat?.label || q.category, label: q.label, answer: answers[q.id] });
+            }
+          }
+          return result.length > 0 ? result : undefined;
         })(),
       };
 
@@ -3205,6 +3305,11 @@ export default function ClinicalReportEditor() {
                         <p><strong>Bayley Scales of Infant and Toddler Development, Fourth Edition (Bayley-4):</strong> The Bayley-4 is a comprehensive developmental assessment for children ages 1-42 months. For the purpose of this evaluation, the adaptive behavior domain was utilized.</p>
                       </div>
                     )}
+                    {formSelections.some(f => f.formId === 'otfeeding') && (
+                      <div className="bg-slate-50 border border-slate-200 rounded-md p-3 text-xs font-serif text-slate-700 leading-relaxed mt-2">
+                        <p><strong>Developmental Assessment of Young Children-Second Edition (DAYC-2):</strong> The DAYC-2 is a battery of five subtests that measures different but interrelated developmental abilities (cognitive, communication, social-emotional development, physical development, and adaptive behavior). This battery is designed for children from birth to 5 years, 11 months. For the purpose of this evaluation, the adaptive domain was utilized.</p>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -3231,6 +3336,38 @@ export default function ClinicalReportEditor() {
                             </thead>
                             <tbody>
                               {dayc2Scores.filter(r => r.domain.toLowerCase().includes('adaptive')).map((row, i) => (
+                                <tr key={i}>
+                                  <td className="border border-slate-400 px-3 py-2 font-medium">{row.domain}</td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center font-mono">{row.rawScore}</td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center font-mono">{row.standardScore}</td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.descriptiveTerm}</td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.ageEquivalent}</td>
+                                  <td className="border border-slate-400 px-3 py-2 text-center">{row.percentDelay}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {otFeedingScores.length > 0 && (
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">DAYC-2 (Adaptive Behavior)</h4>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs border-collapse border border-slate-400">
+                            <thead>
+                              <tr className="bg-slate-100">
+                                <th className="border border-slate-400 px-3 py-2 text-left font-bold">Domain</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">Raw Score</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">Standard Score</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">Descriptive Term</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">Age Equivalency</th>
+                                <th className="border border-slate-400 px-3 py-2 text-center font-bold">% Delay</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {otFeedingScores.map((row, i) => (
                                 <tr key={i}>
                                   <td className="border border-slate-400 px-3 py-2 font-medium">{row.domain}</td>
                                   <td className="border border-slate-400 px-3 py-2 text-center font-mono">{row.rawScore}</td>
@@ -3294,7 +3431,7 @@ export default function ClinicalReportEditor() {
                         </div>
                       )}
                       {feedingAdaptiveItems.demonstrated.length === 0 && feedingAdaptiveItems.notDemonstrated.length === 0 && (
-                        <p className="text-sm font-serif text-slate-400 italic">No adaptive behavior items scored yet. Complete the DAYC-2 or Bayley-4 adaptive domain to auto-populate this section.</p>
+                        <p className="text-sm font-serif text-slate-400 italic">No adaptive behavior items scored yet. Complete the OT Feeding, DAYC-2, or Bayley-4 adaptive domain to auto-populate this section.</p>
                       )}
                     </div>
                   </div>
@@ -3413,6 +3550,46 @@ export default function ClinicalReportEditor() {
                     <EditableSection label="" value={feedingDrinking} onChange={setFeedingDrinking} childName={firstName} placeholder={`Describe ${firstName}'s drinking skills, including bottle use, sippy cup, straw cup, open cup, liquid preferences, and any difficulties with drinking.`} rows={5} />
                   </div>
                 )}
+
+                <SectionHeader title="Discrete Oral Motor Skills" sectionKey="fd_discreteoral" collapsed={collapsedSections} toggle={toggleSection} number="" />
+                {!collapsedSections.fd_discreteoral && (() => {
+                  const oralMotorKey = `${childInfo.firstName}-${childInfo.lastName}-${childInfo.dob}`.toLowerCase().replace(/\s+/g, '-');
+                  const oralAnswers = loadOralMotorAnswers(oralMotorKey);
+                  const palateOn = isPalateEnabled(oralMotorKey);
+                  const visibleQuestions = ORAL_MOTOR_QUESTIONS.filter(q => !q.optional || palateOn);
+                  const hasAnyAnswers = visibleQuestions.some(q => oralAnswers[q.id]?.trim());
+
+                  if (!hasAnyAnswers) {
+                    return (
+                      <p className="text-sm font-serif text-slate-400 italic mb-4">
+                        No discrete oral motor observations recorded yet. Complete the Discrete Oral Motor Skills section during the OT Feeding assessment to auto-populate this area.
+                      </p>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-4 mb-6">
+                      {ORAL_MOTOR_CATEGORIES.filter(cat => cat.id !== 'palate' || palateOn).map(cat => {
+                        const catQuestions = visibleQuestions.filter(q => q.category === cat.id);
+                        const answeredQuestions = catQuestions.filter(q => oralAnswers[q.id]?.trim());
+                        if (answeredQuestions.length === 0) return null;
+
+                        return (
+                          <div key={cat.id}>
+                            <h4 className="text-sm font-bold text-slate-700 mb-1">{cat.label}</h4>
+                            <div className="space-y-1">
+                              {answeredQuestions.map(q => (
+                                <p key={q.id} className="text-sm font-serif text-slate-800">
+                                  <strong>{q.label}:</strong> {oralAnswers[q.id]}
+                                </p>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
 
                 <SectionHeader title="Summary and Recommendations" sectionKey="fd_summary" collapsed={collapsedSections} toggle={toggleSection} number="VII" />
                 {!collapsedSections.fd_summary && (
