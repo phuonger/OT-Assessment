@@ -478,9 +478,9 @@ function EditableSection({
   }, [editing]);
 
   const handleAiEnhance = async () => {
-    const textToEnhance = value?.trim();
-    if (!textToEnhance || textToEnhance.length < 10) {
-      toast.error('Please add more text before using AI Enhance.');
+    const textToEnhance = value?.trim() || placeholder?.trim();
+    if (!textToEnhance || textToEnhance.length < 5) {
+      toast.error('Please add some text or notes before using AI Enhance.');
       return;
     }
     if (!isAiConfigured()) {
@@ -543,7 +543,8 @@ function EditableSection({
   };
 
   const isHeader = !label;
-  const hasContent = !!value?.trim() && value.trim().length >= 10;
+  const hasContent = !!value?.trim() && value.trim().length >= 5;
+  const showAiButton = hasContent || !!placeholder; // Show AI button even with placeholder for generation
 
   return (
     <div className="mb-4">
@@ -554,7 +555,7 @@ function EditableSection({
             {editing ? <Check className="w-3 h-3" /> : <Pencil className="w-3 h-3" />}
             {editing ? 'Done' : 'Edit'}
           </button>
-          {hasContent && !isHeader && (
+          {showAiButton && !isHeader && (
             <>
               {aiLoading ? (
                 <span className="flex items-center gap-1 text-xs text-purple-600 print:hidden">
@@ -566,10 +567,10 @@ function EditableSection({
                 <button
                   onClick={handleAiEnhance}
                   className="text-xs text-purple-600 hover:text-purple-800 flex items-center gap-1 print:hidden"
-                  title="Rewrite this section using AI for a more professional clinical narrative"
+                  title={hasContent ? 'Rewrite this section using AI for a more professional clinical narrative' : 'Generate clinical narrative from placeholder template using AI'}
                 >
                   <WandSparkles className="w-3 h-3" />
-                  AI Enhance
+                  {hasContent ? 'AI Enhance' : 'AI Generate'}
                 </button>
               )}
               {previousValue !== null && !aiLoading && (
@@ -591,7 +592,7 @@ function EditableSection({
             {editing ? <Check className="w-3 h-3" /> : <Pencil className="w-3 h-3" />}
             {editing ? 'Done' : 'Edit'}
           </button>
-          {hasContent && (
+          {showAiButton && (
             <>
               {aiLoading ? (
                 <span className="flex items-center gap-1 text-xs text-purple-600">
@@ -603,10 +604,10 @@ function EditableSection({
                 <button
                   onClick={handleAiEnhance}
                   className="text-xs text-purple-600 hover:text-purple-800 flex items-center gap-1"
-                  title="Rewrite this section using AI for a more professional clinical narrative"
+                  title={hasContent ? 'Rewrite this section using AI for a more professional clinical narrative' : 'Generate clinical narrative from placeholder template using AI'}
                 >
                   <WandSparkles className="w-3 h-3" />
-                  AI Enhance
+                  {hasContent ? 'AI Enhance' : 'AI Generate'}
                 </button>
               )}
               {previousValue !== null && !aiLoading && (
@@ -3003,7 +3004,7 @@ export default function ClinicalReportEditor() {
                 {/* Feeding/Oral Motor */}
                 <SectionHeader title="Feeding/Oral Motor Skills" sectionKey="feeding" collapsed={collapsedSections} toggle={toggleSection} />
                 {!collapsedSections.feeding && (
-                  <EditableSection label="" value={feedingOralMotor} onChange={setFeedingOralMotor} childName={firstName} placeholder="Enter feeding and oral motor observations (texture progression, self-feeding, straw cup, open cup, positioning)..." rows={5} />
+                  <EditableSection label="" value={feedingOralMotor} onChange={setFeedingOralMotor} childName={firstName} sectionContext="Feeding and Oral Motor Observations - texture progression, self-feeding, straw cup, open cup, positioning" placeholder="Enter feeding and oral motor observations (texture progression, self-feeding, straw cup, open cup, positioning)..." rows={5} />
                 )}
 
                 {/* Sensory Processing (brief) */}
@@ -3318,7 +3319,7 @@ export default function ClinicalReportEditor() {
 
                 <SectionHeader title="Testing Conditions and Behavior During Evaluation" sectionKey="fd_testing" collapsed={collapsedSections} toggle={toggleSection} number="III" />
                 {!collapsedSections.fd_testing && (
-                  <EditableSection label="" value={feedingTestingConditions} onChange={setFeedingTestingConditions} childName={firstName} placeholder={`${firstName} was seen at home with ${pronoun(gender, 'possessive')} caregiver present during the evaluation. ${Pronoun(gender, 'subject')} transitioned easily to a high chair for the meal. Behavior and performance observed during the assessment is reported to be typical. Therefore, this assessment is believed to be valid and reliable in regard to present levels of function in all areas.`} rows={6} />
+                  <EditableSection label="" value={feedingTestingConditions} onChange={setFeedingTestingConditions} childName={firstName} sectionContext="Testing Conditions - evaluation setting, caregiver presence, child behavior, assessment validity" placeholder={`${firstName} was seen at home with ${pronoun(gender, 'possessive')} caregiver present during the evaluation. ${Pronoun(gender, 'subject')} transitioned easily to a high chair for the meal. Behavior and performance observed during the assessment is reported to be typical. Therefore, this assessment is believed to be valid and reliable in regard to present levels of function in all areas.`} rows={6} />
                 )}
 
                 <SectionHeader title="Assessment Tools" sectionKey="fd_tools" collapsed={collapsedSections} toggle={toggleSection} number="IV" />
@@ -3474,7 +3475,7 @@ export default function ClinicalReportEditor() {
 
                 <SectionHeader title="Previous Feeding History" sectionKey="fd_prevhistory" collapsed={collapsedSections} toggle={toggleSection} number="" />
                 {!collapsedSections.fd_prevhistory && (
-                  <EditableSection label="" value={feedingPreviousHistory} onChange={setFeedingPreviousHistory} childName={firstName} placeholder={`Describe ${firstName}'s previous feeding history, including when solid foods were introduced, any history of breastfeeding/bottle feeding, feeding difficulties, tube feeding, etc.`} rows={5} />
+                  <EditableSection label="" value={feedingPreviousHistory} onChange={setFeedingPreviousHistory} childName={firstName} sectionContext="Previous Feeding History - breastfeeding, bottle feeding, solid food introduction, feeding difficulties, tube feeding history" placeholder={`Describe ${firstName}'s previous feeding history, including when solid foods were introduced, any history of breastfeeding/bottle feeding, feeding difficulties, tube feeding, etc.`} rows={5} />
                 )}
 
                 <SectionHeader title="Feeding/Oral Motor Skills" sectionKey="fd_oralmotor" collapsed={collapsedSections} toggle={toggleSection} number="VI" />
@@ -3482,7 +3483,7 @@ export default function ClinicalReportEditor() {
                   <div className="space-y-5 mb-6">
                     <div>
                       <h4 className="text-sm font-bold text-slate-700 mb-1">a. Oral Structures</h4>
-                      <EditableSection label="" value={feedingOralStructures} onChange={setFeedingOralStructures} childName={firstName} placeholder={`${firstName}'s facial structures are symmetrical. ${Pronoun(gender, 'possessive')} oral structures appear to be healthy and grossly intact as observed while ${pronoun(gender, 'subject')} was engaging in feeding.`} rows={4} />
+                      <EditableSection label="" value={feedingOralStructures} onChange={setFeedingOralStructures} childName={firstName} sectionContext="Oral Structures - facial symmetry, oral health, structural integrity during feeding" placeholder={`${firstName}'s facial structures are symmetrical. ${Pronoun(gender, 'possessive')} oral structures appear to be healthy and grossly intact as observed while ${pronoun(gender, 'subject')} was engaging in feeding.`} rows={4} />
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-slate-700 mb-1">b. Feeding Behaviors</h4>
@@ -3505,7 +3506,7 @@ export default function ClinicalReportEditor() {
                           }
                         }}
                       />
-                      <EditableSection label="" value={feedingBehaviors} onChange={setFeedingBehaviors} childName={firstName} placeholder={`${firstName} demonstrates adequate readiness with feeding activity. Describe feeding behaviors observed during the evaluation (drooling, posture, ability to stay seated, finger feeding, etc.).`} rows={4} />
+                      <EditableSection label="" value={feedingBehaviors} onChange={setFeedingBehaviors} childName={firstName} sectionContext="Feeding Behaviors - clinical observations of feeding readiness, drooling, posture, ability to stay seated" placeholder={`${firstName} demonstrates adequate readiness with feeding activity. Describe feeding behaviors observed during the evaluation (drooling, posture, ability to stay seated, finger feeding, etc.).`} rows={4} />
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-slate-700 mb-1">c. Oral Motor Coordination</h4>
@@ -3528,11 +3529,11 @@ export default function ClinicalReportEditor() {
                           }
                         }}
                       />
-                      <EditableSection label="" value={feedingOralMotorCoord} onChange={setFeedingOralMotorCoord} childName={firstName} placeholder={`During the feeding evaluation, ${firstName} was provided with [foods]. Per clinical observation, describe tongue lateralization, chewing endurance, jaw strength, compensatory techniques, etc.`} rows={5} />
+                      <EditableSection label="" value={feedingOralMotorCoord} onChange={setFeedingOralMotorCoord} childName={firstName} sectionContext="Oral Motor Coordination - tongue lateralization, chewing endurance, jaw strength, compensatory techniques during feeding evaluation" placeholder={`During the feeding evaluation, ${firstName} was provided with [foods]. Per clinical observation, describe tongue lateralization, chewing endurance, jaw strength, compensatory techniques, etc.`} rows={5} />
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-slate-700 mb-1">d. Food Repertoire</h4>
-                      <EditableSection label="" value={feedingFoodRepertoire} onChange={setFeedingFoodRepertoire} childName={firstName} placeholder={`${firstName} was introduced to solid foods around [age]. Per caregiver report, ${pronoun(gender, 'subject')} began with purees and is now eating [describe current foods]. Describe food preferences, textures accepted/refused, etc.`} rows={5} />
+                      <EditableSection label="" value={feedingFoodRepertoire} onChange={setFeedingFoodRepertoire} childName={firstName} sectionContext="Food Repertoire - solid food introduction, purees, current foods, food preferences, textures accepted and refused" placeholder={`${firstName} was introduced to solid foods around [age]. Per caregiver report, ${pronoun(gender, 'subject')} began with purees and is now eating [describe current foods]. Describe food preferences, textures accepted/refused, etc.`} rows={5} />
                     </div>
                     <div>
                       <h4 className="text-sm font-bold text-slate-700 mb-1">e. Self-Feeding Skills</h4>
@@ -3555,7 +3556,7 @@ export default function ClinicalReportEditor() {
                           }
                         }}
                       />
-                      <EditableSection label="" value={feedingSelfFeeding} onChange={setFeedingSelfFeeding} childName={firstName} placeholder={`${firstName} is able to finger feed ${pronoun(gender, 'object')}self independently. Describe hand-eye coordination, utensil use, cup drinking ability, etc.`} rows={4} />
+                      <EditableSection label="" value={feedingSelfFeeding} onChange={setFeedingSelfFeeding} childName={firstName} sectionContext="Self-Feeding Skills - finger feeding, hand-eye coordination, utensil use, cup drinking ability" placeholder={`${firstName} is able to finger feed ${pronoun(gender, 'object')}self independently. Describe hand-eye coordination, utensil use, cup drinking ability, etc.`} rows={4} />
                     </div>
                   </div>
                 )}
@@ -3582,7 +3583,7 @@ export default function ClinicalReportEditor() {
                         }
                       }}
                     />
-                    <EditableSection label="" value={feedingDrinking} onChange={setFeedingDrinking} childName={firstName} placeholder={`Describe ${firstName}'s drinking skills, including bottle use, sippy cup, straw cup, open cup, liquid preferences, and any difficulties with drinking.`} rows={5} />
+                    <EditableSection label="" value={feedingDrinking} onChange={setFeedingDrinking} childName={firstName} sectionContext="Drinking Skills - bottle use, sippy cup, straw cup, open cup, liquid preferences, drinking difficulties" placeholder={`Describe ${firstName}'s drinking skills, including bottle use, sippy cup, straw cup, open cup, liquid preferences, and any difficulties with drinking.`} rows={5} />
                   </div>
                 )}
 
