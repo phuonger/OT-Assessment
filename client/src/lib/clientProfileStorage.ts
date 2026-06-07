@@ -34,6 +34,17 @@ export interface Milestone {
   ageAchieved: string; // freeform, e.g. "6 months", "N/A", "Not yet"
 }
 
+export interface BirthHistory {
+  weeksGestation: string; // e.g. "38", "40"
+  deliveryType: 'vaginal' | 'c-section' | ''; // type of delivery
+  hospitalName: string;
+  weight: string; // e.g. "7 lbs 4 oz"
+  length: string; // e.g. "20 inches"
+  complications: 'none' | 'yes'; // toggle
+  complicationsNarrative: string; // only used when complications === 'yes'
+  dischargeNote: string; // e.g. "He was discharged home without medical equipment"
+}
+
 export interface ClientProfile {
   id: string;
   firstName: string;
@@ -43,6 +54,7 @@ export interface ClientProfile {
   prematureWeeks: number; // 0 = full term
   parentNames: string; // freeform, e.g. "John & Jane Doe"
   notes: string; // freeform
+  birthHistory?: BirthHistory;
   /** @deprecated Use goalCategories instead. Kept for migration. */
   goals?: ClientGoal[];
   goalCategories: GoalCategory[];

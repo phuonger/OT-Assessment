@@ -1042,7 +1042,42 @@ export default function ClinicalReportEditor() {
     savedReport?.referralInfo ??
     `${firstName} was referred to the regional center due to concerns regarding ${pronoun(gender, 'possessive')} overall development. A developmental assessment is being completed to obtain present levels of performance and to determine eligibility for early intervention services.`
   );
-  const [medicalHistory, setMedicalHistory] = useState(() => savedReport?.medicalHistory ?? '');
+  const [medicalHistory, setMedicalHistory] = useState(() => {
+    if (savedReport?.medicalHistory) return savedReport.medicalHistory;
+    // Auto-populate from client profile birth history for feeding template
+    if (state.activeProfileId) {
+      const activeProfile = getProfile(state.activeProfileId);
+      if (activeProfile?.birthHistory) {
+        const bh = activeProfile.birthHistory;
+        const pronHeShe = gender === 'female' ? 'She' : 'He';
+        const pronHisHer = gender === 'female' ? 'her' : 'his';
+        const parts: string[] = [];
+        // Birth narrative
+        const gestationStr = bh.weeksGestation ? (Number(bh.weeksGestation) >= 37 ? 'full term' : `at ${bh.weeksGestation} weeks gestation`) : 'full term';
+        const deliveryStr = bh.deliveryType ? `via ${bh.deliveryType === 'c-section' ? 'cesarean section' : 'vaginal delivery'}` : '';
+        const hospitalStr = bh.hospitalName ? `at ${bh.hospitalName}` : '';
+        const weightStr = bh.weight ? `, weighing ${bh.weight}` : '';
+        const lengthStr = bh.length ? ` and measuring ${bh.length}` : '';
+        parts.push(`${firstName} was born ${gestationStr} ${deliveryStr} ${hospitalStr}${weightStr}${lengthStr}.`.replace(/\s+/g, ' ').trim());
+        // Complications
+        if (bh.complications === 'none') {
+          parts.push(`Mother reports no complications with pregnancy or immediately following birth.`);
+        } else if (bh.complications === 'yes' && bh.complicationsNarrative) {
+          parts.push(bh.complicationsNarrative);
+        }
+        // Discharge
+        if (bh.dischargeNote) {
+          parts.push(bh.dischargeNote);
+        } else {
+          parts.push(`${pronHeShe} was discharged home without medical equipment.`);
+        }
+        // Standard sections placeholder
+        parts.push(`\nFamily History: None reported.\nMedical History/Hospitalizations: \nMedications: N/A\nAllergies: None reported.\nMedical/Adaptive Equipment: N/A\nVision: There are no concerns reported at this time.\nHearing: Passed newborn hearing test`);
+        return parts.join(' ').replace(/ {2,}/g, ' ');
+      }
+    }
+    return '';
+  });
   const [parentConcerns, setParentConcerns] = useState(() => savedReport?.parentConcerns ?? '');
   const [clinicalObservation, setClinicalObservation] = useState(() => savedReport?.clinicalObservation ?? '');
   const [feedingOralMotor, setFeedingOralMotor] = useState(() => savedReport?.feedingOralMotor ?? '');

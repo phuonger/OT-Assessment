@@ -24,7 +24,7 @@ import {
   addGoal, updateGoal, deleteGoal,
   updateMilestone, addMilestone, removeMilestone,
   CATEGORY_PRESETS, DEFAULT_MILESTONES,
-  type ClientProfile, type ClientGoal, type GoalCategory, type Milestone
+  type ClientProfile, type ClientGoal, type GoalCategory, type Milestone, type BirthHistory
 } from '@/lib/clientProfileStorage';
 import { getAllMultiSessions, type SavedMultiSession } from '@/lib/multiSessionStorage';
 import { toast } from 'sonner';
@@ -51,6 +51,18 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
   const [editPrematureWeeks, setEditPrematureWeeks] = useState(0);
   const [editParentNames, setEditParentNames] = useState('');
   const [editNotes, setEditNotes] = useState('');
+
+  // Birth History edit state
+  const [editBirthHistory, setEditBirthHistory] = useState<BirthHistory>({
+    weeksGestation: '',
+    deliveryType: '',
+    hospitalName: '',
+    weight: '',
+    length: '',
+    complications: 'none',
+    complicationsNarrative: '',
+    dischargeNote: '',
+  });
 
   // Category form state
   const [showCategoryForm, setShowCategoryForm] = useState(false);
@@ -93,6 +105,16 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
     setEditPrematureWeeks(profile.prematureWeeks);
     setEditParentNames(profile.parentNames);
     setEditNotes(profile.notes);
+    setEditBirthHistory(profile.birthHistory || {
+      weeksGestation: '',
+      deliveryType: '',
+      hospitalName: '',
+      weight: '',
+      length: '',
+      complications: 'none',
+      complicationsNarrative: '',
+      dischargeNote: '',
+    });
     setEditingProfile(true);
   };
 
@@ -106,6 +128,7 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
       prematureWeeks: editPrematureWeeks,
       parentNames: editParentNames.trim(),
       notes: editNotes.trim(),
+      birthHistory: editBirthHistory,
     });
     setEditingProfile(false);
     refreshProfile();
@@ -324,6 +347,71 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
                     <Label>Notes</Label>
                     <Textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={3} className="mt-1" placeholder="Any additional notes..." />
                   </div>
+
+                  {/* Birth History Section */}
+                  <div className="border-t border-[#E5E1D8] pt-4 mt-4">
+                    <h4 className="text-sm font-semibold text-[#2C2C2C] mb-3 flex items-center gap-2">
+                      <Baby className="w-4 h-4 text-[#0D7377]" /> Birth History
+                    </h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>Weeks Gestation</Label>
+                        <Input value={editBirthHistory.weeksGestation} onChange={e => setEditBirthHistory(prev => ({ ...prev, weeksGestation: e.target.value }))} className="mt-1" placeholder="e.g. 40" />
+                      </div>
+                      <div>
+                        <Label>Type of Delivery</Label>
+                        <Select value={editBirthHistory.deliveryType || 'none'} onValueChange={(v) => setEditBirthHistory(prev => ({ ...prev, deliveryType: v === 'none' ? '' : v as 'vaginal' | 'c-section' }))}>
+                          <SelectTrigger className="mt-1"><SelectValue placeholder="Select..." /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Not specified</SelectItem>
+                            <SelectItem value="vaginal">Vaginal</SelectItem>
+                            <SelectItem value="c-section">C-Section</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 mt-3">
+                      <div>
+                        <Label>Hospital Name</Label>
+                        <Input value={editBirthHistory.hospitalName} onChange={e => setEditBirthHistory(prev => ({ ...prev, hospitalName: e.target.value }))} className="mt-1" placeholder="e.g. Kaiser Permanente" />
+                      </div>
+                      <div>
+                        <Label>Weight</Label>
+                        <Input value={editBirthHistory.weight} onChange={e => setEditBirthHistory(prev => ({ ...prev, weight: e.target.value }))} className="mt-1" placeholder="e.g. 7 lbs 4 oz" />
+                      </div>
+                      <div>
+                        <Label>Length</Label>
+                        <Input value={editBirthHistory.length} onChange={e => setEditBirthHistory(prev => ({ ...prev, length: e.target.value }))} className="mt-1" placeholder="e.g. 20 inches" />
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <Label>Complications</Label>
+                      <div className="flex items-center gap-4 mt-1.5">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="complications" checked={editBirthHistory.complications === 'none'} onChange={() => setEditBirthHistory(prev => ({ ...prev, complications: 'none', complicationsNarrative: '' }))} className="accent-[#0D7377]" />
+                          <span className="text-sm">No complications</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="complications" checked={editBirthHistory.complications === 'yes'} onChange={() => setEditBirthHistory(prev => ({ ...prev, complications: 'yes' }))} className="accent-[#0D7377]" />
+                          <span className="text-sm">Yes, complications</span>
+                        </label>
+                      </div>
+                      {editBirthHistory.complications === 'yes' && (
+                        <Textarea
+                          value={editBirthHistory.complicationsNarrative}
+                          onChange={e => setEditBirthHistory(prev => ({ ...prev, complicationsNarrative: e.target.value }))}
+                          rows={2}
+                          className="mt-2"
+                          placeholder="Describe complications..."
+                        />
+                      )}
+                    </div>
+                    <div className="mt-3">
+                      <Label>Discharge Note</Label>
+                      <Input value={editBirthHistory.dischargeNote} onChange={e => setEditBirthHistory(prev => ({ ...prev, dischargeNote: e.target.value }))} className="mt-1" placeholder="e.g. He was discharged home without medical equipment" />
+                    </div>
+                  </div>
+
                   <div className="flex items-center gap-2 justify-end">
                     <Button variant="outline" size="sm" onClick={() => setEditingProfile(false)}>Cancel</Button>
                     <Button size="sm" onClick={saveEditProfile} className="bg-[#0D7377] hover:bg-[#0a5c5f] text-white gap-1.5">
@@ -367,6 +455,40 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
                     <div className="mt-3 pt-3 border-t border-[#E5E1D8]">
                       <span className="text-xs text-[#8B8B8B] uppercase tracking-wide">Notes</span>
                       <p className="text-sm text-[#2C2C2C] mt-1 whitespace-pre-wrap">{profile.notes}</p>
+                    </div>
+                  )}
+                  {/* Birth History display */}
+                  {profile.birthHistory && (profile.birthHistory.weeksGestation || profile.birthHistory.deliveryType || profile.birthHistory.hospitalName || profile.birthHistory.weight) && (
+                    <div className="mt-3 pt-3 border-t border-[#E5E1D8]">
+                      <span className="text-xs text-[#8B8B8B] uppercase tracking-wide">Birth History</span>
+                      <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm mt-2">
+                        {profile.birthHistory.weeksGestation && (
+                          <div><span className="text-[#8B8B8B]">Gestation:</span> <span className="text-[#2C2C2C]">{profile.birthHistory.weeksGestation} weeks</span></div>
+                        )}
+                        {profile.birthHistory.deliveryType && (
+                          <div><span className="text-[#8B8B8B]">Delivery:</span> <span className="text-[#2C2C2C] capitalize">{profile.birthHistory.deliveryType}</span></div>
+                        )}
+                        {profile.birthHistory.hospitalName && (
+                          <div><span className="text-[#8B8B8B]">Hospital:</span> <span className="text-[#2C2C2C]">{profile.birthHistory.hospitalName}</span></div>
+                        )}
+                        {profile.birthHistory.weight && (
+                          <div><span className="text-[#8B8B8B]">Weight:</span> <span className="text-[#2C2C2C]">{profile.birthHistory.weight}</span></div>
+                        )}
+                        {profile.birthHistory.length && (
+                          <div><span className="text-[#8B8B8B]">Length:</span> <span className="text-[#2C2C2C]">{profile.birthHistory.length}</span></div>
+                        )}
+                        {profile.birthHistory.complications && (
+                          <div className="col-span-2">
+                            <span className="text-[#8B8B8B]">Complications:</span>
+                            <span className="text-[#2C2C2C] ml-1">
+                              {profile.birthHistory.complications === 'none' ? 'None reported' : profile.birthHistory.complicationsNarrative || 'Yes (details not provided)'}
+                            </span>
+                          </div>
+                        )}
+                        {profile.birthHistory.dischargeNote && (
+                          <div className="col-span-2"><span className="text-[#8B8B8B]">Discharge:</span> <span className="text-[#2C2C2C]">{profile.birthHistory.dischargeNote}</span></div>
+                        )}
+                      </div>
                     </div>
                   )}
                   <div className="flex items-center gap-2 mt-4 pt-3 border-t border-[#E5E1D8]">
