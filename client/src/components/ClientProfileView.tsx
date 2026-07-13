@@ -16,7 +16,7 @@ import {
   ArrowLeft, Plus, Pencil, Trash2, Save, X, Play, Calendar,
   Target, CheckCircle2, Clock, XCircle, FileText, User, Baby,
   ChevronDown, ChevronUp, FolderPlus, MessageSquare, Milestone as MilestoneIcon,
-  Download
+  Download, ClipboardList
 } from 'lucide-react';
 import {
   getProfile, updateProfile, deleteProfile, touchProfile,
@@ -29,6 +29,10 @@ import {
 import { getAllMultiSessions, type SavedMultiSession } from '@/lib/multiSessionStorage';
 import { toast } from 'sonner';
 import { generateProfileDocx } from '@/lib/generateProfileDocx';
+import { getAttendanceCount, type AttendanceRecord } from '@/lib/attendanceStorage';
+import AttendanceForm from '@/components/AttendanceForm';
+import AttendanceHistory from '@/components/AttendanceHistory';
+import { generateAttendanceDocx } from '@/lib/generateAttendanceDocx';
 
 interface ClientProfileViewProps {
   profileId: string;
@@ -42,6 +46,11 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
   const [editingProfile, setEditingProfile] = useState(false);
   const [linkedSessions, setLinkedSessions] = useState<SavedMultiSession[]>([]);
   const [expandedSection, setExpandedSection] = useState<'info' | 'milestones' | 'goals' | 'history' | null>('goals');
+
+  // Attendance state
+  const [attendanceView, setAttendanceView] = useState<'none' | 'form' | 'history'>('none');
+  const [editingAttendance, setEditingAttendance] = useState<AttendanceRecord | null>(null);
+  const [attendanceCount, setAttendanceCount] = useState(0);
 
   // Edit form state
   const [editFirstName, setEditFirstName] = useState('');
@@ -91,6 +100,7 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
       const allSessions = getAllMultiSessions();
       const linked = allSessions.filter((s: SavedMultiSession) => p.linkedAssessmentIds.includes(s.id));
       setLinkedSessions(linked);
+      setAttendanceCount(getAttendanceCount(profileId));
     }
   }, [profileId]);
 
@@ -253,6 +263,38 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
     );
   }
 
+  // Attendance views
+  if (attendanceView === 'form') {
+    return (
+      <AttendanceForm
+        profile={profile}
+        existingRecord={editingAttendance}
+        onBack={() => { setAttendanceView('none'); setEditingAttendance(null); }}
+        onSaved={() => { setAttendanceView('history'); setEditingAttendance(null); refreshProfile(); }}
+      />
+    );
+  }
+
+  if (attendanceView === 'history') {
+    return (
+      <AttendanceHistory
+        profile={profile}
+        onBack={() => setAttendanceView('none')}
+        onNewEntry={() => { setEditingAttendance(null); setAttendanceView('form'); }}
+        onEditEntry={(record) => { setEditingAttendance(record); setAttendanceView('form'); }}
+        onPrintEntry={async (record) => {
+          try {
+            await generateAttendanceDocx(record);
+            toast.success('Attendance record exported');
+          } catch (err) {
+            console.error(err);
+            toast.error('Failed to export attendance record');
+          }
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#FAF9F6]">
       {/* Header */}
@@ -283,6 +325,18 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
           >
             <Download className="w-4 h-4" />
             Export
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => { setAttendanceView('form'); setEditingAttendance(null); }}
+            className="gap-1.5 border-[#0D7377] text-[#0D7377] hover:bg-[#0D7377]/5"
+          >
+            <ClipboardList className="w-4 h-4" />
+            Attendance
+            {attendanceCount > 0 && (
+              <span className="ml-1 text-xs bg-[#0D7377]/10 px-1.5 py-0.5 rounded-full">{attendanceCount}</span>
+            )}
           </Button>
           <Button
             onClick={() => onStartAssessment(profile)}
@@ -851,6 +905,25 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
               </div>
             </div>
           )}
+        </section>
+
+        {/* ===== ATTENDANCE RECORDS QUICK ACCESS ===== */}
+        <section className="bg-white rounded-xl border border-[#E5E1D8] overflow-hidden">
+          <button
+            onClick={() => setAttendanceView('history')}
+            className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-[#FAF9F6] transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-[#0D7377]" />
+              <span className="text-sm font-semibold text-[#2C2C2C]">Attendance Records</span>
+              {attendanceCount > 0 && (
+                <span className="text-xs bg-[#0D7377]/10 text-[#0D7377] px-2 py-0.5 rounded-full font-medium">
+                  {attendanceCount}
+                </span>
+              )}
+            </div>
+            <ChevronDown className="w-4 h-4 text-[#8B8B8B]" />
+          </button>
         </section>
 
         {/* ===== ASSESSMENT HISTORY SECTION ===== */}
