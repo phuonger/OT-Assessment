@@ -1095,8 +1095,22 @@ export default function ClinicalReportEditor() {
   const [reportTitle, setReportTitle] = useState(() => savedReport?.reportTitle ?? TEMPLATE_INFO[template].title);
   const [domainOverrides, setDomainOverrides] = useState<Record<string, string>>(() => savedReport?.domainOverrides ?? {});
   const [scoreOverrides, setScoreOverrides] = useState<Record<string, string>>(() => savedReport?.scoreOverrides ?? {});
-  const [uciNumber, setUciNumber] = useState(() => savedReport?.uciNumber ?? '');
-  const [regionalCenter, setRegionalCenter] = useState(() => savedReport?.regionalCenter ?? '');
+  const [uciNumber, setUciNumber] = useState(() => {
+    if (savedReport?.uciNumber) return savedReport.uciNumber;
+    if (state.activeProfileId) {
+      const p = getProfile(state.activeProfileId);
+      if (p?.uci) return p.uci;
+    }
+    return '';
+  });
+  const [regionalCenter, setRegionalCenter] = useState(() => {
+    if (savedReport?.regionalCenter) return savedReport.regionalCenter;
+    if (state.activeProfileId) {
+      const p = getProfile(state.activeProfileId);
+      if (p?.sc) return p.sc;
+    }
+    return '';
+  });
 
   // Evaluation Period
   const [evalPeriodMode, setEvalPeriodMode] = useState<'range' | 'text'>(() => savedReport?.evalPeriodMode ?? 'text');
