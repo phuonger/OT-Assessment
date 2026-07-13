@@ -50,6 +50,8 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
   const [editGender, setEditGender] = useState<'male' | 'female' | 'other'>('male');
   const [editPrematureWeeks, setEditPrematureWeeks] = useState(0);
   const [editParentNames, setEditParentNames] = useState('');
+  const [editUci, setEditUci] = useState('');
+  const [editSc, setEditSc] = useState('');
   const [editNotes, setEditNotes] = useState('');
 
   // Birth History edit state
@@ -104,6 +106,8 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
     setEditGender(profile.gender);
     setEditPrematureWeeks(profile.prematureWeeks);
     setEditParentNames(profile.parentNames);
+    setEditUci(profile.uci || '');
+    setEditSc(profile.sc || '');
     setEditNotes(profile.notes);
     setEditBirthHistory(profile.birthHistory || {
       weeksGestation: '',
@@ -127,6 +131,8 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
       gender: editGender,
       prematureWeeks: editPrematureWeeks,
       parentNames: editParentNames.trim(),
+      uci: editUci.trim(),
+      sc: editSc.trim(),
       notes: editNotes.trim(),
       birthHistory: editBirthHistory,
     });
@@ -343,6 +349,16 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
                       <Input value={editParentNames} onChange={e => setEditParentNames(e.target.value)} className="mt-1" />
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>UCI</Label>
+                      <Input value={editUci} onChange={e => setEditUci(e.target.value)} className="mt-1" placeholder="UCI number" />
+                    </div>
+                    <div>
+                      <Label>SC</Label>
+                      <Input value={editSc} onChange={e => setEditSc(e.target.value)} className="mt-1" placeholder="SC number" />
+                    </div>
+                  </div>
                   <div>
                     <Label>Notes</Label>
                     <Textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={3} className="mt-1" placeholder="Any additional notes..." />
@@ -448,6 +464,18 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
                       <div>
                         <span className="text-[#8B8B8B]">Parent(s):</span>
                         <span className="ml-2 text-[#2C2C2C]">{profile.parentNames}</span>
+                      </div>
+                    )}
+                    {profile.uci && (
+                      <div>
+                        <span className="text-[#8B8B8B]">UCI:</span>
+                        <span className="ml-2 text-[#2C2C2C]">{profile.uci}</span>
+                      </div>
+                    )}
+                    {profile.sc && (
+                      <div>
+                        <span className="text-[#8B8B8B]">SC:</span>
+                        <span className="ml-2 text-[#2C2C2C]">{profile.sc}</span>
                       </div>
                     )}
                   </div>

@@ -53,6 +53,8 @@ export interface ClientProfile {
   gender: 'male' | 'female' | 'other';
   prematureWeeks: number; // 0 = full term
   parentNames: string; // freeform, e.g. "John & Jane Doe"
+  uci: string; // UCI number
+  sc: string; // SC number
   notes: string; // freeform
   birthHistory?: BirthHistory;
   /** @deprecated Use goalCategories instead. Kept for migration. */
@@ -121,6 +123,9 @@ function migrateProfile(profile: ClientProfile): ClientProfile {
   if (!profile.milestones) {
     profile.milestones = DEFAULT_MILESTONES.map(m => ({ ...m }));
   }
+  // Ensure uci and sc fields exist
+  if (profile.uci === undefined) profile.uci = '';
+  if (profile.sc === undefined) profile.sc = '';
   // Migrate legacy flat goals into a "General" category
   if (profile.goals && profile.goals.length > 0 && profile.goalCategories.length === 0) {
     profile.goalCategories.push({
@@ -170,6 +175,8 @@ export function createProfile(data: {
   gender: 'male' | 'female' | 'other';
   prematureWeeks: number;
   parentNames: string;
+  uci?: string;
+  sc?: string;
   notes: string;
 }): ClientProfile {
   const now = new Date().toISOString();
@@ -181,6 +188,8 @@ export function createProfile(data: {
     gender: data.gender,
     prematureWeeks: data.prematureWeeks,
     parentNames: data.parentNames,
+    uci: data.uci || '',
+    sc: data.sc || '',
     notes: data.notes,
     goalCategories: [],
     milestones: DEFAULT_MILESTONES.map(m => ({ ...m })),
