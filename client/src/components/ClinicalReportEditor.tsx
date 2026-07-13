@@ -1091,7 +1091,7 @@ export default function ClinicalReportEditor() {
     savedReport?.closingNote ??
     `Thank you for this referral. It was a pleasure to work with ${firstName} and ${pronoun(gender, 'possessive')} family. Please feel free to contact me with any additional questions and/or concerns.`
   );
-  const [practiceName, setPracticeName] = useState(() => savedReport?.practiceName ?? (appSettings.practiceName || examinerInfo.agency || 'Practice Name'));
+  const [practiceName, setPracticeName] = useState(() => savedReport?.practiceName ?? (appSettings.practiceName || examinerInfo.agency || 'Company Name'));
   const [reportTitle, setReportTitle] = useState(() => savedReport?.reportTitle ?? TEMPLATE_INFO[template].title);
   const [domainOverrides, setDomainOverrides] = useState<Record<string, string>>(() => savedReport?.domainOverrides ?? {});
   const [scoreOverrides, setScoreOverrides] = useState<Record<string, string>>(() => savedReport?.scoreOverrides ?? {});
@@ -2488,7 +2488,7 @@ export default function ClinicalReportEditor() {
                 {appSettings.practiceLogo && (
                   <img
                     src={appSettings.practiceLogo}
-                    alt="Practice logo"
+                    alt="Company logo"
                     className="w-16 h-16 object-contain print:w-14 print:h-14"
                   />
                 )}

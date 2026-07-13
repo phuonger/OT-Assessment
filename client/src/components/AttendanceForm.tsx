@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Save, Calendar, Clock } from 'lucide-react';
 import { type ClientProfile } from '@/lib/clientProfileStorage';
-import { createAttendance, updateAttendance, type AttendanceRecord } from '@/lib/attendanceStorage';
+import { createAttendance, updateAttendance, getAttendanceByProfile, type AttendanceRecord } from '@/lib/attendanceStorage';
 import { loadAppSettings } from '@/components/SettingsPreferences';
 import SignaturePad from '@/components/SignaturePad';
 import { toast } from 'sonner';
@@ -57,8 +57,13 @@ export default function AttendanceForm({ profile, existingRecord, onBack, onSave
   const appSettings = useMemo(() => loadAppSettings(), []);
   const therapistName = appSettings.defaultExaminerName || appSettings.signatureName || '';
 
-  // Form state
-  const [typeFrequency, setTypeFrequency] = useState(existingRecord?.typeFrequency ?? '');
+  // Form state — auto-fill typeFrequency from last entry for this child
+  const [typeFrequency, setTypeFrequency] = useState(() => {
+    if (existingRecord?.typeFrequency) return existingRecord.typeFrequency;
+    const previous = getAttendanceByProfile(profile.id);
+    if (previous.length > 0 && previous[0].typeFrequency) return previous[0].typeFrequency;
+    return '';
+  });
   const [payPeriodMonth, setPayPeriodMonth] = useState(() => {
     if (existingRecord?.payPeriod) {
       const parts = existingRecord.payPeriod.split(' ');

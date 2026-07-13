@@ -37,7 +37,7 @@ export interface RecommendationTemplate {
 }
 
 export interface AppSettings {
-  // Practice info
+  // Company info
   practiceName: string;
   practiceAddress: string;
   practicePhone: string;
@@ -297,23 +297,23 @@ export default function SettingsPreferences({ onBack }: { onBack: () => void }) 
       </header>
 
       <main className="max-w-3xl mx-auto px-6 py-8 space-y-8">
-        {/* Practice Information */}
+        {/* Company Information */}
         <section>
           <div className="flex items-center gap-2 mb-4">
             <Building2 className="w-5 h-5 text-[#0D7377]" />
-            <h2 className="text-lg font-semibold text-[#2C2C2C]">Practice Information</h2>
+            <h2 className="text-lg font-semibold text-[#2C2C2C]">Company Information</h2>
           </div>
           <p className="text-sm text-[#6B6B6B] mb-4">
             This information will appear in the header of clinical reports and DOCX exports.
           </p>
           <div className="bg-white rounded-lg border border-[#E5E1D8] p-6 space-y-4">
             <div>
-              <Label htmlFor="practiceName">Practice / Clinic Name</Label>
+              <Label htmlFor="practiceName">Company Name</Label>
               <Input
                 id="practiceName"
                 value={settings.practiceName}
                 onChange={e => update('practiceName', e.target.value)}
-                placeholder="e.g., ABC Pediatric Therapy"
+                placeholder="e.g., Elevate Pediatric Therapy"
                 className="mt-1"
               />
             </div>
@@ -344,7 +344,7 @@ export default function SettingsPreferences({ onBack }: { onBack: () => void }) 
                   id="practiceEmail"
                   value={settings.practiceEmail}
                   onChange={e => update('practiceEmail', e.target.value)}
-                  placeholder="e.g., info@practice.com"
+                  placeholder="e.g., info@company.com"
                   className="mt-1"
                 />
               </div>
@@ -352,9 +352,9 @@ export default function SettingsPreferences({ onBack }: { onBack: () => void }) 
 
             {/* Logo Upload */}
             <div>
-              <Label>Practice Logo</Label>
+              <Label>Company Logo</Label>
               <p className="text-xs text-[#8B8B8B] mt-0.5 mb-2">
-                Upload a logo (PNG, JPG, SVG — max 500 KB) to display in report headers.
+                Upload your company logo (PNG, JPG, SVG — max 500 KB) to display in report headers.
               </p>
               <div className="flex items-start gap-4">
                 {settings.practiceLogo ? (
@@ -362,7 +362,7 @@ export default function SettingsPreferences({ onBack }: { onBack: () => void }) 
                     <div className="w-24 h-24 rounded-lg border border-[#E5E1D8] bg-white flex items-center justify-center overflow-hidden">
                       <img
                         src={settings.practiceLogo}
-                        alt="Practice logo"
+                        alt="Company logo"
                         className="max-w-full max-h-full object-contain p-1"
                       />
                     </div>

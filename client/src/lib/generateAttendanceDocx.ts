@@ -71,8 +71,26 @@ export async function generateAttendanceDocx(record: AttendanceRecord): Promise<
   const appSettings = loadAppSettings();
   const sections: any[] = [];
 
-  // Practice header
+  // Practice header with logo
   const headerParagraphs: Paragraph[] = [];
+  if (appSettings.practiceLogo) {
+    try {
+      const { buffer, width, height } = await dataUriToBuffer(appSettings.practiceLogo);
+      if (buffer.byteLength > 0) {
+        const maxW = 180;
+        const scale = maxW / width;
+        headerParagraphs.push(new Paragraph({
+          children: [new ImageRun({
+            data: buffer,
+            transformation: { width: maxW, height: Math.round(height * scale) },
+            type: 'png',
+          })],
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 80 },
+        }));
+      }
+    } catch { /* skip logo if it fails */ }
+  }
   if (appSettings.practiceName) {
     headerParagraphs.push(new Paragraph({
       children: [new TextRun({ text: appSettings.practiceName, bold: true, size: 28, font: 'Arial' })],
@@ -80,10 +98,11 @@ export async function generateAttendanceDocx(record: AttendanceRecord): Promise<
       spacing: { after: 60 },
     }));
   }
-  if (appSettings.practicePhone || appSettings.practiceEmail) {
+  const contactParts = [appSettings.practicePhone, appSettings.practiceEmail, appSettings.practiceAddress].filter(Boolean);
+  if (contactParts.length > 0) {
     headerParagraphs.push(new Paragraph({
       children: [new TextRun({
-        text: [appSettings.practicePhone, appSettings.practiceEmail].filter(Boolean).join(' | '),
+        text: contactParts.join(' | '),
         size: 18,
         font: 'Arial',
       })],
@@ -257,4 +276,201 @@ function formatDateForDoc(dateStr: string): string {
   } catch {
     return dateStr;
   }
+}
+
+/**
+ * Batch export all attendance records for a given pay period as a single multi-page DOCX.
+ * Each record becomes its own section (page break between entries).
+ */
+export async function generateBatchAttendanceDocx(records: AttendanceRecord[], payPeriod: string): Promise<void> {
+  if (records.length === 0) return;
+
+  const appSettings = loadAppSettings();
+
+  // Build header elements (shared across all pages)
+  async function buildHeader(): Promise<Paragraph[]> {
+    const headerParagraphs: Paragraph[] = [];
+    if (appSettings.practiceLogo) {
+      try {
+        const { buffer, width, height } = await dataUriToBuffer(appSettings.practiceLogo);
+        if (buffer.byteLength > 0) {
+          const maxW = 180;
+          const scale = maxW / width;
+          headerParagraphs.push(new Paragraph({
+            children: [new ImageRun({
+              data: buffer,
+              transformation: { width: maxW, height: Math.round(height * scale) },
+              type: 'png',
+            })],
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 80 },
+          }));
+        }
+      } catch { /* skip */ }
+    }
+    if (appSettings.practiceName) {
+      headerParagraphs.push(new Paragraph({
+        children: [new TextRun({ text: appSettings.practiceName, bold: true, size: 28, font: 'Arial' })],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 60 },
+      }));
+    }
+    const contactParts = [appSettings.practicePhone, appSettings.practiceEmail, appSettings.practiceAddress].filter(Boolean);
+    if (contactParts.length > 0) {
+      headerParagraphs.push(new Paragraph({
+        children: [new TextRun({ text: contactParts.join(' | '), size: 18, font: 'Arial' })],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 200 },
+      }));
+    }
+    return headerParagraphs;
+  }
+
+  const headerParas = await buildHeader();
+
+  // Build sections — one per record
+  const sections = [];
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i];
+
+    const infoTable = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [
+        new TableRow({
+          children: [
+            headerCell('Child Name:'),
+            valueCell(record.childName),
+            headerCell('Therapist Name:'),
+            valueCell(record.therapistName),
+          ],
+        }),
+        new TableRow({
+          children: [
+            headerCell('UCI:'),
+            valueCell(record.uci),
+            headerCell('SC:'),
+            valueCell(record.sc),
+          ],
+        }),
+        new TableRow({
+          children: [
+            headerCell('Type / Frequency:'),
+            valueCell(record.typeFrequency),
+            headerCell('Pay Period:'),
+            valueCell(record.payPeriod),
+          ],
+        }),
+      ],
+    });
+
+    const dailyNoteHeading = new Paragraph({
+      children: [new TextRun({ text: 'Daily Note', bold: true, size: 28, font: 'Arial' })],
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 300, after: 200 },
+    });
+
+    const dateTimeRow = new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      rows: [
+        new TableRow({
+          children: [
+            headerCell('DATE'),
+            headerCell('TIME'),
+            headerCell('CONSUMER SIGNATURE'),
+            headerCell('THERAPIST SIGNATURE'),
+          ],
+        }),
+        new TableRow({
+          children: [
+            valueCell(formatDateForDoc(record.date)),
+            valueCell(record.time),
+            new TableCell({
+              children: record.parentSignature ? [new Paragraph({
+                children: [new TextRun({ text: '[Signed]', italics: true, size: 18, font: 'Arial' })],
+              })] : [new Paragraph({ children: [] })],
+              borders: createBorderStyle(),
+              verticalAlign: VerticalAlign.CENTER,
+            }),
+            new TableCell({
+              children: record.therapistSignature ? [new Paragraph({
+                children: [new TextRun({ text: '[Signed]', italics: true, size: 18, font: 'Arial' })],
+              })] : [new Paragraph({ children: [] })],
+              borders: createBorderStyle(),
+              verticalAlign: VerticalAlign.CENTER,
+            }),
+          ],
+        }),
+      ],
+    });
+
+    const progressNoteLabel = new Paragraph({
+      children: [new TextRun({ text: 'Progress note:', bold: true, size: 20, font: 'Arial' })],
+      spacing: { before: 100, after: 60 },
+    });
+
+    const progressNoteText = new Paragraph({
+      children: [new TextRun({ text: record.progressNote, size: 20, font: 'Arial' })],
+      spacing: { before: 60, after: 200 },
+    });
+
+    // Signature images
+    const signatureElements: Paragraph[] = [];
+    if (record.parentSignature) {
+      try {
+        const { buffer, width, height } = await dataUriToBuffer(record.parentSignature);
+        if (buffer.byteLength > 0) {
+          const scale = 200 / width;
+          signatureElements.push(new Paragraph({
+            children: [new TextRun({ text: 'Parent/Guardian Signature:', bold: true, size: 20, font: 'Arial' })],
+            spacing: { before: 100, after: 60 },
+          }));
+          signatureElements.push(new Paragraph({
+            children: [new ImageRun({
+              data: buffer,
+              transformation: { width: 200, height: Math.round(height * scale) },
+              type: 'png',
+            })],
+          }));
+        }
+      } catch { /* skip */ }
+    }
+    if (record.therapistSignature) {
+      try {
+        const { buffer, width, height } = await dataUriToBuffer(record.therapistSignature);
+        if (buffer.byteLength > 0) {
+          const scale = 200 / width;
+          signatureElements.push(new Paragraph({
+            children: [new TextRun({ text: 'Therapist Signature:', bold: true, size: 20, font: 'Arial' })],
+            spacing: { before: 100, after: 60 },
+          }));
+          signatureElements.push(new Paragraph({
+            children: [new ImageRun({
+              data: buffer,
+              transformation: { width: 200, height: Math.round(height * scale) },
+              type: 'png',
+            })],
+          }));
+        }
+      } catch { /* skip */ }
+    }
+
+    sections.push({
+      properties: i > 0 ? { page: { margin: { top: 720, bottom: 720, left: 720, right: 720 } } } : undefined,
+      children: [
+        ...headerParas,
+        infoTable,
+        dailyNoteHeading,
+        dateTimeRow,
+        progressNoteLabel,
+        progressNoteText,
+        ...signatureElements,
+      ],
+    });
+  }
+
+  const doc = new Document({ sections });
+  const blob = await Packer.toBlob(doc);
+  const childName = records[0].childName.replace(/\s+/g, '_');
+  const fileName = `Attendance_${childName}_${payPeriod.replace(/\s+/g, '_')}.docx`;
+  saveAs(blob, fileName);
 }
