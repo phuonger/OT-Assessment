@@ -53,7 +53,7 @@ const STORAGE_KEY = 'bayley4-gdrive-sync-config';
 const FOLDER_NAME = 'otassess';
 const DATA_FILE_NAME = 'otassess_backup.json';
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
-const REDIRECT_URI = 'http://localhost:8377/oauth/callback';
+const REDIRECT_URI = 'http://localhost';
 
 // Pre-configured OAuth credentials (shared across all users)
 export const DEFAULT_CLIENT_ID = '510997634868-87764bvo14ehkllh8m5denadtq7i5ebq.apps.googleusercontent.com';

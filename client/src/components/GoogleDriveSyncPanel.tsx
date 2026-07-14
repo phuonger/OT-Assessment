@@ -59,15 +59,31 @@ export default function GoogleDriveSyncPanel() {
     }
   }, []);
 
+  const [authUrl, setAuthUrl] = useState('');
+
   const handleConnect = () => {
     // Use pre-configured credentials
     const updated = { ...config, clientId: DEFAULT_CLIENT_ID, clientSecret: DEFAULT_CLIENT_SECRET };
     saveSyncConfig(updated);
     setConfig(updated);
 
-    // Open Google sign-in
+    // Generate auth URL
     const url = getAuthUrl(DEFAULT_CLIENT_ID);
-    window.open(url, '_blank', 'width=600,height=700');
+    setAuthUrl(url);
+
+    // Try to open in system browser (works in Electron with shell.openExternal)
+    // For Electron: use require('electron').shell.openExternal
+    try {
+      const { shell } = (window as any).require?.('electron') || {};
+      if (shell?.openExternal) {
+        shell.openExternal(url);
+      } else {
+        window.open(url, '_blank');
+      }
+    } catch {
+      // Fallback: just show the link for manual copy
+      window.open(url, '_blank');
+    }
     setAwaitingCode(true);
   };
 
@@ -185,8 +201,43 @@ export default function GoogleDriveSyncPanel() {
             <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
               <p className="text-sm font-medium text-blue-800 mb-2">Sign in and paste the code</p>
               <p className="text-xs text-blue-700 mb-3">
-                A Google sign-in window should have opened. Sign in with your Google account, grant access, then copy the authorization code and paste it below.
+                A browser window should have opened for Google sign-in. After signing in and granting access, Google will redirect to a page that may show an error — that's normal. <strong>Copy the code from the browser's address bar</strong> (the part after <code>?code=</code> and before <code>&scope=</code>) and paste it below.
               </p>
+              {authUrl && (
+                <div className="mb-3 p-2 bg-white rounded border border-blue-200">
+                  <p className="text-xs text-blue-600 mb-1 font-medium">If the browser didn't open, click or copy this link:</p>
+                  <a
+                    href={authUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-blue-700 underline break-all font-mono"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      try {
+                        const { shell } = (window as any).require?.('electron') || {};
+                        if (shell?.openExternal) {
+                          shell.openExternal(authUrl);
+                        } else {
+                          window.open(authUrl, '_blank');
+                        }
+                      } catch {
+                        window.open(authUrl, '_blank');
+                      }
+                    }}
+                  >
+                    Open Google Sign-In
+                  </a>
+                  <button
+                    className="ml-2 text-xs text-slate-500 hover:text-slate-700 underline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(authUrl);
+                      toast.success('Link copied to clipboard');
+                    }}
+                  >
+                    Copy link
+                  </button>
+                </div>
+              )}
               <div className="flex gap-2">
                 <Input
                   value={authCode}
