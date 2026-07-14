@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import SyncStatusIndicator from './SyncStatusIndicator';
 import {
-  loadAllProfiles, searchProfiles, getRecentProfiles, createProfile,
+  loadAllProfiles, createProfile,
   type ClientProfile
 } from '@/lib/clientProfileStorage';
 import { toast } from 'sonner';
@@ -31,7 +31,10 @@ interface ClientProfilesProps {
 export default function ClientProfiles({ onSelectProfile, onOpenSettings, onOpenAllAssessments, onStartWithoutProfile }: ClientProfilesProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [recentProfiles, setRecentProfiles] = useState<ClientProfile[]>([]);
+  const [allProfiles, setAllProfiles] = useState<ClientProfile[]>([]);
+  const [sortBy, setSortBy] = useState<'recent' | 'alpha'>(() => {
+    return (localStorage.getItem('bayley4-profile-sort') as 'recent' | 'alpha') || 'alpha';
+  });
 
   // Create form state
   const [newFirstName, setNewFirstName] = useState('');
@@ -43,15 +46,41 @@ export default function ClientProfiles({ onSelectProfile, onOpenSettings, onOpen
   const [newNotes, setNewNotes] = useState('');
 
   useEffect(() => {
-    setRecentProfiles(getRecentProfiles(10));
+    setAllProfiles(loadAllProfiles());
   }, []);
 
-  const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    return searchProfiles(searchQuery);
-  }, [searchQuery]);
+  const handleSortChange = (newSort: 'recent' | 'alpha') => {
+    setSortBy(newSort);
+    localStorage.setItem('bayley4-profile-sort', newSort);
+  };
 
-  const displayedProfiles = searchQuery.trim() ? searchResults : recentProfiles;
+  const displayedProfiles = useMemo(() => {
+    let profiles = [...allProfiles];
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      profiles = profiles.filter(p =>
+        p.firstName.toLowerCase().includes(q) ||
+        p.lastName.toLowerCase().includes(q) ||
+        `${p.firstName} ${p.lastName}`.toLowerCase().includes(q) ||
+        p.parentNames?.toLowerCase().includes(q)
+      );
+    }
+
+    // Sort
+    if (sortBy === 'alpha') {
+      profiles.sort((a, b) => {
+        const nameA = `${a.lastName} ${a.firstName}`.toLowerCase();
+        const nameB = `${b.lastName} ${b.firstName}`.toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+    } else {
+      profiles.sort((a, b) => new Date(b.lastAccessedAt).getTime() - new Date(a.lastAccessedAt).getTime());
+    }
+
+    return profiles;
+  }, [allProfiles, searchQuery, sortBy]);
 
   const handleCreate = () => {
     if (!newFirstName.trim()) {
@@ -259,8 +288,9 @@ export default function ClientProfiles({ onSelectProfile, onOpenSettings, onOpen
           <Input
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search client profiles..."
+            placeholder="Search by name or parent..."
             className="pl-10 h-11 bg-white border-[#E5E1D8]"
+            autoFocus
           />
           {searchQuery && (
             <button
@@ -293,9 +323,37 @@ export default function ClientProfiles({ onSelectProfile, onOpenSettings, onOpen
 
         {/* Profile List */}
         <div>
-          <h2 className="text-sm font-semibold text-[#6B6B6B] uppercase tracking-wide mb-3">
-            {searchQuery.trim() ? `Search Results (${searchResults.length})` : 'Recent Profiles'}
-          </h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-[#6B6B6B] uppercase tracking-wide">
+              {searchQuery.trim()
+                ? `Search Results (${displayedProfiles.length})`
+                : `All Profiles (${displayedProfiles.length})`}
+            </h2>
+            {!searchQuery.trim() && (
+              <div className="flex items-center gap-1 bg-white border border-[#E5E1D8] rounded-lg p-0.5">
+                <button
+                  onClick={() => handleSortChange('alpha')}
+                  className={`text-xs px-2.5 py-1 rounded-md transition-colors ${
+                    sortBy === 'alpha'
+                      ? 'bg-[#0D7377] text-white font-medium'
+                      : 'text-[#6B6B6B] hover:text-[#2C2C2C]'
+                  }`}
+                >
+                  A–Z
+                </button>
+                <button
+                  onClick={() => handleSortChange('recent')}
+                  className={`text-xs px-2.5 py-1 rounded-md transition-colors ${
+                    sortBy === 'recent'
+                      ? 'bg-[#0D7377] text-white font-medium'
+                      : 'text-[#6B6B6B] hover:text-[#2C2C2C]'
+                  }`}
+                >
+                  Recent
+                </button>
+              </div>
+            )}
+          </div>
 
           {displayedProfiles.length === 0 ? (
             <div className="bg-white rounded-xl border border-[#E5E1D8] p-8 text-center">
