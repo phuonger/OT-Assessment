@@ -5,7 +5,9 @@
  * Routes between welcome, profiles, profileView, dashboard, setup, assessment, summary, report, history, and backup phases.
  */
 
+import { useState } from 'react';
 import { MultiAssessmentProvider, useMultiAssessment } from '@/contexts/MultiAssessmentContext';
+import CompanySetupWizard from '@/components/CompanySetupWizard';
 import WelcomePage from '@/components/WelcomePage';
 import ClientProfiles from '@/components/ClientProfiles';
 import ClientProfileView from '@/components/ClientProfileView';
@@ -133,6 +135,14 @@ function AssessmentFlow() {
 }
 
 export default function Home() {
+  const [setupComplete, setSetupComplete] = useState(() => {
+    return localStorage.getItem('bayley4-setup-complete') === 'true';
+  });
+
+  if (!setupComplete) {
+    return <CompanySetupWizard onComplete={() => setSetupComplete(true)} />;
+  }
+
   return (
     <MultiAssessmentProvider>
       <AssessmentFlow />

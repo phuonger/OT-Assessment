@@ -64,6 +64,10 @@ export default function AttendanceHistory({ profile, onBack, onNewEntry, onEditE
     return sorted;
   }, [records]);
 
+  // Summary stats
+  const totalSessions = records.length;
+  const totalSigned = records.filter(r => r.parentSignature && r.therapistSignature).length;
+
   const handleDelete = (record: AttendanceRecord) => {
     if (!confirm(`Delete attendance record from ${formatDate(record.date)}?`)) return;
     deleteAttendance(record.id);
@@ -110,6 +114,24 @@ export default function AttendanceHistory({ profile, onBack, onNewEntry, onEditE
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-6">
+        {/* Summary Stats */}
+        {records.length > 0 && (
+          <div className="mb-6 grid grid-cols-3 gap-3">
+            <div className="bg-white rounded-xl border border-[#E5E1D8] p-4 text-center">
+              <p className="text-2xl font-bold text-[#0D7377]">{totalSessions}</p>
+              <p className="text-xs text-slate-500 mt-1">Total Sessions</p>
+            </div>
+            <div className="bg-white rounded-xl border border-[#E5E1D8] p-4 text-center">
+              <p className="text-2xl font-bold text-[#2C2C2C]">{groupedByPeriod.length}</p>
+              <p className="text-xs text-slate-500 mt-1">Pay Periods</p>
+            </div>
+            <div className="bg-white rounded-xl border border-[#E5E1D8] p-4 text-center">
+              <p className="text-2xl font-bold text-green-600">{totalSigned}</p>
+              <p className="text-xs text-slate-500 mt-1">Fully Signed</p>
+            </div>
+          </div>
+        )}
+
         {records.length === 0 ? (
           <div className="text-center py-16">
             <FileText className="w-12 h-12 text-slate-300 mx-auto mb-4" />

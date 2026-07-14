@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Save, Calendar, Clock } from 'lucide-react';
+import { ArrowLeft, Save, Calendar, Clock, Printer } from 'lucide-react';
 import { type ClientProfile } from '@/lib/clientProfileStorage';
 import { createAttendance, updateAttendance, getAttendanceByProfile, type AttendanceRecord } from '@/lib/attendanceStorage';
 import { loadAppSettings } from '@/components/SettingsPreferences';
@@ -141,17 +141,41 @@ export default function AttendanceForm({ profile, existingRecord, onBack, onSave
             {existingRecord ? 'Edit Attendance' : 'New Attendance Entry'}
           </h1>
         </div>
-        <Button
-          onClick={handleSave}
-          disabled={saving}
-          className="bg-[#0D7377] hover:bg-[#0a5c5f] text-white gap-2"
-        >
-          <Save className="w-4 h-4" />
-          {saving ? 'Saving...' : 'Save'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.print()}
+            className="gap-1.5 text-slate-600"
+          >
+            <Printer className="w-4 h-4" />
+            Print
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={saving}
+            className="bg-[#0D7377] hover:bg-[#0a5c5f] text-white gap-2"
+          >
+            <Save className="w-4 h-4" />
+            {saving ? 'Saving...' : 'Save'}
+          </Button>
+        </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+        {/* Print-only company header */}
+        <div className="hidden print-only text-center mb-4">
+          {appSettings.practiceLogo && (
+            <img src={appSettings.practiceLogo} alt="Company logo" className="mx-auto h-16 mb-2 object-contain" />
+          )}
+          {appSettings.practiceName && (
+            <p className="text-base font-bold">{appSettings.practiceName}</p>
+          )}
+          <p className="text-xs text-slate-600">
+            {[appSettings.practicePhone, appSettings.practiceEmail].filter(Boolean).join(' | ')}
+          </p>
+        </div>
+
         {/* Header Info Section */}
         <section className="bg-white rounded-xl border border-[#E5E1D8] p-6 space-y-4">
           <h2 className="text-sm font-bold uppercase tracking-wider text-[#0D7377] border-b border-[#E5E1D8] pb-2">
@@ -192,12 +216,13 @@ export default function AttendanceForm({ profile, existingRecord, onBack, onSave
                 value={typeFrequency}
                 onChange={e => setTypeFrequency(e.target.value)}
                 placeholder="e.g. OT 1x/wk"
-                className="mt-1"
+                className="mt-1 no-print"
               />
+              <p className="text-sm text-[#2C2C2C] mt-1 hidden print-only">{typeFrequency || '—'}</p>
             </div>
             <div>
               <Label className="text-xs text-slate-500 uppercase tracking-wide">Pay Period</Label>
-              <div className="flex gap-2 mt-1">
+              <div className="flex gap-2 mt-1 no-print">
                 <Select value={payPeriodMonth} onValueChange={setPayPeriodMonth}>
                   <SelectTrigger className="flex-1">
                     <SelectValue />
@@ -219,6 +244,7 @@ export default function AttendanceForm({ profile, existingRecord, onBack, onSave
                   </SelectContent>
                 </Select>
               </div>
+              <p className="text-sm text-[#2C2C2C] mt-1 hidden print-only">{payPeriodMonth} {payPeriodYear}</p>
             </div>
           </div>
         </section>
@@ -237,8 +263,9 @@ export default function AttendanceForm({ profile, existingRecord, onBack, onSave
                 type="date"
                 value={date}
                 onChange={e => setDate(e.target.value)}
-                className="mt-1"
+                className="mt-1 no-print"
               />
+              <p className="text-sm text-[#2C2C2C] mt-1 hidden print-only">{date}</p>
             </div>
             <div>
               <Label className="text-xs text-slate-500 uppercase tracking-wide flex items-center gap-1">
@@ -248,8 +275,9 @@ export default function AttendanceForm({ profile, existingRecord, onBack, onSave
                 value={time}
                 onChange={e => setTime(e.target.value)}
                 placeholder="e.g. 10:00 AM"
-                className="mt-1"
+                className="mt-1 no-print"
               />
+              <p className="text-sm text-[#2C2C2C] mt-1 hidden print-only">{time}</p>
             </div>
           </div>
           <div>
@@ -259,8 +287,9 @@ export default function AttendanceForm({ profile, existingRecord, onBack, onSave
               onChange={e => setProgressNote(e.target.value)}
               rows={6}
               placeholder="Enter session notes, observations, and progress..."
-              className="mt-1 resize-none"
+              className="mt-1 resize-none no-print"
             />
+            <p className="text-sm text-[#2C2C2C] mt-1 hidden print-only whitespace-pre-wrap leading-relaxed">{progressNote}</p>
           </div>
         </section>
 

@@ -815,7 +815,7 @@ export default function SettingsPreferences({ onBack }: { onBack: () => void }) 
                 id="signatureEmail"
                 value={settings.signatureEmail}
                 onChange={e => update('signatureEmail', e.target.value)}
-                placeholder="e.g., jane@practice.com"
+                placeholder="e.g., jane@company.com"
                 className="mt-1"
               />
             </div>
