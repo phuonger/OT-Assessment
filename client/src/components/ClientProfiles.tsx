@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Search, Plus, User, Calendar, Baby, ArrowRight, X, FileText, Settings
 } from 'lucide-react';
+import SyncStatusIndicator from './SyncStatusIndicator';
 import {
   loadAllProfiles, searchProfiles, getRecentProfiles, createProfile,
   type ClientProfile
@@ -243,6 +244,7 @@ export default function ClientProfiles({ onSelectProfile, onOpenSettings, onOpen
               <FileText className="w-4 h-4" />
               All Assessments
             </Button>
+            <SyncStatusIndicator onClick={onOpenSettings} />
             <Button variant="ghost" size="sm" onClick={onOpenSettings} className="gap-1.5 text-[#6B6B6B]">
               <Settings className="w-4 h-4" />
             </Button>

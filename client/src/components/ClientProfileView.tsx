@@ -18,6 +18,7 @@ import {
   ChevronDown, ChevronUp, FolderPlus, MessageSquare, Milestone as MilestoneIcon,
   Download, ClipboardList
 } from 'lucide-react';
+import SyncStatusIndicator from './SyncStatusIndicator';
 import {
   getProfile, updateProfile, deleteProfile, touchProfile,
   addGoalCategory, updateGoalCategory, deleteGoalCategory,
@@ -309,6 +310,7 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
             </h1>
             <p className="text-xs text-[#8B8B8B]">{calculateAge(profile.dob)}</p>
           </div>
+          <SyncStatusIndicator />
           <Button
             variant="outline"
             size="sm"
