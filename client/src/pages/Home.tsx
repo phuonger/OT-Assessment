@@ -24,6 +24,7 @@ import { touchProfile, type ClientProfile } from '@/lib/clientProfileStorage';
 import { type SavedMultiSession } from '@/lib/multiSessionStorage';
 import { startAutoSync, syncOnClose, loadSyncConfig, loadConflict, markDirty } from '@/lib/googleDriveSync';
 import SyncConflictDialog from '@/components/SyncConflictDialog';
+import WhatsNewDialog from '@/components/WhatsNewDialog';
 
 function AssessmentFlow() {
   const { state, dispatch } = useMultiAssessment();
@@ -136,6 +137,8 @@ function AssessmentFlow() {
   }
 }
 
+const APP_VERSION = '1.15.0';
+
 export default function Home() {
   const [setupComplete, setSetupComplete] = useState(() => {
     return localStorage.getItem('bayley4-setup-complete') === 'true';
@@ -188,6 +191,7 @@ export default function Home() {
           onResolved={() => setShowConflict(false)}
         />
       )}
+      <WhatsNewDialog currentVersion={APP_VERSION} />
     </MultiAssessmentProvider>
   );
 }

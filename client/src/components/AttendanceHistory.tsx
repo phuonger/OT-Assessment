@@ -20,6 +20,7 @@ interface AttendanceHistoryProps {
   onNewEntry: () => void;
   onEditEntry: (record: AttendanceRecord) => void;
   onPrintEntry: (record: AttendanceRecord) => void;
+  onCalendarView?: () => void;
 }
 
 function formatDate(dateStr: string): string {
@@ -32,7 +33,7 @@ function formatDate(dateStr: string): string {
   }
 }
 
-export default function AttendanceHistory({ profile, onBack, onNewEntry, onEditEntry, onPrintEntry }: AttendanceHistoryProps) {
+export default function AttendanceHistory({ profile, onBack, onNewEntry, onEditEntry, onPrintEntry, onCalendarView }: AttendanceHistoryProps) {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [exportingPeriod, setExportingPeriod] = useState<string | null>(null);
   const [exportingAll, setExportingAll] = useState(false);
@@ -106,6 +107,17 @@ export default function AttendanceHistory({ profile, onBack, onNewEntry, onEditE
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {onCalendarView && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onCalendarView}
+              className="gap-1.5"
+            >
+              <Calendar className="w-4 h-4" />
+              Calendar
+            </Button>
+          )}
           {records.length > 0 && (
             <Button
               variant="outline"

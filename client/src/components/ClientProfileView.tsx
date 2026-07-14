@@ -33,6 +33,7 @@ import { generateProfileDocx } from '@/lib/generateProfileDocx';
 import { getAttendanceCount, type AttendanceRecord } from '@/lib/attendanceStorage';
 import AttendanceForm from '@/components/AttendanceForm';
 import AttendanceHistory from '@/components/AttendanceHistory';
+import AttendanceCalendar from '@/components/AttendanceCalendar';
 import { generateAttendanceDocx } from '@/lib/generateAttendanceDocx';
 
 interface ClientProfileViewProps {
@@ -49,7 +50,7 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
   const [expandedSection, setExpandedSection] = useState<'info' | 'milestones' | 'goals' | 'history' | null>('goals');
 
   // Attendance state
-  const [attendanceView, setAttendanceView] = useState<'none' | 'form' | 'history'>('none');
+  const [attendanceView, setAttendanceView] = useState<'none' | 'form' | 'history' | 'calendar'>('none');
   const [editingAttendance, setEditingAttendance] = useState<AttendanceRecord | null>(null);
   const [attendanceCount, setAttendanceCount] = useState(0);
 
@@ -292,6 +293,23 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
             toast.error('Failed to export attendance record');
           }
         }}
+        onCalendarView={() => setAttendanceView('calendar')}
+      />
+    );
+  }
+
+  if (attendanceView === 'calendar') {
+    return (
+      <AttendanceCalendar
+        profile={profile}
+        onBack={() => setAttendanceView('none')}
+        onNewEntry={(prefilledDate) => {
+          setEditingAttendance(null);
+          // Store prefilled date in sessionStorage for the form to pick up
+          if (prefilledDate) sessionStorage.setItem('attendance-prefill-date', prefilledDate);
+          setAttendanceView('form');
+        }}
+        onViewEntry={(record) => { setEditingAttendance(record); setAttendanceView('form'); }}
       />
     );
   }
@@ -911,10 +929,7 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
 
         {/* ===== ATTENDANCE RECORDS QUICK ACCESS ===== */}
         <section className="bg-white rounded-xl border border-[#E5E1D8] overflow-hidden">
-          <button
-            onClick={() => setAttendanceView('history')}
-            className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-[#FAF9F6] transition-colors"
-          >
+          <div className="px-5 py-3.5 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ClipboardList className="w-4 h-4 text-[#0D7377]" />
               <span className="text-sm font-semibold text-[#2C2C2C]">Attendance Records</span>
@@ -924,8 +939,27 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
                 </span>
               )}
             </div>
-            <ChevronDown className="w-4 h-4 text-[#8B8B8B]" />
-          </button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAttendanceView('calendar')}
+                className="gap-1.5 text-xs"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                Calendar
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAttendanceView('history')}
+                className="gap-1.5 text-xs"
+              >
+                <ClipboardList className="w-3.5 h-3.5" />
+                History
+              </Button>
+            </div>
+          </div>
         </section>
 
         {/* ===== ASSESSMENT HISTORY SECTION ===== */}

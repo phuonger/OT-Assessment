@@ -25,6 +25,7 @@ import {
 } from '@/lib/aiEnhance';
 import { toast } from 'sonner';
 import GoogleDriveSyncPanel from './GoogleDriveSyncPanel';
+import WhatsNewDialog, { getChangelog } from './WhatsNewDialog';
 
 
 // ============================================================
@@ -1059,6 +1060,9 @@ export default function SettingsPreferences({ onBack }: { onBack: () => void }) 
         {/* Google Drive Sync */}
         <GoogleDriveSyncPanel />
 
+        {/* What's New */}
+        <WhatsNewSection />
+
         {/* Reset Setup */}
         <section>
           <div className="flex items-center gap-2 mb-4">
@@ -1091,5 +1095,44 @@ export default function SettingsPreferences({ onBack }: { onBack: () => void }) 
         )}
       </main>
     </div>
+  );
+}
+
+// ============================================================
+// What's New Section (for Settings page)
+// ============================================================
+
+function WhatsNewSection() {
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const changelog = getChangelog();
+  const latestVersion = changelog[0]?.version || '1.15.0';
+
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-4">
+        <Sparkles className="w-5 h-5 text-[#0D7377]" />
+        <h2 className="text-lg font-semibold text-[#2C2C2C]">What's New</h2>
+      </div>
+      <div className="bg-white rounded-lg border border-[#E5E1D8] p-6">
+        <p className="text-sm text-[#6B6B6B] mb-4">
+          See what's changed in recent updates. The changelog popup also appears automatically after each app update.
+        </p>
+        <Button
+          variant="outline"
+          onClick={() => setShowWhatsNew(true)}
+          className="gap-2"
+        >
+          <Sparkles className="w-4 h-4" />
+          View Changelog
+        </Button>
+      </div>
+      {showWhatsNew && (
+        <WhatsNewDialog
+          currentVersion={latestVersion}
+          forceOpen={true}
+          onClose={() => setShowWhatsNew(false)}
+        />
+      )}
+    </section>
   );
 }
