@@ -25,6 +25,14 @@ export interface ChangelogEntry {
 // Changelog data — add new entries at the top
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.15.1',
+    date: '2026-07-14',
+    highlights: [
+      { type: 'fix', text: 'Fixed Google Drive creating duplicate "otassess" folders on reconnect' },
+      { type: 'improvement', text: 'Drive sync now verifies and reuses existing folder instead of creating new ones' },
+    ],
+  },
+  {
     version: '1.15.0',
     date: '2026-07-14',
     highlights: [

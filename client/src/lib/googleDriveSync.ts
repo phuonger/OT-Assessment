@@ -52,7 +52,7 @@ interface DriveFile {
 const STORAGE_KEY = 'bayley4-gdrive-sync-config';
 const FOLDER_NAME = 'otassess';
 const DATA_FILE_NAME = 'otassess_backup.json';
-const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly';
 const REDIRECT_URI = 'http://localhost:8377/oauth/callback';
 
 // Pre-configured OAuth credentials (shared across all users)
@@ -268,21 +268,40 @@ async function refreshAccessToken(config: SyncConfig): Promise<string> {
 // GOOGLE DRIVE API HELPERS
 // ============================================================
 
-async function getOrCreateFolder(token: string): Promise<string> {
-  // Search for existing folder
+async function getOrCreateFolder(token: string, savedFolderId?: string | null): Promise<string> {
+  // 1. If we have a saved folder ID, verify it still exists and isn't trashed
+  if (savedFolderId) {
+    try {
+      const checkRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${savedFolderId}?fields=id,name,trashed`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (checkRes.ok) {
+        const checkData = await checkRes.json();
+        if (!checkData.trashed) {
+          return savedFolderId; // Folder still exists, reuse it
+        }
+      }
+    } catch {
+      // Fall through to search
+    }
+  }
+
+  // 2. Search for existing folder by name (uses drive.metadata.readonly to see all files)
   const searchUrl = `https://www.googleapis.com/drive/v3/files?q=name='${FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`;
   const searchRes = await fetch(searchUrl, {
     headers: { Authorization: `Bearer ${token}` },
   });
 
-  if (!searchRes.ok) throw new Error('Failed to search Drive folders');
-  const searchData = await searchRes.json();
-
-  if (searchData.files && searchData.files.length > 0) {
-    return searchData.files[0].id;
+  if (searchRes.ok) {
+    const searchData = await searchRes.json();
+    if (searchData.files && searchData.files.length > 0) {
+      // Return the first matching folder (avoid creating duplicates)
+      return searchData.files[0].id;
+    }
   }
 
-  // Create folder
+  // 3. No existing folder found — create one
   const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
     method: 'POST',
     headers: {
@@ -428,9 +447,10 @@ export async function performSync(direction: SyncDirection = 'auto'): Promise<Sy
     // Refresh token if needed
     const token = await refreshAccessToken(config);
 
-    // Ensure folder exists
-    if (!config.folderId) {
-      config.folderId = await getOrCreateFolder(token);
+    // Ensure folder exists (always verify, passing saved ID for reuse)
+    const folderId = await getOrCreateFolder(token, config.folderId);
+    if (folderId !== config.folderId) {
+      config.folderId = folderId;
       saveSyncConfig(config);
     }
 
