@@ -3,13 +3,12 @@
  * 
  * Design: Clinical Precision / Swiss Medical
  * Settings panel for Google Drive sync configuration.
- * Shows connection status, sync controls, and auto-sync settings.
+ * Credentials are pre-configured — users just click Connect and sign in.
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import {
   Cloud, CloudOff, RefreshCw, CheckCircle2, AlertTriangle,
@@ -19,6 +18,7 @@ import {
   loadSyncConfig, saveSyncConfig, getSyncStatus,
   performSync, disconnectGoogleDrive, getAuthUrl,
   exchangeCodeForTokens, startAutoSync, stopAutoSync,
+  DEFAULT_CLIENT_ID, DEFAULT_CLIENT_SECRET,
   type SyncConfig, type SyncStatus, type SyncResult
 } from '@/lib/googleDriveSync';
 import { toast } from 'sonner';
@@ -27,9 +27,7 @@ export default function GoogleDriveSyncPanel() {
   const [config, setConfig] = useState<SyncConfig>(loadSyncConfig);
   const [status, setStatus] = useState<SyncStatus>(getSyncStatus);
   const [syncing, setSyncing] = useState(false);
-  const [showSetup, setShowSetup] = useState(false);
-  const [clientId, setClientId] = useState(config.clientId);
-  const [clientSecret, setClientSecret] = useState(config.clientSecret);
+  const [awaitingCode, setAwaitingCode] = useState(false);
   const [authCode, setAuthCode] = useState('');
   const [connecting, setConnecting] = useState(false);
 
@@ -59,21 +57,16 @@ export default function GoogleDriveSyncPanel() {
     }
   }, []);
 
-  const handleConnect = async () => {
-    if (!clientId.trim() || !clientSecret.trim()) {
-      toast.error('Please enter both Client ID and Client Secret');
-      return;
-    }
-
-    // Save credentials
-    const updated = { ...config, clientId: clientId.trim(), clientSecret: clientSecret.trim() };
+  const handleConnect = () => {
+    // Use pre-configured credentials
+    const updated = { ...config, clientId: DEFAULT_CLIENT_ID, clientSecret: DEFAULT_CLIENT_SECRET };
     saveSyncConfig(updated);
     setConfig(updated);
 
-    // Open auth URL
-    const url = getAuthUrl(clientId.trim());
+    // Open Google sign-in
+    const url = getAuthUrl(DEFAULT_CLIENT_ID);
     window.open(url, '_blank', 'width=600,height=700');
-    setShowSetup(true);
+    setAwaitingCode(true);
   };
 
   const handleAuthCode = async () => {
@@ -84,11 +77,11 @@ export default function GoogleDriveSyncPanel() {
 
     setConnecting(true);
     try {
-      const tokens = await exchangeCodeForTokens(authCode.trim(), clientId, clientSecret);
+      const tokens = await exchangeCodeForTokens(authCode.trim(), DEFAULT_CLIENT_ID, DEFAULT_CLIENT_SECRET);
       const updated: SyncConfig = {
         ...config,
-        clientId,
-        clientSecret,
+        clientId: DEFAULT_CLIENT_ID,
+        clientSecret: DEFAULT_CLIENT_SECRET,
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
         tokenExpiry: Date.now() + tokens.expiresIn * 1000,
@@ -99,14 +92,14 @@ export default function GoogleDriveSyncPanel() {
       };
       saveSyncConfig(updated);
       setConfig(updated);
-      setShowSetup(false);
+      setAwaitingCode(false);
       setAuthCode('');
       toast.success('Connected to Google Drive!');
 
       // Start auto-sync
       startAutoSync();
 
-      // Do initial sync
+      // Do initial backup
       await performSync('push');
       setConfig(loadSyncConfig());
       setStatus(getSyncStatus());
@@ -167,7 +160,7 @@ export default function GoogleDriveSyncPanel() {
                     ? status.lastSyncAt
                       ? `Last synced ${status.message.replace('Last synced ', '')}`
                       : 'Connected, never synced'
-                    : 'Connect to back up and sync your data across devices'}
+                    : 'Connect your Google account to back up and sync data across devices'}
                 </p>
               </div>
             </div>
@@ -180,10 +173,35 @@ export default function GoogleDriveSyncPanel() {
             ) : (
               <Button onClick={handleConnect} className="bg-[#0D7377] hover:bg-[#0a5c5f] text-white gap-2">
                 <Link2 className="w-4 h-4" />
-                Connect
+                Connect Google Drive
               </Button>
             )}
           </div>
+
+          {/* Authorization Code Entry (after clicking Connect) */}
+          {!config.connected && awaitingCode && (
+            <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm font-medium text-blue-800 mb-2">Sign in and paste the code</p>
+              <p className="text-xs text-blue-700 mb-3">
+                A Google sign-in window should have opened. Sign in with your Google account, grant access, then copy the authorization code and paste it below.
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  value={authCode}
+                  onChange={e => setAuthCode(e.target.value)}
+                  placeholder="Paste authorization code here..."
+                  className="font-mono text-xs"
+                />
+                <Button
+                  onClick={handleAuthCode}
+                  disabled={connecting}
+                  className="bg-[#0D7377] hover:bg-[#0a5c5f] text-white whitespace-nowrap"
+                >
+                  {connecting ? 'Connecting...' : 'Connect'}
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Sync Reminder Banner */}
           {status.needsReminder && (
@@ -299,82 +317,28 @@ export default function GoogleDriveSyncPanel() {
           </div>
         )}
 
-        {/* Setup Form (when not connected) */}
-        {!config.connected && (
-          <div className="p-6">
-            <h3 className="text-sm font-semibold text-[#2C2C2C] mb-3">Setup</h3>
-            <p className="text-xs text-slate-500 mb-4">
-              To connect, you'll need a Google Cloud project with the Drive API enabled and OAuth2 credentials (Desktop App type).
-              <a href="https://console.cloud.google.com" target="_blank" rel="noopener" className="text-[#0D7377] ml-1 underline">
-                Google Cloud Console →
-              </a>
-            </p>
-            <div className="space-y-3">
-              <div>
-                <Label className="text-xs text-slate-500">Client ID</Label>
-                <Input
-                  value={clientId}
-                  onChange={e => setClientId(e.target.value)}
-                  placeholder="xxxx.apps.googleusercontent.com"
-                  className="mt-1 font-mono text-xs"
-                />
-              </div>
-              <div>
-                <Label className="text-xs text-slate-500">Client Secret</Label>
-                <Input
-                  type="password"
-                  value={clientSecret}
-                  onChange={e => setClientSecret(e.target.value)}
-                  placeholder="GOCSPX-..."
-                  className="mt-1 font-mono text-xs"
-                />
-              </div>
-            </div>
-
-            {showSetup && (
-              <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm font-medium text-blue-800 mb-2">Step 2: Paste Authorization Code</p>
-                <p className="text-xs text-blue-700 mb-3">
-                  A Google sign-in window should have opened. After granting access, copy the authorization code and paste it below.
-                </p>
-                <div className="flex gap-2">
-                  <Input
-                    value={authCode}
-                    onChange={e => setAuthCode(e.target.value)}
-                    placeholder="Paste authorization code here..."
-                    className="font-mono text-xs"
-                  />
-                  <Button
-                    onClick={handleAuthCode}
-                    disabled={connecting}
-                    className="bg-[#0D7377] hover:bg-[#0a5c5f] text-white whitespace-nowrap"
-                  >
-                    {connecting ? 'Connecting...' : 'Connect'}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* How it works */}
         <div className="p-6 bg-[#F8F7F4]">
           <h4 className="text-sm font-semibold text-[#2C2C2C] mb-2">How it works</h4>
           <ul className="text-xs text-[#6B6B6B] space-y-1.5">
             <li className="flex items-start gap-2">
               <span className="text-[#0D7377] font-bold mt-0.5">1.</span>
-              All your data (profiles, assessments, attendance, settings) is saved as a single backup file in a "otassess" folder on your Google Drive
+              Click "Connect Google Drive" and sign in with your Google account
             </li>
             <li className="flex items-start gap-2">
               <span className="text-[#0D7377] font-bold mt-0.5">2.</span>
-              Auto-sync runs on app open, close, and every hour when connected to the internet
+              All your data (profiles, assessments, attendance, settings) is backed up to an "otassess" folder on your Drive
             </li>
             <li className="flex items-start gap-2">
               <span className="text-[#0D7377] font-bold mt-0.5">3.</span>
-              On a new device, connect the same Google account and click "Restore from Drive" to get all your data back
+              Auto-sync runs on app open, close, and every hour when connected to the internet
             </li>
             <li className="flex items-start gap-2">
               <span className="text-[#0D7377] font-bold mt-0.5">4.</span>
+              On a new device, connect the same Google account and click "Restore from Drive" to get all your data back
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-[#0D7377] font-bold mt-0.5">5.</span>
               If no sync happens for {config.reminderDays}+ days, you'll see a reminder to back up
             </li>
           </ul>
