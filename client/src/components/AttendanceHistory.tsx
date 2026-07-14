@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, Plus, Pencil, Trash2, Printer, Calendar, Clock, FileText, Download } from 'lucide-react';
 import { type ClientProfile } from '@/lib/clientProfileStorage';
 import { getAttendanceByProfile, deleteAttendance, type AttendanceRecord } from '@/lib/attendanceStorage';
-import { generateBatchAttendanceDocx } from '@/lib/generateAttendanceDocx';
+import { generateBatchAttendanceDocx, generateAllAttendanceDocx } from '@/lib/generateAttendanceDocx';
 import { toast } from 'sonner';
 
 interface AttendanceHistoryProps {
@@ -35,6 +35,7 @@ function formatDate(dateStr: string): string {
 export default function AttendanceHistory({ profile, onBack, onNewEntry, onEditEntry, onPrintEntry }: AttendanceHistoryProps) {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [exportingPeriod, setExportingPeriod] = useState<string | null>(null);
+  const [exportingAll, setExportingAll] = useState(false);
 
   const refresh = useCallback(() => {
     setRecords(getAttendanceByProfile(profile.id));
@@ -104,13 +105,38 @@ export default function AttendanceHistory({ profile, onBack, onNewEntry, onEditE
             {profile.firstName} {profile.lastName}
           </span>
         </div>
-        <Button
-          onClick={onNewEntry}
-          className="bg-[#0D7377] hover:bg-[#0a5c5f] text-white gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          New Entry
-        </Button>
+        <div className="flex items-center gap-2">
+          {records.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={exportingAll}
+              onClick={async () => {
+                setExportingAll(true);
+                try {
+                  await generateAllAttendanceDocx(records, `${profile.firstName} ${profile.lastName}`);
+                  toast.success('All attendance records exported');
+                } catch (err) {
+                  console.error(err);
+                  toast.error('Export failed');
+                } finally {
+                  setExportingAll(false);
+                }
+              }}
+              className="gap-1.5"
+            >
+              <Download className="w-4 h-4" />
+              {exportingAll ? 'Exporting...' : 'Export All'}
+            </Button>
+          )}
+          <Button
+            onClick={onNewEntry}
+            className="bg-[#0D7377] hover:bg-[#0a5c5f] text-white gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            New Entry
+          </Button>
+        </div>
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-6">

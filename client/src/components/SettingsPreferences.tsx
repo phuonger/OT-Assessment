@@ -24,6 +24,7 @@ import {
   AI_MODELS, type AiModelId, isAiConfigured
 } from '@/lib/aiEnhance';
 import { toast } from 'sonner';
+import GoogleDriveSyncPanel from './GoogleDriveSyncPanel';
 
 
 // ============================================================
@@ -1052,6 +1053,33 @@ export default function SettingsPreferences({ onBack }: { onBack: () => void }) 
                 Requires an internet connection. Your report text is sent to OpenRouter for processing — no data is stored by the AI service.
               </p>
             </div>
+          </div>
+        </section>
+
+        {/* Google Drive Sync */}
+        <GoogleDriveSyncPanel />
+
+        {/* Reset Setup */}
+        <section>
+          <div className="flex items-center gap-2 mb-4">
+            <RotateCcw className="w-5 h-5 text-[#0D7377]" />
+            <h2 className="text-lg font-semibold text-[#2C2C2C]">Setup Wizard</h2>
+          </div>
+          <div className="bg-white rounded-lg border border-[#E5E1D8] p-6">
+            <p className="text-sm text-[#6B6B6B] mb-4">
+              Re-run the initial Company Setup wizard to update your company information, logo, and therapist details in one guided flow.
+            </p>
+            <Button
+              variant="outline"
+              onClick={() => {
+                localStorage.removeItem('bayley4-setup-complete');
+                window.location.reload();
+              }}
+              className="gap-2"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Re-run Setup Wizard
+            </Button>
           </div>
         </section>
 

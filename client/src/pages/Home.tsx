@@ -5,7 +5,7 @@
  * Routes between welcome, profiles, profileView, dashboard, setup, assessment, summary, report, history, and backup phases.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MultiAssessmentProvider, useMultiAssessment } from '@/contexts/MultiAssessmentContext';
 import CompanySetupWizard from '@/components/CompanySetupWizard';
 import WelcomePage from '@/components/WelcomePage';
@@ -22,6 +22,7 @@ import DataBackupRestore from '@/components/DataBackupRestore';
 import SettingsPreferences from '@/components/SettingsPreferences';
 import { touchProfile, type ClientProfile } from '@/lib/clientProfileStorage';
 import { type SavedMultiSession } from '@/lib/multiSessionStorage';
+import { startAutoSync, syncOnClose, loadSyncConfig } from '@/lib/googleDriveSync';
 
 function AssessmentFlow() {
   const { state, dispatch } = useMultiAssessment();
@@ -138,6 +139,23 @@ export default function Home() {
   const [setupComplete, setSetupComplete] = useState(() => {
     return localStorage.getItem('bayley4-setup-complete') === 'true';
   });
+
+  // Auto-sync: start on mount, push on close
+  useEffect(() => {
+    const config = loadSyncConfig();
+    if (config.connected && config.autoSyncEnabled) {
+      startAutoSync();
+    }
+
+    const handleBeforeUnload = () => {
+      syncOnClose();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
 
   if (!setupComplete) {
     return <CompanySetupWizard onComplete={() => setSetupComplete(true)} />;
