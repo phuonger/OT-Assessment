@@ -22,7 +22,8 @@ import DataBackupRestore from '@/components/DataBackupRestore';
 import SettingsPreferences from '@/components/SettingsPreferences';
 import { touchProfile, type ClientProfile } from '@/lib/clientProfileStorage';
 import { type SavedMultiSession } from '@/lib/multiSessionStorage';
-import { startAutoSync, syncOnClose, loadSyncConfig } from '@/lib/googleDriveSync';
+import { startAutoSync, syncOnClose, loadSyncConfig, loadConflict, markDirty } from '@/lib/googleDriveSync';
+import SyncConflictDialog from '@/components/SyncConflictDialog';
 
 function AssessmentFlow() {
   const { state, dispatch } = useMultiAssessment();
@@ -139,6 +140,7 @@ export default function Home() {
   const [setupComplete, setSetupComplete] = useState(() => {
     return localStorage.getItem('bayley4-setup-complete') === 'true';
   });
+  const [showConflict, setShowConflict] = useState(false);
 
   // Auto-sync: start on mount, push on close
   useEffect(() => {
@@ -147,13 +149,30 @@ export default function Home() {
       startAutoSync();
     }
 
+    // Check for existing unresolved conflict
+    const existingConflict = loadConflict();
+    if (existingConflict) {
+      setShowConflict(true);
+    }
+
     const handleBeforeUnload = () => {
       syncOnClose();
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
 
+    // Track localStorage changes to mark dirty for sync
+    const originalSetItem = localStorage.setItem.bind(localStorage);
+    localStorage.setItem = (key: string, value: string) => {
+      originalSetItem(key, value);
+      // Mark dirty when app data keys change (not sync-internal keys)
+      if (key.startsWith('bayley4-') && !key.includes('gdrive') && !key.includes('setup-complete')) {
+        markDirty();
+      }
+    };
+
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      localStorage.setItem = originalSetItem;
     };
   }, []);
 
@@ -164,6 +183,11 @@ export default function Home() {
   return (
     <MultiAssessmentProvider>
       <AssessmentFlow />
+      {showConflict && (
+        <SyncConflictDialog
+          onResolved={() => setShowConflict(false)}
+        />
+      )}
     </MultiAssessmentProvider>
   );
 }

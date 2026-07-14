@@ -45,6 +45,8 @@ export default function GoogleDriveSyncPanel() {
       const result: SyncResult = await performSync(direction);
       if (result.success) {
         toast.success(result.message);
+      } else if (result.conflict) {
+        toast.warning('Sync conflict detected — data changed on both this device and Google Drive. Please resolve the conflict.', { duration: 8000 });
       } else {
         toast.error(result.message);
       }

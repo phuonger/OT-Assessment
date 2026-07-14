@@ -59,6 +59,55 @@ const REDIRECT_URI = 'http://localhost:8377/oauth/callback';
 export const DEFAULT_CLIENT_ID = '510997634868-87764bvo14ehkllh8m5denadtq7i5ebq.apps.googleusercontent.com';
 export const DEFAULT_CLIENT_SECRET = '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';
 
+// ============================================================
+// UNSYNCED CHANGES TRACKING
+// ============================================================
+
+const DIRTY_KEY = 'bayley4-gdrive-dirty';
+const CONFLICT_KEY = 'bayley4-gdrive-conflict';
+
+export interface ConflictData {
+  localData: Record<string, any>;
+  remoteData: Record<string, any>;
+  localTimestamp: string;
+  remoteTimestamp: string;
+}
+
+export function markDirty(): void {
+  const config = loadSyncConfig();
+  if (config.connected) {
+    localStorage.setItem(DIRTY_KEY, new Date().toISOString());
+  }
+}
+
+export function clearDirty(): void {
+  localStorage.removeItem(DIRTY_KEY);
+}
+
+export function isDirty(): boolean {
+  return !!localStorage.getItem(DIRTY_KEY);
+}
+
+export function getDirtyTimestamp(): string | null {
+  return localStorage.getItem(DIRTY_KEY);
+}
+
+export function saveConflict(conflict: ConflictData): void {
+  localStorage.setItem(CONFLICT_KEY, JSON.stringify(conflict));
+}
+
+export function loadConflict(): ConflictData | null {
+  try {
+    const raw = localStorage.getItem(CONFLICT_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return null;
+}
+
+export function clearConflict(): void {
+  localStorage.removeItem(CONFLICT_KEY);
+}
+
 // All localStorage keys that contain app data to sync
 const SYNC_KEYS = [
   'bayley4-client-profiles',
@@ -355,6 +404,7 @@ export interface SyncResult {
   direction: 'push' | 'pull' | 'none';
   message: string;
   conflict?: boolean;
+  conflictData?: ConflictData;
 }
 
 /**
@@ -394,6 +444,7 @@ export async function performSync(direction: SyncDirection = 'auto'): Promise<Sy
       config.lastSyncAt = new Date().toISOString();
       config.lastSyncDirection = 'push';
       saveSyncConfig(config);
+      clearDirty();
       return { success: true, direction: 'push', message: 'Data backed up to Google Drive' };
     }
 
@@ -407,6 +458,8 @@ export async function performSync(direction: SyncDirection = 'auto'): Promise<Sy
       config.lastSyncAt = new Date().toISOString();
       config.lastSyncDirection = 'pull';
       saveSyncConfig(config);
+      clearDirty();
+      clearConflict();
       return { success: true, direction: 'pull', message: 'Data restored from Google Drive' };
     }
 
@@ -420,16 +473,31 @@ export async function performSync(direction: SyncDirection = 'auto'): Promise<Sy
       const localModified = Date.now(); // Assume local is current
 
       if (remoteModified > localTimestamp + 5000) {
-        // Remote is newer — pull
+        // Remote is newer — check if local also has changes (conflict)
         const remoteData = await downloadBackupFile(token, existingFile.id);
         const remoteSyncTime = remoteData['_syncTimestamp'] ? new Date(remoteData['_syncTimestamp']).getTime() : remoteModified;
 
         if (remoteSyncTime > localTimestamp + 5000) {
-          // Remote truly newer, pull it
+          // Remote is newer. Check if local is also dirty (= conflict)
+          const localIsDirty = isDirty();
+          if (localIsDirty) {
+            // CONFLICT: both local and remote changed since last sync
+            const conflictInfo: ConflictData = {
+              localData,
+              remoteData,
+              localTimestamp: getDirtyTimestamp() || new Date().toISOString(),
+              remoteTimestamp: remoteData['_syncTimestamp'] || existingFile.modifiedTime,
+            };
+            saveConflict(conflictInfo);
+            return { success: false, direction: 'none', message: 'Conflict detected: both local and remote data have changed', conflict: true, conflictData: conflictInfo };
+          }
+
+          // No local changes, safe to pull
           restoreLocalData(remoteData);
           config.lastSyncAt = new Date().toISOString();
           config.lastSyncDirection = 'pull';
           saveSyncConfig(config);
+          clearDirty();
           return { success: true, direction: 'pull', message: 'Updated from Google Drive (remote was newer)' };
         }
       }
@@ -439,6 +507,7 @@ export async function performSync(direction: SyncDirection = 'auto'): Promise<Sy
       config.lastSyncAt = new Date().toISOString();
       config.lastSyncDirection = 'push';
       saveSyncConfig(config);
+      clearDirty();
       return { success: true, direction: 'push', message: 'Data backed up to Google Drive' };
     }
 
