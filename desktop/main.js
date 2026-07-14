@@ -1,6 +1,8 @@
 const { app, BrowserWindow, Menu, shell, dialog, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
+const url = require('url');
 
 // Keep a global reference of the window object to prevent garbage collection
 let mainWindow;
@@ -204,6 +206,118 @@ ipcMain.handle('install-update', async () => {
 
 ipcMain.handle('get-app-version', () => {
   return app.getVersion();
+});
+
+// ─── Google Drive OAuth Local Server ──────────────────────────────────
+
+let oauthServer = null;
+let oauthResolve = null;
+
+function startOAuthServer() {
+  return new Promise((resolve, reject) => {
+    if (oauthServer) {
+      // Server already running, just update the resolve
+      oauthResolve = resolve;
+      return;
+    }
+
+    oauthResolve = resolve;
+
+    oauthServer = http.createServer((req, res) => {
+      const parsedUrl = url.parse(req.url, true);
+      const code = parsedUrl.query.code;
+      const error = parsedUrl.query.error;
+
+      // Send a nice HTML response to the browser
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      if (code) {
+        res.end(`
+          <html>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #faf8f5;">
+              <div style="text-align: center; padding: 40px;">
+                <div style="font-size: 48px; margin-bottom: 16px;">\u2705</div>
+                <h1 style="color: #0D7377; margin-bottom: 8px;">Connected!</h1>
+                <p style="color: #666;">Google Drive has been connected successfully.<br>You can close this window and return to the app.</p>
+              </div>
+            </body>
+          </html>
+        `);
+        // Resolve with the code
+        if (oauthResolve) {
+          oauthResolve({ success: true, code });
+          oauthResolve = null;
+        }
+      } else {
+        res.end(`
+          <html>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #faf8f5;">
+              <div style="text-align: center; padding: 40px;">
+                <div style="font-size: 48px; margin-bottom: 16px;">\u274C</div>
+                <h1 style="color: #dc2626; margin-bottom: 8px;">Connection Failed</h1>
+                <p style="color: #666;">Error: ${error || 'Unknown error'}<br>Please try again from the app.</p>
+              </div>
+            </body>
+          </html>
+        `);
+        if (oauthResolve) {
+          oauthResolve({ success: false, error: error || 'Unknown error' });
+          oauthResolve = null;
+        }
+      }
+
+      // Stop the server after handling the callback
+      setTimeout(() => {
+        if (oauthServer) {
+          oauthServer.close();
+          oauthServer = null;
+        }
+      }, 1000);
+    });
+
+    oauthServer.listen(8377, '127.0.0.1', () => {
+      console.log('[oauth] Local OAuth callback server started on port 8377');
+    });
+
+    oauthServer.on('error', (err) => {
+      console.error('[oauth] Server error:', err.message);
+      oauthServer = null;
+      if (oauthResolve) {
+        oauthResolve({ success: false, error: err.message });
+        oauthResolve = null;
+      }
+    });
+
+    // Timeout after 5 minutes
+    setTimeout(() => {
+      if (oauthServer) {
+        oauthServer.close();
+        oauthServer = null;
+      }
+      if (oauthResolve) {
+        oauthResolve({ success: false, error: 'Timed out waiting for authorization' });
+        oauthResolve = null;
+      }
+    }, 5 * 60 * 1000);
+  });
+}
+
+// IPC: Start OAuth flow - opens browser and waits for callback
+ipcMain.handle('oauth-start', async (_event, authUrl) => {
+  // Start local server to catch the redirect
+  const resultPromise = startOAuthServer();
+
+  // Open the auth URL in the system browser
+  shell.openExternal(authUrl);
+
+  // Wait for the callback
+  const result = await resultPromise;
+  return result;
+});
+
+// IPC: Open URL in system browser (fallback)
+ipcMain.handle('open-external', async (_event, url) => {
+  shell.openExternal(url);
+  return { success: true };
 });
 
 // ─── Window Creation ───────────────────────────────────────────────────

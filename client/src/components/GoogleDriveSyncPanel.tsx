@@ -4,6 +4,8 @@
  * Design: Clinical Precision / Swiss Medical
  * Settings panel for Google Drive sync configuration.
  * Credentials are pre-configured — users just click Connect and sign in.
+ * In Electron: automatic OAuth code capture via local HTTP server.
+ * In web: fallback to manual code paste.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -12,12 +14,12 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import {
   Cloud, CloudOff, RefreshCw, CheckCircle2, AlertTriangle,
-  Link2, Unlink, Download, Upload, Settings2, Wifi, WifiOff
+  Link2, Unlink, Download, Upload, Settings2, Wifi, WifiOff, Loader2
 } from 'lucide-react';
 import {
   loadSyncConfig, saveSyncConfig, getSyncStatus,
-  performSync, disconnectGoogleDrive, getAuthUrl,
-  exchangeCodeForTokens, startAutoSync, stopAutoSync,
+  performSync, disconnectGoogleDrive, connectToDrive,
+  getAuthUrl, exchangeCodeForTokens, startAutoSync, stopAutoSync,
   DEFAULT_CLIENT_ID, DEFAULT_CLIENT_SECRET,
   type SyncConfig, type SyncStatus, type SyncResult
 } from '@/lib/googleDriveSync';
@@ -27,9 +29,13 @@ export default function GoogleDriveSyncPanel() {
   const [config, setConfig] = useState<SyncConfig>(loadSyncConfig);
   const [status, setStatus] = useState<SyncStatus>(getSyncStatus);
   const [syncing, setSyncing] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  // Manual code fallback (web only)
   const [awaitingCode, setAwaitingCode] = useState(false);
   const [authCode, setAuthCode] = useState('');
-  const [connecting, setConnecting] = useState(false);
+  const [authUrl, setAuthUrl] = useState('');
+
+  const isElectron = !!(window as any).electronAPI?.oauthStart;
 
   // Refresh status periodically
   useEffect(() => {
@@ -59,35 +65,30 @@ export default function GoogleDriveSyncPanel() {
     }
   }, []);
 
-  const [authUrl, setAuthUrl] = useState('');
-
-  const handleConnect = () => {
-    // Use pre-configured credentials
-    const updated = { ...config, clientId: DEFAULT_CLIENT_ID, clientSecret: DEFAULT_CLIENT_SECRET };
-    saveSyncConfig(updated);
-    setConfig(updated);
-
-    // Generate auth URL
-    const url = getAuthUrl(DEFAULT_CLIENT_ID);
-    setAuthUrl(url);
-
-    // Try to open in system browser (works in Electron with shell.openExternal)
-    // For Electron: use require('electron').shell.openExternal
+  const handleConnect = async () => {
+    setConnecting(true);
     try {
-      const { shell } = (window as any).require?.('electron') || {};
-      if (shell?.openExternal) {
-        shell.openExternal(url);
+      const result = await connectToDrive();
+      if (result.success) {
+        toast.success('Connected to Google Drive!');
+        setConfig(loadSyncConfig());
+        setStatus(getSyncStatus());
+      } else if (result.error === 'MANUAL_CODE_NEEDED') {
+        // Web fallback: show manual code input
+        const url = getAuthUrl(DEFAULT_CLIENT_ID);
+        setAuthUrl(url);
+        setAwaitingCode(true);
       } else {
-        window.open(url, '_blank');
+        toast.error(result.error || 'Failed to connect');
       }
-    } catch {
-      // Fallback: just show the link for manual copy
-      window.open(url, '_blank');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to connect');
+    } finally {
+      setConnecting(false);
     }
-    setAwaitingCode(true);
   };
 
-  const handleAuthCode = async () => {
+  const handleManualAuthCode = async () => {
     if (!authCode.trim()) {
       toast.error('Please paste the authorization code');
       return;
@@ -189,15 +190,44 @@ export default function GoogleDriveSyncPanel() {
                 Disconnect
               </Button>
             ) : (
-              <Button onClick={handleConnect} className="bg-[#0D7377] hover:bg-[#0a5c5f] text-white gap-2">
-                <Link2 className="w-4 h-4" />
-                Connect Google Drive
+              <Button
+                onClick={handleConnect}
+                disabled={connecting}
+                className="bg-[#0D7377] hover:bg-[#0a5c5f] text-white gap-2"
+              >
+                {connecting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    <Link2 className="w-4 h-4" />
+                    Connect Google Drive
+                  </>
+                )}
               </Button>
             )}
           </div>
 
-          {/* Authorization Code Entry (after clicking Connect) */}
-          {!config.connected && awaitingCode && (
+          {/* Electron: Waiting for sign-in indicator */}
+          {!config.connected && connecting && isElectron && (
+            <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <Loader2 className="w-5 h-5 text-blue-600 animate-spin flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-blue-800">Waiting for Google sign-in...</p>
+                  <p className="text-xs text-blue-700 mt-1">
+                    A browser window has opened for you to sign in with your Google account. 
+                    Once you grant access, the app will connect automatically.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Web fallback: Manual code paste UI */}
+          {!config.connected && awaitingCode && !isElectron && (
             <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
               <p className="text-sm font-medium text-blue-800 mb-2">Sign in and paste the code</p>
               <p className="text-xs text-blue-700 mb-3">
@@ -211,19 +241,6 @@ export default function GoogleDriveSyncPanel() {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs text-blue-700 underline break-all font-mono"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      try {
-                        const { shell } = (window as any).require?.('electron') || {};
-                        if (shell?.openExternal) {
-                          shell.openExternal(authUrl);
-                        } else {
-                          window.open(authUrl, '_blank');
-                        }
-                      } catch {
-                        window.open(authUrl, '_blank');
-                      }
-                    }}
                   >
                     Open Google Sign-In
                   </a>
@@ -246,7 +263,7 @@ export default function GoogleDriveSyncPanel() {
                   className="font-mono text-xs"
                 />
                 <Button
-                  onClick={handleAuthCode}
+                  onClick={handleManualAuthCode}
                   disabled={connecting}
                   className="bg-[#0D7377] hover:bg-[#0a5c5f] text-white whitespace-nowrap"
                 >
@@ -380,18 +397,24 @@ export default function GoogleDriveSyncPanel() {
             </li>
             <li className="flex items-start gap-2">
               <span className="text-[#0D7377] font-bold mt-0.5">2.</span>
-              All your data (profiles, assessments, attendance, settings) is backed up to an "otassess" folder on your Drive
+              {isElectron
+                ? 'The app connects automatically once you sign in — no code to copy!'
+                : 'After signing in, paste the authorization code back into the app'}
             </li>
             <li className="flex items-start gap-2">
               <span className="text-[#0D7377] font-bold mt-0.5">3.</span>
-              Auto-sync runs on app open, close, and every hour when connected to the internet
+              All your data (profiles, assessments, attendance, settings) is backed up to an "otassess" folder on your Drive
             </li>
             <li className="flex items-start gap-2">
               <span className="text-[#0D7377] font-bold mt-0.5">4.</span>
-              On a new device, connect the same Google account and click "Restore from Drive" to get all your data back
+              Auto-sync runs on app open, close, and every hour when connected to the internet
             </li>
             <li className="flex items-start gap-2">
               <span className="text-[#0D7377] font-bold mt-0.5">5.</span>
+              On a new device, connect the same Google account and click "Restore from Drive" to get all your data back
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-[#0D7377] font-bold mt-0.5">6.</span>
               If no sync happens for {config.reminderDays}+ days, you'll see a reminder to back up
             </li>
           </ul>

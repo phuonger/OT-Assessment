@@ -16,4 +16,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // App info
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+
+  // Google Drive OAuth
+  oauthStart: (authUrl) => ipcRenderer.invoke('oauth-start', authUrl),
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
 });

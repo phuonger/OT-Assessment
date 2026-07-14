@@ -53,7 +53,7 @@ const STORAGE_KEY = 'bayley4-gdrive-sync-config';
 const FOLDER_NAME = 'otassess';
 const DATA_FILE_NAME = 'otassess_backup.json';
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
-const REDIRECT_URI = 'http://localhost';
+const REDIRECT_URI = 'http://localhost:8377/oauth/callback';
 
 // Pre-configured OAuth credentials (shared across all users)
 export const DEFAULT_CLIENT_ID = '510997634868-87764bvo14ehkllh8m5denadtq7i5ebq.apps.googleusercontent.com';
@@ -560,6 +560,64 @@ export function syncOnClose(): void {
   // Use sendBeacon for reliability on close, but it can't do auth headers
   // So we'll do a best-effort fetch
   performSync('push').catch(console.error);
+}
+
+// ============================================================
+// CONNECT (Automatic OAuth via Electron IPC)
+// ============================================================
+
+/**
+ * Connect to Google Drive using the automatic OAuth flow.
+ * In Electron: opens system browser, local server captures the redirect code automatically.
+ * In web: falls back to manual code entry (returns null, caller must handle).
+ */
+export async function connectToDrive(): Promise<{ success: boolean; error?: string }> {
+  const config = loadSyncConfig();
+  const clientId = DEFAULT_CLIENT_ID;
+  const clientSecret = DEFAULT_CLIENT_SECRET;
+
+  // Save credentials to config
+  config.clientId = clientId;
+  config.clientSecret = clientSecret;
+  saveSyncConfig(config);
+
+  // Generate auth URL
+  const authUrl = getAuthUrl(clientId);
+
+  // Check if running in Electron with the oauthStart API
+  const electronAPI = (window as any).electronAPI;
+  if (electronAPI?.oauthStart) {
+    // Electron: automatic code capture via local HTTP server
+    const result = await electronAPI.oauthStart(authUrl);
+    if (!result.success) {
+      return { success: false, error: result.error || 'OAuth authorization failed' };
+    }
+
+    // Exchange code for tokens
+    const tokens = await exchangeCodeForTokens(result.code, clientId, clientSecret);
+    const updated: SyncConfig = {
+      ...config,
+      clientId,
+      clientSecret,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      tokenExpiry: Date.now() + tokens.expiresIn * 1000,
+      connected: true,
+      autoSyncEnabled: true,
+      syncIntervalMinutes: 60,
+      reminderDays: 7,
+    };
+    saveSyncConfig(updated);
+    startAutoSync();
+
+    // Do initial backup
+    await performSync('push');
+    return { success: true };
+  }
+
+  // Web fallback: open in new tab, return indication that manual code is needed
+  window.open(authUrl, '_blank');
+  return { success: false, error: 'MANUAL_CODE_NEEDED' };
 }
 
 // ============================================================
