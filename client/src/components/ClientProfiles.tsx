@@ -46,6 +46,7 @@ export default function ClientProfiles({ onSelectProfile, onOpenSettings, onOpen
   const [newGender, setNewGender] = useState<'male' | 'female' | 'other'>('male');
   const [newPrematureWeeks, setNewPrematureWeeks] = useState(0);
   const [newParentNames, setNewParentNames] = useState('');
+  const [newParentEmail, setNewParentEmail] = useState('');
   const [newNotes, setNewNotes] = useState('');
 
   useEffect(() => {
@@ -128,6 +129,7 @@ export default function ClientProfiles({ onSelectProfile, onOpenSettings, onOpen
       gender: newGender,
       prematureWeeks: newPrematureWeeks,
       parentNames: newParentNames.trim(),
+      parentEmail: newParentEmail.trim(),
       notes: newNotes.trim(),
     });
     toast.success(`Profile created for ${profile.firstName}`);
@@ -143,6 +145,7 @@ export default function ClientProfiles({ onSelectProfile, onOpenSettings, onOpen
     setNewGender('male');
     setNewPrematureWeeks(0);
     setNewParentNames('');
+    setNewParentEmail('');
     setNewNotes('');
   };
 
@@ -256,6 +259,18 @@ export default function ClientProfiles({ onSelectProfile, onOpenSettings, onOpen
                   placeholder="e.g., John & Jane Doe"
                   className="mt-1"
                 />
+              </div>
+              <div className="mt-3">
+                <Label htmlFor="parentEmail">Parent/Guardian Email</Label>
+                <Input
+                  id="parentEmail"
+                  type="email"
+                  value={newParentEmail}
+                  onChange={e => setNewParentEmail(e.target.value)}
+                  placeholder="parent@email.com"
+                  className="mt-1"
+                />
+                <p className="text-xs text-[#8B8B8B] mt-1">Used for sending e-signature requests</p>
               </div>
             </div>
 

@@ -16,7 +16,7 @@ import {
   ArrowLeft, Plus, Pencil, Trash2, Save, X, Play, Calendar,
   Target, CheckCircle2, Clock, XCircle, FileText, User, Baby,
   ChevronDown, ChevronUp, FolderPlus, MessageSquare, Milestone as MilestoneIcon,
-  Download, ClipboardList, Archive, ArchiveRestore, Camera
+  Download, ClipboardList, Archive, ArchiveRestore, Camera, Shield
 } from 'lucide-react';
 import SyncStatusIndicator from './SyncStatusIndicator';
 import {
@@ -35,6 +35,9 @@ import AttendanceForm from '@/components/AttendanceForm';
 import AttendanceHistory from '@/components/AttendanceHistory';
 import AttendanceCalendar from '@/components/AttendanceCalendar';
 import { generateAttendanceDocx } from '@/lib/generateAttendanceDocx';
+import SendForSignatureDialog from '@/components/SendForSignatureDialog';
+import SignedDocumentsPanel from '@/components/SignedDocumentsPanel';
+import { getPendingSignatureCount } from '@/lib/signatureService';
 
 interface ClientProfileViewProps {
   profileId: string;
@@ -50,7 +53,8 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
   const [expandedSection, setExpandedSection] = useState<'info' | 'milestones' | 'goals' | 'history' | null>('goals');
 
   // Attendance state
-  const [attendanceView, setAttendanceView] = useState<'none' | 'form' | 'history' | 'calendar'>('none');
+  const [attendanceView, setAttendanceView] = useState<'none' | 'form' | 'history' | 'calendar' | 'signedDocs'>('none');
+  const [signatureRecord, setSignatureRecord] = useState<AttendanceRecord | null>(null);
   const [editingAttendance, setEditingAttendance] = useState<AttendanceRecord | null>(null);
   const [attendanceCount, setAttendanceCount] = useState(0);
 
@@ -61,6 +65,7 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
   const [editGender, setEditGender] = useState<'male' | 'female' | 'other'>('male');
   const [editPrematureWeeks, setEditPrematureWeeks] = useState(0);
   const [editParentNames, setEditParentNames] = useState('');
+  const [editParentEmail, setEditParentEmail] = useState('');
   const [editUci, setEditUci] = useState('');
   const [editSc, setEditSc] = useState('');
   const [editNotes, setEditNotes] = useState('');
@@ -118,6 +123,7 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
     setEditGender(profile.gender);
     setEditPrematureWeeks(profile.prematureWeeks);
     setEditParentNames(profile.parentNames);
+    setEditParentEmail(profile.parentEmail || '');
     setEditUci(profile.uci || '');
     setEditSc(profile.sc || '');
     setEditNotes(profile.notes);
@@ -143,6 +149,7 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
       gender: editGender,
       prematureWeeks: editPrematureWeeks,
       parentNames: editParentNames.trim(),
+      parentEmail: editParentEmail.trim(),
       uci: editUci.trim(),
       sc: editSc.trim(),
       notes: editNotes.trim(),
@@ -329,6 +336,7 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
             toast.error('Failed to export attendance record');
           }
         }}
+        onSendForSignature={(record) => setSignatureRecord(record)}
         onCalendarView={() => setAttendanceView('calendar')}
       />
     );
@@ -346,6 +354,15 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
           setAttendanceView('form');
         }}
         onViewEntry={(record) => { setEditingAttendance(record); setAttendanceView('form'); }}
+      />
+    );
+  }
+
+  if (attendanceView === 'signedDocs') {
+    return (
+      <SignedDocumentsPanel
+        profile={profile}
+        onBack={() => setAttendanceView('none')}
       />
     );
   }
@@ -474,6 +491,10 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
                       <Input value={editParentNames} onChange={e => setEditParentNames(e.target.value)} className="mt-1" />
                     </div>
                   </div>
+                  <div>
+                    <Label>Parent/Guardian Email</Label>
+                    <Input type="email" value={editParentEmail} onChange={e => setEditParentEmail(e.target.value)} className="mt-1" placeholder="parent@email.com (for e-signature requests)" />
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label>UCI</Label>
@@ -589,6 +610,12 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
                       <div>
                         <span className="text-[#8B8B8B]">Parent(s):</span>
                         <span className="ml-2 text-[#2C2C2C]">{profile.parentNames}</span>
+                      </div>
+                    )}
+                    {profile.parentEmail && (
+                      <div>
+                        <span className="text-[#8B8B8B]">Email:</span>
+                        <span className="ml-2 text-[#2C2C2C]">{profile.parentEmail}</span>
                       </div>
                     )}
                     {profile.uci && (
@@ -1044,6 +1071,30 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
           </div>
         </section>
 
+        {/* ===== SIGNED DOCUMENTS QUICK ACCESS ===== */}
+        <section className="bg-white rounded-xl border border-[#E5E1D8] overflow-hidden">
+          <div className="px-5 py-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-[#0D7377]" />
+              <span className="text-sm font-semibold text-[#2C2C2C]">Signed Documents</span>
+              {getPendingSignatureCount(profile.id) > 0 && (
+                <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+                  {getPendingSignatureCount(profile.id)} pending
+                </span>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAttendanceView('signedDocs')}
+              className="gap-1.5 text-xs border-[#0D7377] text-[#0D7377] hover:bg-[#0D7377]/5"
+            >
+              <Shield className="w-3.5 h-3.5" />
+              View All
+            </Button>
+          </div>
+        </section>
+
         {/* ===== ASSESSMENT HISTORY SECTION ===== */}
         <section className="bg-white rounded-xl border border-[#E5E1D8] overflow-hidden">
           <button
@@ -1093,6 +1144,20 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
           )}
         </section>
       </main>
+
+      {/* Send for Signature Dialog */}
+      {signatureRecord && profile && (
+        <SendForSignatureDialog
+          record={signatureRecord}
+          profile={profile}
+          onClose={() => setSignatureRecord(null)}
+          onSent={() => {
+            setSignatureRecord(null);
+            refreshProfile();
+            toast.success('Signature request tracked');
+          }}
+        />
+      )}
     </div>
   );
 }

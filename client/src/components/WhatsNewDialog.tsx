@@ -25,6 +25,17 @@ export interface ChangelogEntry {
 // Changelog data — add new entries at the top
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.17.0',
+    date: '2026-07-14',
+    highlights: [
+      { type: 'feature', text: 'Adobe Sign e-signature workflow — send attendance records to parents for audit-proof electronic signature' },
+      { type: 'feature', text: 'Signed Documents panel — track all signature requests per client with status updates' },
+      { type: 'feature', text: 'Google Drive filing — PDFs are automatically organized in per-client subfolders' },
+      { type: 'feature', text: 'Parent email field added to client profiles for e-signature delivery' },
+      { type: 'improvement', text: 'Removed in-app signature boxes — signatures now captured securely via Adobe Sign' },
+    ],
+  },
+  {
     version: '1.16.0',
     date: '2026-07-14',
     highlights: [

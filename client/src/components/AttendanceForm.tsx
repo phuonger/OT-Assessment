@@ -16,7 +16,6 @@ import { ArrowLeft, Save, Calendar, Clock, Printer } from 'lucide-react';
 import { type ClientProfile } from '@/lib/clientProfileStorage';
 import { createAttendance, updateAttendance, getAttendanceByProfile, type AttendanceRecord } from '@/lib/attendanceStorage';
 import { loadAppSettings } from '@/components/SettingsPreferences';
-import SignaturePad from '@/components/SignaturePad';
 import { toast } from 'sonner';
 
 interface AttendanceFormProps {
@@ -81,8 +80,8 @@ export default function AttendanceForm({ profile, existingRecord, onBack, onSave
   const [date, setDate] = useState(existingRecord?.date ?? getTodayISO());
   const [time, setTime] = useState(existingRecord?.time ?? getCurrentTime());
   const [progressNote, setProgressNote] = useState(existingRecord?.progressNote ?? '');
-  const [parentSignature, setParentSignature] = useState(existingRecord?.parentSignature ?? '');
-  const [therapistSignature, setTherapistSignature] = useState(existingRecord?.therapistSignature ?? '');
+  const parentSignature = existingRecord?.parentSignature ?? '';
+  const therapistSignature = existingRecord?.therapistSignature ?? '';
   const [saving, setSaving] = useState(false);
 
   const yearOptions = useMemo(() => {
@@ -293,26 +292,20 @@ export default function AttendanceForm({ profile, existingRecord, onBack, onSave
           </div>
         </section>
 
-        {/* Signatures Section */}
-        <section className="bg-white rounded-xl border border-[#E5E1D8] p-6 space-y-6">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-[#0D7377] border-b border-[#E5E1D8] pb-2">
-            Signatures
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <SignaturePad
-              label="Parent/Guardian Signature"
-              value={parentSignature}
-              onChange={setParentSignature}
-              width={350}
-              height={120}
-            />
-            <SignaturePad
-              label="Therapist Signature"
-              value={therapistSignature}
-              onChange={setTherapistSignature}
-              width={350}
-              height={120}
-            />
+        {/* E-Signature Notice */}
+        <section className="bg-[#0D7377]/5 border border-[#0D7377]/20 rounded-xl p-5">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[#0D7377]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg className="w-4 h-4 text-[#0D7377]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-[#2C2C2C]">Signatures via Adobe Sign</p>
+              <p className="text-xs text-[#6B6B6B] mt-1">
+                After saving, use the <strong>Send for E-Signature</strong> button (envelope icon) in the attendance history to send this record to the parent for audit-proof electronic signature.
+              </p>
+            </div>
           </div>
         </section>
 

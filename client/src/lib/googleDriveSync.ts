@@ -539,6 +539,98 @@ export async function performSync(direction: SyncDirection = 'auto'): Promise<Sy
 }
 
 // ============================================================
+// SIGNED DOCUMENT UPLOAD (per-client subfolder)
+// ============================================================
+
+/**
+ * Upload a signed PDF to Google Drive under otassess/signed-documents/{clientName}/
+ * Returns the web view link for the uploaded file.
+ */
+export async function uploadSignedDocument(
+  pdfBlob: Blob,
+  filename: string,
+  clientName: string
+): Promise<{ success: boolean; fileUrl?: string; error?: string }> {
+  const config = loadSyncConfig();
+  if (!config.connected || !config.refreshToken) {
+    return { success: false, error: 'Not connected to Google Drive' };
+  }
+
+  try {
+    const token = await refreshAccessToken(config);
+    const rootFolderId = await getOrCreateFolder(token, config.folderId);
+
+    // Ensure "signed-documents" subfolder exists
+    const signedDocsFolderId = await getOrCreateSubfolder(token, rootFolderId, 'signed-documents');
+
+    // Ensure client-specific subfolder exists
+    const sanitizedName = clientName.replace(/[^a-zA-Z0-9\s-]/g, '').trim();
+    const clientFolderId = await getOrCreateSubfolder(token, signedDocsFolderId, sanitizedName);
+
+    // Upload the PDF
+    const metadata = {
+      name: filename,
+      parents: [clientFolderId],
+      mimeType: 'application/pdf',
+    };
+
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', pdfBlob);
+
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error?.message || 'Upload failed');
+    }
+
+    const fileData = await res.json();
+    return { success: true, fileUrl: fileData.webViewLink || `https://drive.google.com/file/d/${fileData.id}/view` };
+  } catch (err: any) {
+    console.error('[Drive Upload Error]', err);
+    return { success: false, error: err.message || 'Upload failed' };
+  }
+}
+
+async function getOrCreateSubfolder(token: string, parentId: string, folderName: string): Promise<string> {
+  // Search for existing subfolder
+  const searchUrl = `https://www.googleapis.com/drive/v3/files?q=name='${folderName}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`;
+  const searchRes = await fetch(searchUrl, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (searchRes.ok) {
+    const searchData = await searchRes.json();
+    if (searchData.files && searchData.files.length > 0) {
+      return searchData.files[0].id;
+    }
+  }
+
+  // Create subfolder
+  const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      name: folderName,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [parentId],
+    }),
+  });
+
+  if (!createRes.ok) throw new Error(`Failed to create subfolder: ${folderName}`);
+  const createData = await createRes.json();
+  return createData.id;
+}
+
+// ============================================================
 // AUTO-SYNC MANAGER
 // ============================================================
 

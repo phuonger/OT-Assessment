@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Plus, Pencil, Trash2, Printer, Calendar, Clock, FileText, Download } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, Printer, Calendar, Clock, FileText, Download, Send } from 'lucide-react';
 import { type ClientProfile } from '@/lib/clientProfileStorage';
 import { getAttendanceByProfile, deleteAttendance, type AttendanceRecord } from '@/lib/attendanceStorage';
 import { generateBatchAttendanceDocx, generateAllAttendanceDocx } from '@/lib/generateAttendanceDocx';
@@ -20,6 +20,7 @@ interface AttendanceHistoryProps {
   onNewEntry: () => void;
   onEditEntry: (record: AttendanceRecord) => void;
   onPrintEntry: (record: AttendanceRecord) => void;
+  onSendForSignature?: (record: AttendanceRecord) => void;
   onCalendarView?: () => void;
 }
 
@@ -33,7 +34,7 @@ function formatDate(dateStr: string): string {
   }
 }
 
-export default function AttendanceHistory({ profile, onBack, onNewEntry, onEditEntry, onPrintEntry, onCalendarView }: AttendanceHistoryProps) {
+export default function AttendanceHistory({ profile, onBack, onNewEntry, onEditEntry, onPrintEntry, onSendForSignature, onCalendarView }: AttendanceHistoryProps) {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [exportingPeriod, setExportingPeriod] = useState<string | null>(null);
   const [exportingAll, setExportingAll] = useState(false);
@@ -246,6 +247,17 @@ export default function AttendanceHistory({ profile, onBack, onNewEntry, onEditE
                           </div>
                         </div>
                         <div className="flex items-center gap-1 ml-4">
+                          {onSendForSignature && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onSendForSignature(record)}
+                              className="text-slate-500 hover:text-[#0D7377] h-8 w-8 p-0"
+                              title="Send for E-Signature"
+                            >
+                              <Send className="w-4 h-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"

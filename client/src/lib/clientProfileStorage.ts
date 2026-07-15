@@ -45,6 +45,22 @@ export interface BirthHistory {
   dischargeNote: string; // e.g. "He was discharged home without medical equipment"
 }
 
+export type SignatureStatus = 'pending' | 'signed' | 'expired' | 'declined';
+
+export interface SignatureRequest {
+  id: string;
+  type: 'attendance' | 'assessment'; // what kind of document
+  referenceId: string; // attendance record ID or assessment session ID
+  documentName: string; // human-readable name
+  parentEmail: string; // email it was sent to
+  therapistSigned: boolean; // whether therapist pre-signed
+  status: SignatureStatus;
+  sentAt: string; // ISO date
+  signedAt?: string; // ISO date when parent signed
+  signedPdfPath?: string; // local path or Drive URL to signed PDF
+  notes?: string;
+}
+
 export interface ClientProfile {
   id: string;
   firstName: string;
@@ -53,6 +69,7 @@ export interface ClientProfile {
   gender: 'male' | 'female' | 'other';
   prematureWeeks: number; // 0 = full term
   parentNames: string; // freeform, e.g. "John & Jane Doe"
+  parentEmail: string; // parent/guardian email for e-signature requests
   uci: string; // UCI number
   sc: string; // SC number
   notes: string; // freeform
@@ -62,6 +79,7 @@ export interface ClientProfile {
   goalCategories: GoalCategory[];
   milestones: Milestone[];
   linkedAssessmentIds: string[]; // session IDs from multiSessionStorage
+  signatureRequests: SignatureRequest[]; // e-signature tracking
   archived?: boolean; // true = inactive/archived client
   photoUrl?: string; // base64 data URL or external URL for profile photo
   createdAt: string;
@@ -130,6 +148,10 @@ function migrateProfile(profile: ClientProfile): ClientProfile {
   if (profile.sc === undefined) profile.sc = '';
   // Ensure archived field exists
   if (profile.archived === undefined) profile.archived = false;
+  // Ensure parentEmail exists
+  if (!profile.parentEmail) profile.parentEmail = '';
+  // Ensure signatureRequests exists
+  if (!profile.signatureRequests) profile.signatureRequests = [];
   // Migrate legacy flat goals into a "General" category
   if (profile.goals && profile.goals.length > 0 && profile.goalCategories.length === 0) {
     profile.goalCategories.push({
@@ -179,6 +201,7 @@ export function createProfile(data: {
   gender: 'male' | 'female' | 'other';
   prematureWeeks: number;
   parentNames: string;
+  parentEmail?: string;
   uci?: string;
   sc?: string;
   notes: string;
@@ -192,12 +215,14 @@ export function createProfile(data: {
     gender: data.gender,
     prematureWeeks: data.prematureWeeks,
     parentNames: data.parentNames,
+    parentEmail: data.parentEmail || '',
     uci: data.uci || '',
     sc: data.sc || '',
     notes: data.notes,
     goalCategories: [],
     milestones: DEFAULT_MILESTONES.map(m => ({ ...m })),
     linkedAssessmentIds: [],
+    signatureRequests: [],
     createdAt: now,
     updatedAt: now,
     lastAccessedAt: now,
