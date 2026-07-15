@@ -8,8 +8,9 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Plus, Pencil, Trash2, Printer, Calendar, Clock, FileText, Download, Send } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, Printer, Calendar, Clock, FileText, Download, Send, Shield, CheckCircle2 } from 'lucide-react';
 import { type ClientProfile } from '@/lib/clientProfileStorage';
+import { getSignatureRequestsByProfile } from '@/lib/signatureService';
 import { getAttendanceByProfile, deleteAttendance, type AttendanceRecord } from '@/lib/attendanceStorage';
 import { generateBatchAttendanceDocx, generateAllAttendanceDocx } from '@/lib/generateAttendanceDocx';
 import { toast } from 'sonner';
@@ -38,6 +39,18 @@ export default function AttendanceHistory({ profile, onBack, onNewEntry, onEditE
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [exportingPeriod, setExportingPeriod] = useState<string | null>(null);
   const [exportingAll, setExportingAll] = useState(false);
+
+  // Get e-signature status for each record
+  const signatureRequests = useMemo(() => {
+    const requests = getSignatureRequestsByProfile(profile.id);
+    const map: Record<string, { status: string; sentAt: string }> = {};
+    for (const req of requests) {
+      if (req.type === 'attendance') {
+        map[req.referenceId] = { status: req.status, sentAt: req.sentAt };
+      }
+    }
+    return map;
+  }, [profile.id, records]);
 
   const refresh = useCallback(() => {
     setRecords(getAttendanceByProfile(profile.id));
@@ -69,7 +82,8 @@ export default function AttendanceHistory({ profile, onBack, onNewEntry, onEditE
 
   // Summary stats
   const totalSessions = records.length;
-  const totalSigned = records.filter(r => r.parentSignature && r.therapistSignature).length;
+  const totalSigned = Object.values(signatureRequests).filter(r => r.status === 'signed').length;
+  const totalPending = Object.values(signatureRequests).filter(r => r.status === 'pending').length;
 
   const handleDelete = (record: AttendanceRecord) => {
     if (!confirm(`Delete attendance record from ${formatDate(record.date)}?`)) return;
@@ -166,8 +180,14 @@ export default function AttendanceHistory({ profile, onBack, onNewEntry, onEditE
             </div>
             <div className="bg-white rounded-xl border border-[#E5E1D8] p-4 text-center">
               <p className="text-2xl font-bold text-green-600">{totalSigned}</p>
-              <p className="text-xs text-slate-500 mt-1">Fully Signed</p>
+              <p className="text-xs text-slate-500 mt-1">E-Signed</p>
             </div>
+            {totalPending > 0 && (
+              <div className="bg-white rounded-xl border border-[#E5E1D8] p-4 text-center">
+                <p className="text-2xl font-bold text-amber-600">{totalPending}</p>
+                <p className="text-xs text-slate-500 mt-1">Pending</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -238,11 +258,24 @@ export default function AttendanceHistory({ profile, onBack, onNewEntry, onEditE
                             {record.progressNote}
                           </p>
                           <div className="flex items-center gap-4 mt-2">
-                            {record.parentSignature && (
-                              <span className="text-xs text-green-600 font-medium">✓ Parent signed</span>
-                            )}
-                            {record.therapistSignature && (
-                              <span className="text-xs text-green-600 font-medium">✓ Therapist signed</span>
+                            {signatureRequests[record.id] ? (
+                              signatureRequests[record.id].status === 'signed' ? (
+                                <span className="text-xs text-green-600 font-medium flex items-center gap-1">
+                                  <CheckCircle2 className="w-3 h-3" /> E-Signed via Adobe Sign
+                                </span>
+                              ) : signatureRequests[record.id].status === 'pending' ? (
+                                <span className="text-xs text-amber-600 font-medium flex items-center gap-1">
+                                  <Clock className="w-3 h-3" /> Awaiting parent signature
+                                </span>
+                              ) : signatureRequests[record.id].status === 'expired' ? (
+                                <span className="text-xs text-red-500 font-medium flex items-center gap-1">
+                                  <Shield className="w-3 h-3" /> Signature expired
+                                </span>
+                              ) : (
+                                <span className="text-xs text-slate-400 font-medium">Declined</span>
+                              )
+                            ) : (
+                              <span className="text-xs text-slate-400">No e-signature sent</span>
                             )}
                           </div>
                         </div>

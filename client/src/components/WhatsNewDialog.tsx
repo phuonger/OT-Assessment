@@ -25,6 +25,16 @@ export interface ChangelogEntry {
 // Changelog data — add new entries at the top
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.17.1',
+    date: '2026-07-15',
+    highlights: [
+      { type: 'feature', text: 'E-signature for assessments — send completed assessment summaries to parents via Adobe Sign' },
+      { type: 'feature', text: 'Mark as Signed & Upload — confirm signed documents and file them to Google Drive' },
+      { type: 'improvement', text: 'Attendance history now shows e-signature status (pending/signed) instead of old checkmarks' },
+      { type: 'improvement', text: 'GitHub releases now auto-publish — no more manual draft publishing needed' },
+    ],
+  },
+  {
     version: '1.17.0',
     date: '2026-07-14',
     highlights: [

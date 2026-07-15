@@ -22,6 +22,7 @@ import {
   updateSignatureRequestStatus,
   deleteSignatureRequest
 } from '@/lib/signatureService';
+import { uploadSignedDocument, loadSyncConfig } from '@/lib/googleDriveSync';
 import { toast } from 'sonner';
 
 interface SignedDocumentsPanelProps {
@@ -86,6 +87,44 @@ export default function SignedDocumentsPanel({ profile, onBack }: SignedDocument
     deleteSignatureRequest(profile.id, requestId);
     refresh();
     toast.success('Signature request deleted');
+  };
+
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const driveConnected = loadSyncConfig().connected;
+
+  const handleMarkSignedAndUpload = async (requestId: string) => {
+    // Create a file input to pick the signed PDF
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+
+      setUploadingId(requestId);
+
+      // Mark as signed first
+      updateSignatureRequestStatus(profile.id, requestId, 'signed');
+
+      // Upload to Google Drive if connected
+      if (driveConnected) {
+        const clientName = `${profile.firstName} ${profile.lastName}`;
+        const result = await uploadSignedDocument(file, file.name, clientName);
+        if (result.success && result.fileUrl) {
+          // Update the request with the Drive URL
+          updateSignatureRequestStatus(profile.id, requestId, 'signed', result.fileUrl);
+          toast.success('Marked as signed and uploaded to Google Drive');
+        } else {
+          toast.success('Marked as signed (Drive upload failed: ' + (result.error || 'unknown') + ')');
+        }
+      } else {
+        toast.success('Marked as signed');
+      }
+
+      setUploadingId(null);
+      refresh();
+    };
+    input.click();
   };
 
   const pendingCount = requests.filter(r => r.status === 'pending').length;
@@ -178,7 +217,34 @@ export default function SignedDocumentsPanel({ profile, onBack }: SignedDocument
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 ml-4">
+                  <div className="flex items-center gap-1 ml-4 flex-wrap">
+                    {/* Mark as Signed & Upload */}
+                    {request.status === 'pending' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleMarkSignedAndUpload(request.id)}
+                        disabled={uploadingId === request.id}
+                        className="gap-1.5 text-xs border-green-300 text-green-700 hover:bg-green-50 h-8"
+                        title="Upload signed PDF and mark as complete"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        {uploadingId === request.id ? 'Uploading...' : 'Mark Signed & Upload'}
+                      </Button>
+                    )}
+                    {/* View signed PDF link */}
+                    {request.signedPdfPath && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => window.open(request.signedPdfPath, '_blank')}
+                        className="text-[#0D7377] hover:text-[#0a5c5f] h-8 gap-1 text-xs"
+                        title="View signed document"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        View PDF
+                      </Button>
+                    )}
                     {/* Status update dropdown */}
                     <Select
                       value={request.status}
