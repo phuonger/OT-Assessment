@@ -165,30 +165,3 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: npx electron-builder --win --publish always
-
-  publish-release:
-    needs: [release-mac, release-windows]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Publish draft release
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: |
-          TAG="$GITHUB_REF_NAME"
-          echo "Looking for draft release with tag: $TAG"
-          # Get the release ID for the draft
-          RELEASE_ID=$(gh release list --json tagName,isDraft,databaseId --jq ".[] | select(.tagName == \"$TAG\" and .isDraft == true) | .databaseId" 2>/dev/null || true)
-          if [ -n "$RELEASE_ID" ]; then
-            echo "Found draft release ID: $RELEASE_ID — publishing..."
-            gh release edit "$TAG" --draft=false --title "$TAG" --latest
-            echo "Release $TAG published successfully!"
-          else
-            echo "No draft release found for $TAG. It may already be published or electron-builder hasn't created it yet."
-            # Try to publish anyway in case it exists but wasn't found
-            gh release edit "$TAG" --draft=false --title "$TAG" --latest 2>/dev/null || echo "Could not publish — release may not exist yet."
-          fi
