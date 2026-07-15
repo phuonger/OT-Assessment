@@ -5,14 +5,15 @@
  * Main entry point for the app. Shows search, recent profiles, and create new profile.
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  Search, Plus, User, Calendar, Baby, ArrowRight, X, FileText, Settings
+  Search, Plus, User, Calendar, Baby, ArrowRight, X, FileText, Settings,
+  Archive, ArchiveRestore
 } from 'lucide-react';
 import SyncStatusIndicator from './SyncStatusIndicator';
 import {
@@ -32,9 +33,11 @@ export default function ClientProfiles({ onSelectProfile, onOpenSettings, onOpen
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [allProfiles, setAllProfiles] = useState<ClientProfile[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
   const [sortBy, setSortBy] = useState<'recent' | 'alpha'>(() => {
     return (localStorage.getItem('bayley4-profile-sort') as 'recent' | 'alpha') || 'alpha';
   });
+  const listRef = useRef<HTMLDivElement>(null);
 
   // Create form state
   const [newFirstName, setNewFirstName] = useState('');
@@ -54,8 +57,17 @@ export default function ClientProfiles({ onSelectProfile, onOpenSettings, onOpen
     localStorage.setItem('bayley4-profile-sort', newSort);
   };
 
+  const archivedCount = useMemo(() => allProfiles.filter(p => p.archived).length, [allProfiles]);
+
   const displayedProfiles = useMemo(() => {
     let profiles = [...allProfiles];
+
+    // Filter archived/active
+    if (!showArchived) {
+      profiles = profiles.filter(p => !p.archived);
+    } else {
+      profiles = profiles.filter(p => p.archived);
+    }
 
     // Filter by search query
     if (searchQuery.trim()) {
@@ -80,7 +92,25 @@ export default function ClientProfiles({ onSelectProfile, onOpenSettings, onOpen
     }
 
     return profiles;
-  }, [allProfiles, searchQuery, sortBy]);
+  }, [allProfiles, searchQuery, sortBy, showArchived]);
+
+  // Compute available alphabet letters for quick-jump
+  const availableLetters = useMemo(() => {
+    const letters = new Set<string>();
+    displayedProfiles.forEach(p => {
+      const letter = (p.lastName || p.firstName || '').charAt(0).toUpperCase();
+      if (letter) letters.add(letter);
+    });
+    return Array.from(letters).sort();
+  }, [displayedProfiles]);
+
+  const scrollToLetter = (letter: string) => {
+    if (!listRef.current) return;
+    const el = listRef.current.querySelector(`[data-letter-group="${letter}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
 
   const handleCreate = () => {
     if (!newFirstName.trim()) {
@@ -324,11 +354,28 @@ export default function ClientProfiles({ onSelectProfile, onOpenSettings, onOpen
         {/* Profile List */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-[#6B6B6B] uppercase tracking-wide">
-              {searchQuery.trim()
-                ? `Search Results (${displayedProfiles.length})`
-                : `All Profiles (${displayedProfiles.length})`}
-            </h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-semibold text-[#6B6B6B] uppercase tracking-wide">
+                {searchQuery.trim()
+                  ? `Search Results (${displayedProfiles.length})`
+                  : showArchived
+                    ? `Archived (${displayedProfiles.length})`
+                    : `All Profiles (${displayedProfiles.length})`}
+              </h2>
+              {archivedCount > 0 && (
+                <button
+                  onClick={() => setShowArchived(!showArchived)}
+                  className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md transition-colors ${
+                    showArchived
+                      ? 'bg-amber-100 text-amber-700 font-medium'
+                      : 'text-[#8B8B8B] hover:text-[#6B6B6B] hover:bg-[#F0EDE8]'
+                  }`}
+                >
+                  {showArchived ? <ArchiveRestore className="w-3 h-3" /> : <Archive className="w-3 h-3" />}
+                  {showArchived ? 'Show Active' : `Archived (${archivedCount})`}
+                </button>
+              )}
+            </div>
             {!searchQuery.trim() && (
               <div className="flex items-center gap-1 bg-white border border-[#E5E1D8] rounded-lg p-0.5">
                 <button
@@ -370,47 +417,90 @@ export default function ClientProfiles({ onSelectProfile, onOpenSettings, onOpen
               )}
             </div>
           ) : (
-            <div className="space-y-2">
-              {displayedProfiles.map(profile => (
-                <button
-                  key={profile.id}
-                  onClick={() => onSelectProfile(profile)}
-                  className="w-full bg-white rounded-xl border border-[#E5E1D8] hover:border-[#0D7377]/40 hover:shadow-sm p-4 flex items-center gap-4 transition-all text-left group"
-                >
-                  {/* Avatar */}
-                  <div className="w-11 h-11 rounded-full bg-[#0D7377]/10 flex items-center justify-center flex-shrink-0">
-                    <span className="text-sm font-bold text-[#0D7377]">
-                      {profile.firstName[0]}{profile.lastName?.[0] || ''}
-                    </span>
-                  </div>
+            <div className="flex gap-2">
+              {/* Alphabet Quick-Jump Sidebar */}
+              {sortBy === 'alpha' && availableLetters.length > 3 && !searchQuery.trim() && (
+                <div className="flex flex-col items-center gap-0.5 py-1 sticky top-20 self-start">
+                  {availableLetters.map(letter => (
+                    <button
+                      key={letter}
+                      onClick={() => scrollToLetter(letter)}
+                      className="w-6 h-6 text-[10px] font-semibold text-[#0D7377] hover:bg-[#0D7377]/10 rounded transition-colors flex items-center justify-center"
+                    >
+                      {letter}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-[#2C2C2C] truncate">
-                      {profile.firstName} {profile.lastName}
-                    </p>
-                    <div className="flex items-center gap-3 mt-0.5">
-                      <span className="text-xs text-[#8B8B8B] flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        {calculateAge(profile.dob)}
-                      </span>
-                      {(profile.goalCategories?.reduce((sum, c) => sum + c.goals.length, 0) ?? 0) > 0 && (
-                        <span className="text-xs text-[#8B8B8B]">
-                          {profile.goalCategories?.reduce((sum, c) => sum + c.goals.filter(g => g.status === 'in-progress' || g.status === 'not-started').length, 0) ?? 0} active goals
-                        </span>
+              {/* Profile Cards */}
+              <div className="flex-1 space-y-2" ref={listRef}>
+                {displayedProfiles.map((profile, idx) => {
+                  const letter = (profile.lastName || profile.firstName || '').charAt(0).toUpperCase();
+                  const prevLetter = idx > 0 ? (displayedProfiles[idx - 1].lastName || displayedProfiles[idx - 1].firstName || '').charAt(0).toUpperCase() : '';
+                  const showLetterDivider = sortBy === 'alpha' && letter !== prevLetter;
+
+                  return (
+                    <div key={profile.id} data-letter-group={showLetterDivider ? letter : undefined}>
+                      {showLetterDivider && (
+                        <div className="text-xs font-bold text-[#0D7377] uppercase tracking-widest pl-1 pt-3 pb-1">
+                          {letter}
+                        </div>
                       )}
-                      {profile.linkedAssessmentIds.length > 0 && (
-                        <span className="text-xs text-[#8B8B8B]">
-                          {profile.linkedAssessmentIds.length} assessment{profile.linkedAssessmentIds.length !== 1 ? 's' : ''}
-                        </span>
-                      )}
+                      <button
+                        onClick={() => onSelectProfile(profile)}
+                        className={`w-full rounded-xl border hover:border-[#0D7377]/40 hover:shadow-sm p-4 flex items-center gap-4 transition-all text-left group ${
+                          profile.archived
+                            ? 'bg-amber-50/50 border-amber-200/60'
+                            : 'bg-white border-[#E5E1D8]'
+                        }`}
+                      >
+                        {/* Avatar */}
+                        <div className="w-11 h-11 rounded-full overflow-hidden bg-[#0D7377]/10 flex items-center justify-center flex-shrink-0">
+                          {profile.photoUrl ? (
+                            <img src={profile.photoUrl} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-sm font-bold text-[#0D7377]">
+                              {profile.firstName[0]}{profile.lastName?.[0] || ''}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-[#2C2C2C] truncate">
+                              {profile.firstName} {profile.lastName}
+                            </p>
+                            {profile.archived && (
+                              <span className="text-[9px] font-semibold uppercase bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded flex-shrink-0">Archived</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 mt-0.5">
+                            <span className="text-xs text-[#8B8B8B] flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              {calculateAge(profile.dob)}
+                            </span>
+                            {(profile.goalCategories?.reduce((sum, c) => sum + c.goals.length, 0) ?? 0) > 0 && (
+                              <span className="text-xs text-[#8B8B8B]">
+                                {profile.goalCategories?.reduce((sum, c) => sum + c.goals.filter(g => g.status === 'in-progress' || g.status === 'not-started').length, 0) ?? 0} active goals
+                              </span>
+                            )}
+                            {profile.linkedAssessmentIds.length > 0 && (
+                              <span className="text-xs text-[#8B8B8B]">
+                                {profile.linkedAssessmentIds.length} assessment{profile.linkedAssessmentIds.length !== 1 ? 's' : ''}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Arrow */}
+                        <ArrowRight className="w-4 h-4 text-[#C0BDB6] group-hover:text-[#0D7377] transition-colors flex-shrink-0" />
+                      </button>
                     </div>
-                  </div>
-
-                  {/* Arrow */}
-                  <ArrowRight className="w-4 h-4 text-[#C0BDB6] group-hover:text-[#0D7377] transition-colors flex-shrink-0" />
-                </button>
-              ))}
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

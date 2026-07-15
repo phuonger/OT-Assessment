@@ -25,6 +25,16 @@ export interface ChangelogEntry {
 // Changelog data — add new entries at the top
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.16.0',
+    date: '2026-07-14',
+    highlights: [
+      { type: 'feature', text: 'Alphabet quick-jump sidebar — tap a letter to jump directly to that section in the client list' },
+      { type: 'feature', text: 'Archive/Inactive toggle — mark clients as archived to keep your active list clean' },
+      { type: 'feature', text: 'Profile photo upload — add a photo to each client for quick visual recognition' },
+      { type: 'improvement', text: 'Client list now shows letter group dividers when sorted A-Z' },
+    ],
+  },
+  {
     version: '1.15.1',
     date: '2026-07-14',
     highlights: [

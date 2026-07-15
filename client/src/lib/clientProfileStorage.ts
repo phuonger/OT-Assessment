@@ -62,6 +62,8 @@ export interface ClientProfile {
   goalCategories: GoalCategory[];
   milestones: Milestone[];
   linkedAssessmentIds: string[]; // session IDs from multiSessionStorage
+  archived?: boolean; // true = inactive/archived client
+  photoUrl?: string; // base64 data URL or external URL for profile photo
   createdAt: string;
   updatedAt: string;
   lastAccessedAt: string;
@@ -126,6 +128,8 @@ function migrateProfile(profile: ClientProfile): ClientProfile {
   // Ensure uci and sc fields exist
   if (profile.uci === undefined) profile.uci = '';
   if (profile.sc === undefined) profile.sc = '';
+  // Ensure archived field exists
+  if (profile.archived === undefined) profile.archived = false;
   // Migrate legacy flat goals into a "General" category
   if (profile.goals && profile.goals.length > 0 && profile.goalCategories.length === 0) {
     profile.goalCategories.push({

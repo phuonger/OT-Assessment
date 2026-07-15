@@ -16,7 +16,7 @@ import {
   ArrowLeft, Plus, Pencil, Trash2, Save, X, Play, Calendar,
   Target, CheckCircle2, Clock, XCircle, FileText, User, Baby,
   ChevronDown, ChevronUp, FolderPlus, MessageSquare, Milestone as MilestoneIcon,
-  Download, ClipboardList
+  Download, ClipboardList, Archive, ArchiveRestore, Camera
 } from 'lucide-react';
 import SyncStatusIndicator from './SyncStatusIndicator';
 import {
@@ -159,6 +159,42 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
     deleteProfile(profile.id);
     toast.success('Profile deleted');
     onBack();
+  };
+
+  const handleToggleArchive = () => {
+    if (!profile) return;
+    const newArchived = !profile.archived;
+    updateProfile(profile.id, { archived: newArchived });
+    refreshProfile();
+    toast.success(newArchived ? 'Client archived' : 'Client restored to active');
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !profile) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+    if (file.size > 500 * 1024) {
+      toast.error('Image must be under 500KB');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      updateProfile(profile.id, { photoUrl: dataUrl });
+      refreshProfile();
+      toast.success('Photo updated');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemovePhoto = () => {
+    if (!profile) return;
+    updateProfile(profile.id, { photoUrl: undefined });
+    refreshProfile();
+    toast.success('Photo removed');
   };
 
   // ---- Category handlers ----
@@ -322,10 +358,25 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
           <button onClick={onBack} className="p-2 rounded-lg hover:bg-[#F0EDE8] transition-colors">
             <ArrowLeft className="w-5 h-5 text-[#6B6B6B]" />
           </button>
+          {/* Profile Avatar */}
+          <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 bg-[#0D7377]/10 flex items-center justify-center">
+            {profile.photoUrl ? (
+              <img src={profile.photoUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-xs font-bold text-[#0D7377]">
+                {profile.firstName[0]}{profile.lastName?.[0] || ''}
+              </span>
+            )}
+          </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-lg font-semibold text-[#2C2C2C] truncate">
-              {profile.firstName} {profile.lastName}
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-semibold text-[#2C2C2C] truncate">
+                {profile.firstName} {profile.lastName}
+              </h1>
+              {profile.archived && (
+                <span className="text-[10px] font-semibold uppercase bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Archived</span>
+              )}
+            </div>
             <p className="text-xs text-[#8B8B8B]">{calculateAge(profile.dob)}</p>
           </div>
           <SyncStatusIndicator />
@@ -593,9 +644,40 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
                       </div>
                     </div>
                   )}
+                  {/* Photo Upload */}
+                  <div className="mt-3 pt-3 border-t border-[#E5E1D8]">
+                    <span className="text-xs text-[#8B8B8B] uppercase tracking-wide">Profile Photo</span>
+                    <div className="flex items-center gap-3 mt-2">
+                      <div className="w-16 h-16 rounded-full overflow-hidden bg-[#0D7377]/10 flex items-center justify-center flex-shrink-0 border-2 border-[#E5E1D8]">
+                        {profile.photoUrl ? (
+                          <img src={profile.photoUrl} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <Camera className="w-6 h-6 text-[#8B8B8B]" />
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="cursor-pointer inline-flex items-center gap-1.5 text-xs font-medium text-[#0D7377] hover:text-[#0a5c5f]">
+                          <Camera className="w-3.5 h-3.5" />
+                          {profile.photoUrl ? 'Change Photo' : 'Upload Photo'}
+                          <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+                        </label>
+                        {profile.photoUrl && (
+                          <button onClick={handleRemovePhoto} className="text-xs text-red-500 hover:text-red-700 text-left">
+                            Remove
+                          </button>
+                        )}
+                        <span className="text-[10px] text-[#8B8B8B]">Max 500KB, JPG/PNG</span>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="flex items-center gap-2 mt-4 pt-3 border-t border-[#E5E1D8]">
                     <Button variant="outline" size="sm" onClick={startEditProfile} className="gap-1.5">
                       <Pencil className="w-3.5 h-3.5" /> Edit Profile
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleToggleArchive} className={`gap-1.5 ${profile.archived ? 'text-green-600 hover:text-green-700 hover:bg-green-50' : 'text-amber-600 hover:text-amber-700 hover:bg-amber-50'}`}>
+                      {profile.archived ? <ArchiveRestore className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
+                      {profile.archived ? 'Restore' : 'Archive'}
                     </Button>
                     <Button variant="outline" size="sm" onClick={handleDeleteProfile} className="gap-1.5 text-red-600 hover:text-red-700 hover:bg-red-50">
                       <Trash2 className="w-3.5 h-3.5" /> Delete
