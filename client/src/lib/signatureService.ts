@@ -13,6 +13,8 @@
 import { type SignatureRequest, type SignatureStatus, getProfile, updateProfile } from '@/lib/clientProfileStorage';
 import { type AttendanceRecord } from '@/lib/attendanceStorage';
 import { generateAttendancePdfBlob } from '@/lib/generateAttendancePdf';
+import { generateAssessmentPdfBlob } from '@/lib/generateAssessmentPdf';
+import type { FormScoreSummary } from '@/lib/multiSessionStorage';
 
 const SIGNATURE_REQUESTS_KEY = 'ot_signature_requests';
 
@@ -173,6 +175,38 @@ export async function sendAttendanceForSignature(
     documentName: `Attendance - ${record.childName} - ${formatDate(record.date)}`,
     parentEmail,
     therapistSigned: !!record.therapistSignature,
+  });
+
+  return { request, pdfBlob: blob, filename };
+}
+
+/**
+ * Generate PDF and initiate the Adobe Sign workflow for an assessment.
+ */
+export async function sendAssessmentForSignature(
+  profileId: string,
+  assessmentId: string,
+  data: {
+    childName: string;
+    childDob: string;
+    testDate: string;
+    examinerName: string;
+    examinerTitle: string;
+    formSummaries: FormScoreSummary[];
+    label?: string;
+  },
+  parentEmail: string
+): Promise<{ request: SignatureRequest; pdfBlob: Blob; filename: string }> {
+  // Generate the PDF
+  const { blob, filename } = await generateAssessmentPdfBlob(data);
+
+  // Create the signature request tracking record
+  const request = createSignatureRequest(profileId, {
+    type: 'assessment',
+    referenceId: assessmentId,
+    documentName: `Assessment - ${data.childName} - ${data.testDate || 'undated'}`,
+    parentEmail,
+    therapistSigned: true, // therapist completed the assessment
   });
 
   return { request, pdfBlob: blob, filename };

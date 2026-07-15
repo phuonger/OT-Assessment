@@ -18,10 +18,11 @@ import { lookupDAYC2WithBayley4AB, computeDAYC2BayleyComposites, getScaledScoreC
 import { lookupREEL3AbilityScore, lookupREEL3PercentileRank, lookupREEL3DescriptiveTerm } from '@/lib/reel3ScoringTables';
 import { SP2_BIRTH6MO_CUTOFFS, SP2_ENGLISH_CUTOFFS, SP2_QUADRANT_MAP, getSP2Description } from '@/lib/sensoryProfileData';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Download, Printer, RotateCcw, Clock, FileText, Save, History, Shield, Settings, Home, Plus } from 'lucide-react';
+import { ArrowLeft, Download, Printer, RotateCcw, Clock, FileText, Save, History, Shield, Settings, Home, Plus, Send } from 'lucide-react';
 import { useMemo, useCallback, useState } from 'react';
 import { saveMultiSession } from '@/lib/multiSessionStorage';
-import { linkAssessment } from '@/lib/clientProfileStorage';
+import { linkAssessment, getProfile } from '@/lib/clientProfileStorage';
+import { sendAssessmentForSignature, downloadPdfBlob, openAdobeSignForSend } from '@/lib/signatureService';
 import { parseLocalDate, calculateAge } from '@/lib/dateUtils';
 import { toast } from 'sonner';
 
@@ -109,6 +110,76 @@ export default function UnifiedSummaryReport() {
 
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [saveLabel, setSaveLabel] = useState('');
+  const [sendingForSignature, setSendingForSignature] = useState(false);
+
+  const handleSendForSignature = useCallback(async () => {
+    if (!state.activeProfileId) {
+      toast.error('No client profile linked. Please link a profile first.');
+      return;
+    }
+    const profile = getProfile(state.activeProfileId);
+    if (!profile) {
+      toast.error('Client profile not found.');
+      return;
+    }
+    if (!profile.parentEmail) {
+      toast.error('No parent email on file. Please add it in the client profile first.');
+      return;
+    }
+
+    setSendingForSignature(true);
+    try {
+      // Save the session first to get an ID
+      const saved = saveMultiSession(state, 'completed', 'Sent for signature');
+      if (state.activeProfileId) {
+        linkAssessment(state.activeProfileId, saved.id);
+      }
+
+      const { pdfBlob, filename } = await sendAssessmentForSignature(
+        state.activeProfileId,
+        saved.id,
+        {
+          childName: `${state.childInfo.firstName} ${state.childInfo.lastName}`,
+          childDob: state.childInfo.dob,
+          testDate: state.childInfo.testDate,
+          examinerName: state.examinerInfo.name,
+          examinerTitle: state.examinerInfo.title,
+          formSummaries: Object.entries(state.formStates).map(([formId, fs]: [string, any]) => {
+            const formDef = getFormById(formId);
+            return {
+              formId,
+              formName: formDef?.name || formId,
+              domains: Object.entries(fs.domainScores || {}).map(([domId, score]) => {
+                const domain = formDef?.domains.find((d: any) => d.localId === domId);
+                return {
+                  domainLocalId: domId,
+                  domainName: domain?.name || domId,
+                  rawScore: score as number,
+                  itemsScored: Object.keys(fs.responses?.[domId] || {}).length,
+                  totalItems: domain?.items.length || 0,
+                  timerSeconds: fs.timers?.[domId] || 0,
+                };
+              }),
+              totalRawScore: Object.values((fs.domainScores || {}) as Record<string, number>).reduce((a: number, b: number) => a + b, 0),
+            };
+          }),
+        },
+        profile.parentEmail
+      );
+
+      // Download the PDF
+      downloadPdfBlob(pdfBlob, filename);
+
+      // Open Adobe Sign
+      toast.success('PDF downloaded. Opening Adobe Sign to send for parent signature...');
+      setTimeout(() => openAdobeSignForSend(), 1000);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to generate signature request');
+    } finally {
+      setSendingForSignature(false);
+    }
+  }, [state]);
 
   const handleSaveSession = useCallback(() => {
     setShowSaveDialog(true);
@@ -184,6 +255,16 @@ export default function UnifiedSummaryReport() {
             <Button variant="outline" size="sm" onClick={handleSaveSession} className="gap-1.5">
               <Save className="w-3.5 h-3.5" />
               Save Session
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSendForSignature}
+              disabled={sendingForSignature}
+              className="gap-1.5 border-[#0D7377] text-[#0D7377] hover:bg-[#0D7377]/5"
+            >
+              <Send className="w-3.5 h-3.5" />
+              {sendingForSignature ? 'Sending...' : 'E-Sign'}
             </Button>
             <Button
               variant="outline"
