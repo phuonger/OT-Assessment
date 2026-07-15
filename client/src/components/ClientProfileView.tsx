@@ -322,23 +322,37 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
 
   if (attendanceView === 'history') {
     return (
-      <AttendanceHistory
-        profile={profile}
-        onBack={() => setAttendanceView('none')}
-        onNewEntry={() => { setEditingAttendance(null); setAttendanceView('form'); }}
-        onEditEntry={(record) => { setEditingAttendance(record); setAttendanceView('form'); }}
-        onPrintEntry={async (record) => {
-          try {
-            await generateAttendanceDocx(record);
-            toast.success('Attendance record exported');
-          } catch (err) {
-            console.error(err);
-            toast.error('Failed to export attendance record');
-          }
-        }}
-        onSendForSignature={(record) => setSignatureRecord(record)}
-        onCalendarView={() => setAttendanceView('calendar')}
-      />
+      <>
+        <AttendanceHistory
+          profile={profile}
+          onBack={() => setAttendanceView('none')}
+          onNewEntry={() => { setEditingAttendance(null); setAttendanceView('form'); }}
+          onEditEntry={(record) => { setEditingAttendance(record); setAttendanceView('form'); }}
+          onPrintEntry={async (record) => {
+            try {
+              await generateAttendanceDocx(record);
+              toast.success('Attendance record exported');
+            } catch (err) {
+              console.error(err);
+              toast.error('Failed to export attendance record');
+            }
+          }}
+          onSendForSignature={(record) => setSignatureRecord(record)}
+          onCalendarView={() => setAttendanceView('calendar')}
+        />
+        {signatureRecord && profile && (
+          <SendForSignatureDialog
+            record={signatureRecord}
+            profile={profile}
+            onClose={() => setSignatureRecord(null)}
+            onSent={() => {
+              setSignatureRecord(null);
+              refreshProfile();
+              toast.success('Signature request tracked');
+            }}
+          />
+        )}
+      </>
     );
   }
 
