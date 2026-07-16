@@ -25,6 +25,7 @@ import { type SavedMultiSession } from '@/lib/multiSessionStorage';
 import { startAutoSync, syncOnClose, loadSyncConfig, loadConflict, markDirty } from '@/lib/googleDriveSync';
 import SyncConflictDialog from '@/components/SyncConflictDialog';
 import WhatsNewDialog from '@/components/WhatsNewDialog';
+import GlobalSyncButton from '@/components/GlobalSyncButton';
 
 function AssessmentFlow() {
   const { state, dispatch } = useMultiAssessment();
@@ -137,7 +138,7 @@ function AssessmentFlow() {
   }
 }
 
-const APP_VERSION = '1.18.0';
+const APP_VERSION = '1.18.5';
 
 export default function Home() {
   const [setupComplete, setSetupComplete] = useState(() => {
@@ -192,6 +193,7 @@ export default function Home() {
         />
       )}
       <WhatsNewDialog currentVersion={APP_VERSION} />
+      <GlobalSyncButton />
     </MultiAssessmentProvider>
   );
 }
