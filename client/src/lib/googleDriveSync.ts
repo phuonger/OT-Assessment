@@ -567,6 +567,20 @@ export async function uploadSignedDocument(
     const sanitizedName = clientName.replace(/[^a-zA-Z0-9\s-]/g, '').trim();
     const clientFolderId = await getOrCreateSubfolder(token, signedDocsFolderId, sanitizedName);
 
+    // Check for duplicate — skip upload if file with same name already exists in this folder
+    const dupCheckUrl = `https://www.googleapis.com/drive/v3/files?q=name='${encodeURIComponent(filename).replace(/'/g, "\\'")}'  and '${clientFolderId}' in parents and trashed=false&fields=files(id,webViewLink)`;
+    const dupRes = await fetch(dupCheckUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (dupRes.ok) {
+      const dupData = await dupRes.json();
+      if (dupData.files && dupData.files.length > 0) {
+        // File already exists — return existing link instead of uploading duplicate
+        const existing = dupData.files[0];
+        return { success: true, fileUrl: existing.webViewLink || `https://drive.google.com/file/d/${existing.id}/view` };
+      }
+    }
+
     // Upload the PDF
     const metadata = {
       name: filename,

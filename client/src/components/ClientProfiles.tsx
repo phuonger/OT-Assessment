@@ -20,6 +20,7 @@ import {
   loadAllProfiles, createProfile,
   type ClientProfile
 } from '@/lib/clientProfileStorage';
+import { getPendingSignatureCount } from '@/lib/signatureService';
 import { toast } from 'sonner';
 
 interface ClientProfilesProps {
@@ -490,6 +491,15 @@ export default function ClientProfiles({ onSelectProfile, onOpenSettings, onOpen
                             {profile.archived && (
                               <span className="text-[9px] font-semibold uppercase bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded flex-shrink-0">Archived</span>
                             )}
+                            {(() => {
+                              const pendingCount = getPendingSignatureCount(profile.id);
+                              return pendingCount > 0 ? (
+                                <span className="text-[9px] font-semibold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded flex-shrink-0 flex items-center gap-0.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+                                  {pendingCount} pending sig{pendingCount !== 1 ? 's' : ''}
+                                </span>
+                              ) : null;
+                            })()}
                           </div>
                           <div className="flex items-center gap-3 mt-0.5">
                             <span className="text-xs text-[#8B8B8B] flex items-center gap-1">

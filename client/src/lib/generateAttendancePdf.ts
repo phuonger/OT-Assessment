@@ -101,12 +101,13 @@ export async function generateAttendancePdfBlob(record: AttendanceRecord): Promi
   doc.text(noteLines, 15, yPos);
   yPos += noteLines.length * 4 + 10;
 
-  // Therapist signature (if available)
+  // Therapist Signature section
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Therapist Signature:', 15, yPos);
+  yPos += 5;
+
   if (record.therapistSignature) {
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Therapist Signature:', 15, yPos);
-    yPos += 3;
     try {
       doc.addImage(record.therapistSignature, 'PNG', 15, yPos, 50, 20);
       yPos += 23;
@@ -116,9 +117,20 @@ export async function generateAttendancePdfBlob(record: AttendanceRecord): Promi
       doc.text('[Signed electronically]', 15, yPos + 5);
       yPos += 10;
     }
+  } else {
+    // Draw signature line for therapist
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.3);
+    doc.line(15, yPos + 10, 100, yPos + 10);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Sign here', 15, yPos + 14);
+    yPos += 18;
+    doc.text('Date: _______________', 15, yPos);
+    yPos += 10;
   }
 
-  // Parent signature placeholder
+  // Parent/Guardian Signature section
   yPos += 5;
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
@@ -136,20 +148,16 @@ export async function generateAttendancePdfBlob(record: AttendanceRecord): Promi
       yPos += 10;
     }
   } else {
-    // Draw signature line for Adobe Sign
+    // Draw signature line for parent/guardian
     doc.setDrawColor(0);
     doc.setLineWidth(0.3);
     doc.line(15, yPos + 10, 100, yPos + 10);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     doc.text('Sign here', 15, yPos + 14);
-    yPos += 20;
+    yPos += 18;
+    doc.text('Date: _______________', 15, yPos);
   }
-
-  // Date line
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Date: _______________', 15, yPos);
 
   // Footer
   const footerY = doc.internal.pageSize.getHeight() - 10;
