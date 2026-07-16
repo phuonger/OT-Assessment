@@ -56,12 +56,24 @@ export default function AttendanceForm({ profile, existingRecord, onBack, onSave
   const appSettings = useMemo(() => loadAppSettings(), []);
   const therapistName = appSettings.defaultExaminerName || appSettings.signatureName || '';
 
+  // Preset type/frequency options
+  const TYPE_FREQUENCY_OPTIONS = [
+    'OT 1x/wk', 'OT 2x/wk', 'OT 1x/month', 'OT 2x/month',
+    'OTFD 1x/wk', 'OTFD 2x/wk', 'OTFD 1x/month', 'OTFD 2x/month',
+    'OT EVAL', 'OT INTAKE', 'OTFD EVAL',
+  ];
+
   // Form state — auto-fill typeFrequency from last entry for this child
   const [typeFrequency, setTypeFrequency] = useState(() => {
     if (existingRecord?.typeFrequency) return existingRecord.typeFrequency;
     const previous = getAttendanceByProfile(profile.id);
     if (previous.length > 0 && previous[0].typeFrequency) return previous[0].typeFrequency;
     return '';
+  });
+  const [isCustomType, setIsCustomType] = useState(() => {
+    const val = existingRecord?.typeFrequency || '';
+    if (!val) return false;
+    return !['OT 1x/wk', 'OT 2x/wk', 'OT 1x/month', 'OT 2x/month', 'OTFD 1x/wk', 'OTFD 2x/wk', 'OTFD 1x/month', 'OTFD 2x/month', 'OT EVAL', 'OT INTAKE', 'OTFD EVAL'].includes(val);
   });
   const [payPeriodMonth, setPayPeriodMonth] = useState(() => {
     if (existingRecord?.payPeriod) {
@@ -211,12 +223,48 @@ export default function AttendanceForm({ profile, existingRecord, onBack, onSave
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label className="text-xs text-slate-500 uppercase tracking-wide">Type / Frequency</Label>
-              <Input
-                value={typeFrequency}
-                onChange={e => setTypeFrequency(e.target.value)}
-                placeholder="e.g. OT 1x/wk"
-                className="mt-1 no-print"
-              />
+              {!isCustomType ? (
+                <Select
+                  value={typeFrequency}
+                  onValueChange={(val) => {
+                    if (val === '__custom__') {
+                      setIsCustomType(true);
+                      setTypeFrequency('');
+                    } else {
+                      setTypeFrequency(val);
+                    }
+                  }}
+                >
+                  <SelectTrigger className="mt-1 no-print">
+                    <SelectValue placeholder="Select type/frequency" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TYPE_FREQUENCY_OPTIONS.map(opt => (
+                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                    ))}
+                    <SelectItem value="__custom__">Custom...</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="flex gap-1 mt-1 no-print">
+                  <Input
+                    value={typeFrequency}
+                    onChange={e => setTypeFrequency(e.target.value)}
+                    placeholder="Enter custom type/frequency"
+                    className="flex-1"
+                    autoFocus
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => { setIsCustomType(false); setTypeFrequency(''); }}
+                    className="text-xs px-2"
+                  >
+                    List
+                  </Button>
+                </div>
+              )}
               <p className="text-sm text-[#2C2C2C] mt-1 hidden print-only">{typeFrequency || '—'}</p>
             </div>
             <div>
