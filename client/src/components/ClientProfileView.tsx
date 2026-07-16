@@ -516,7 +516,7 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
                     </div>
                     <div>
                       <Label>SC</Label>
-                      <Input value={editSc} onChange={e => setEditSc(e.target.value)} className="mt-1" placeholder="SC number" />
+                      <Input value={editSc} onChange={e => setEditSc(e.target.value)} className="mt-1" placeholder="" />
                     </div>
                   </div>
                   <div>
