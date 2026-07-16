@@ -167,7 +167,10 @@ export async function generateAttendancePdfBlob(record: AttendanceRecord, profil
 
   const blob = doc.output('blob');
   const profileSuffix = profileNumber ? `-${profileNumber}` : '';
-  const filename = `Attendance_${record.childName.replace(/\s+/g, '_')}${profileSuffix}-${record.date}.pdf`;
+  const typeSuffix = record.typeFrequency
+    ? `_${record.typeFrequency.replace(/\s+/g, '-').replace(/\//g, '')}`
+    : '';
+  const filename = `Attendance_${record.childName.replace(/\s+/g, '_')}${typeSuffix}${profileSuffix}-${record.date}.pdf`;
 
   return { blob, filename };
 }
