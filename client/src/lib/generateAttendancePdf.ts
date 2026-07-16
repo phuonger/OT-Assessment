@@ -24,7 +24,7 @@ function formatDate(dateStr: string): string {
  * Generate a PDF blob for an attendance record.
  * Returns the blob and a suggested filename.
  */
-export async function generateAttendancePdfBlob(record: AttendanceRecord): Promise<{ blob: Blob; filename: string }> {
+export async function generateAttendancePdfBlob(record: AttendanceRecord, profileNumber?: number): Promise<{ blob: Blob; filename: string }> {
   const appSettings = loadAppSettings();
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -169,7 +169,8 @@ export async function generateAttendancePdfBlob(record: AttendanceRecord): Promi
   );
 
   const blob = doc.output('blob');
-  const filename = `Attendance_${record.childName.replace(/\s+/g, '_')}_${record.date}.pdf`;
+  const profileSuffix = profileNumber ? `-${profileNumber}` : '';
+  const filename = `Attendance_${record.childName.replace(/\s+/g, '_')}${profileSuffix}-${record.date}.pdf`;
 
   return { blob, filename };
 }

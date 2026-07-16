@@ -136,8 +136,7 @@ function AssessmentFlow() {
       return <WelcomePage />;
   }
 }
-const APP_VERSION = '1.17.3';
->>>>>>> user_github/main
+const APP_VERSION = '1.18.0';
 
 export default function Home() {
   const [setupComplete, setSetupComplete] = useState(() => {

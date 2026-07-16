@@ -78,6 +78,7 @@ export interface ClientProfile {
   goals?: ClientGoal[];
   goalCategories: GoalCategory[];
   milestones: Milestone[];
+  profileNumber: number; // unique auto-incrementing profile index (starting 100001)
   linkedAssessmentIds: string[]; // session IDs from multiSessionStorage
   signatureRequests: SignatureRequest[]; // e-signature tracking
   archived?: boolean; // true = inactive/archived client
@@ -123,6 +124,33 @@ function generateId(): string {
   return `cp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+const PROFILE_NUMBER_KEY = 'bayley4-next-profile-number';
+const PROFILE_NUMBER_START = 100001;
+
+/** Get the next available profile number and increment the counter */
+function getNextProfileNumber(): number {
+  const stored = localStorage.getItem(PROFILE_NUMBER_KEY);
+  let next = stored ? parseInt(stored, 10) : PROFILE_NUMBER_START;
+  if (isNaN(next) || next < PROFILE_NUMBER_START) next = PROFILE_NUMBER_START;
+  // Check if this number is already in use
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const profiles = JSON.parse(raw) as ClientProfile[];
+      const usedNumbers = new Set(profiles.map(p => p.profileNumber).filter(Boolean));
+      while (usedNumbers.has(next)) next++;
+    }
+  } catch { /* ignore */ }
+  localStorage.setItem(PROFILE_NUMBER_KEY, String(next + 1));
+  return next;
+}
+
+/** Get a profile by its profile number */
+export function getProfileByNumber(profileNumber: number): ClientProfile | null {
+  const profiles = loadAllProfiles();
+  return profiles.find(p => p.profileNumber === profileNumber) || null;
+}
+
 function generateGoalId(): string {
   return `goal_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
@@ -152,6 +180,10 @@ function migrateProfile(profile: ClientProfile): ClientProfile {
   if (!profile.parentEmail) profile.parentEmail = '';
   // Ensure signatureRequests exists
   if (!profile.signatureRequests) profile.signatureRequests = [];
+  // Ensure profileNumber exists (assign next available if missing)
+  if (!profile.profileNumber) {
+    profile.profileNumber = getNextProfileNumber();
+  }
   // Migrate legacy flat goals into a "General" category
   if (profile.goals && profile.goals.length > 0 && profile.goalCategories.length === 0) {
     profile.goalCategories.push({
@@ -223,6 +255,7 @@ export function createProfile(data: {
     milestones: DEFAULT_MILESTONES.map(m => ({ ...m })),
     linkedAssessmentIds: [],
     signatureRequests: [],
+    profileNumber: getNextProfileNumber(),
     createdAt: now,
     updatedAt: now,
     lastAccessedAt: now,

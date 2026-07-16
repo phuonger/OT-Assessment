@@ -502,6 +502,11 @@ export default function ClientProfiles({ onSelectProfile, onOpenSettings, onOpen
                             })()}
                           </div>
                           <div className="flex items-center gap-3 mt-0.5">
+                            {profile.profileNumber && (
+                              <span className="text-[10px] font-mono text-[#8B8B8B] bg-[#F5F3EE] px-1.5 py-0.5 rounded">
+                                #{profile.profileNumber}
+                              </span>
+                            )}
                             <span className="text-xs text-[#8B8B8B] flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
                               {calculateAge(profile.dob)}

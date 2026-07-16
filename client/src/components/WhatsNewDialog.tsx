@@ -25,6 +25,18 @@ export interface ChangelogEntry {
 // Changelog data — add new entries at the top
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.18.0',
+    date: '2026-07-15',
+    highlights: [
+      { type: 'feature', text: 'Profile numbers — each client now has a unique ID (starting at 100001) shown on their profile card' },
+      { type: 'feature', text: 'Auto-filing scanner — automatically moves signed PDFs from Adobe-Signed folder to the correct client folder on Google Drive' },
+      { type: 'feature', text: 'Local watched folder — set a folder on your computer where signed PDFs are saved, and the app files them automatically' },
+      { type: 'improvement', text: 'PDF filenames now include profile number for automatic identification (e.g., Attendance_Jim_Bob-100001-2026-07-15.pdf)' },
+      { type: 'improvement', text: 'Google Drive client folders now include profile number (e.g., Jim Bob 100001)' },
+      { type: 'improvement', text: 'Duplicate prevention for Google Drive uploads — won\'t upload the same file twice' },
+    ],
+  },
+  {
     version: '1.17.1',
     date: '2026-07-15',
     highlights: [

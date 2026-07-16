@@ -320,6 +320,53 @@ ipcMain.handle('open-external', async (_event, url) => {
   return { success: true };
 });
 
+// IPC: Select a folder via native dialog (for watched folder)
+ipcMain.handle('select-folder', async () => {
+  const { dialog } = require('electron');
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory'],
+    title: 'Select Signed Documents Folder',
+    message: 'Choose the folder where signed PDFs are saved',
+  });
+  if (result.canceled || !result.filePaths.length) return null;
+  return result.filePaths[0];
+});
+
+// IPC: Scan a folder for PDF files (auto-filing)
+ipcMain.handle('scan-folder', async (_event, folderPath) => {
+  const fs = require('fs');
+  const path = require('path');
+  try {
+    if (!fs.existsSync(folderPath)) return [];
+    const entries = fs.readdirSync(folderPath);
+    const pdfFiles = entries.filter(f => f.toLowerCase().endsWith('.pdf'));
+    const results = [];
+    for (const name of pdfFiles) {
+      const filePath = path.join(folderPath, name);
+      const data = fs.readFileSync(filePath);
+      results.push({ name, path: filePath, data: data.buffer });
+    }
+    return results;
+  } catch (err) {
+    console.error('[scan-folder] Error:', err);
+    return [];
+  }
+});
+
+// IPC: Delete a file after it has been filed (auto-filing cleanup)
+ipcMain.handle('delete-file', async (_event, filePath) => {
+  const fs = require('fs');
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    return { success: true };
+  } catch (err) {
+    console.error('[delete-file] Error:', err);
+    return { success: false, error: err.message };
+  }
+});
+
 // ─── Window Creation ───────────────────────────────────────────────────
 
 function createWindow() {

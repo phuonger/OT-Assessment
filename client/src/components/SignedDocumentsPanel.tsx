@@ -109,7 +109,7 @@ export default function SignedDocumentsPanel({ profile, onBack }: SignedDocument
       // Upload to Google Drive if connected
       if (driveConnected) {
         const clientName = `${profile.firstName} ${profile.lastName}`;
-        const result = await uploadSignedDocument(file, file.name, clientName);
+        const result = await uploadSignedDocument(file, file.name, clientName, profile.profileNumber);
         if (result.success && result.fileUrl) {
           // Update the request with the Drive URL
           updateSignatureRequestStatus(profile.id, requestId, 'signed', result.fileUrl);

@@ -18,6 +18,7 @@ interface AssessmentPdfData {
   examinerTitle: string;
   formSummaries: FormScoreSummary[];
   label?: string;
+  profileNumber?: number;
 }
 
 function formatDate(dateStr: string): string {
@@ -169,7 +170,8 @@ export async function generateAssessmentPdfBlob(data: AssessmentPdfData): Promis
   const pdfBlob = doc.output('blob');
   const safeName = data.childName.replace(/[^a-zA-Z0-9]/g, '_');
   const dateStr = data.testDate || new Date().toISOString().split('T')[0];
-  const filename = `Assessment_${safeName}_${dateStr}.pdf`;
+  const profileSuffix = data.profileNumber ? `-${data.profileNumber}` : '';
+  const filename = `Assessment_${safeName}${profileSuffix}-${dateStr}.pdf`;
 
   return { blob: pdfBlob, filename };
 }

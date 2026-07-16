@@ -234,7 +234,8 @@ export default function SendForSignatureDialog({ record, profile, onClose, onSen
                       const result = await uploadSignedDocument(
                         pdfBlob,
                         pdfFilename,
-                        `${profile.firstName} ${profile.lastName}`
+                        `${profile.firstName} ${profile.lastName}`,
+                        profile.profileNumber
                       );
                       setUploading(false);
                       if (result.success) {

@@ -25,6 +25,7 @@ import {
 } from '@/lib/aiEnhance';
 import { toast } from 'sonner';
 import GoogleDriveSyncPanel from './GoogleDriveSyncPanel';
+import { AutoFilingSettings } from './AutoFilingSettings';
 import WhatsNewDialog, { getChangelog } from './WhatsNewDialog';
 
 
@@ -1059,6 +1060,13 @@ export default function SettingsPreferences({ onBack }: { onBack: () => void }) 
 
         {/* Google Drive Sync */}
         <GoogleDriveSyncPanel />
+
+        {/* Auto-Filing Settings */}
+        <section>
+          <div className="bg-white rounded-lg border border-[#E5E1D8] p-6">
+            <AutoFilingSettings />
+          </div>
+        </section>
 
         {/* What's New */}
         <WhatsNewSection />

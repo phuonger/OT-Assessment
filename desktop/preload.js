@@ -20,4 +20,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Google Drive OAuth
   oauthStart: (authUrl) => ipcRenderer.invoke('oauth-start', authUrl),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
+
+  // Auto-Filing: folder selection and scanning
+  selectFolder: () => ipcRenderer.invoke('select-folder'),
+  scanFolder: (folderPath) => ipcRenderer.invoke('scan-folder', folderPath),
+  deleteFile: (filePath) => ipcRenderer.invoke('delete-file', filePath),
 });

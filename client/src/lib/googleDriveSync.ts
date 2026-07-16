@@ -549,7 +549,8 @@ export async function performSync(direction: SyncDirection = 'auto'): Promise<Sy
 export async function uploadSignedDocument(
   pdfBlob: Blob,
   filename: string,
-  clientName: string
+  clientName: string,
+  profileNumber?: number
 ): Promise<{ success: boolean; fileUrl?: string; error?: string }> {
   const config = loadSyncConfig();
   if (!config.connected || !config.refreshToken) {
@@ -563,9 +564,10 @@ export async function uploadSignedDocument(
     // Ensure "signed-documents" subfolder exists
     const signedDocsFolderId = await getOrCreateSubfolder(token, rootFolderId, 'signed-documents');
 
-    // Ensure client-specific subfolder exists
+    // Ensure client-specific subfolder exists (includes profile number for auto-filing)
     const sanitizedName = clientName.replace(/[^a-zA-Z0-9\s-]/g, '').trim();
-    const clientFolderId = await getOrCreateSubfolder(token, signedDocsFolderId, sanitizedName);
+    const folderName = profileNumber ? `${sanitizedName} ${profileNumber}` : sanitizedName;
+    const clientFolderId = await getOrCreateSubfolder(token, signedDocsFolderId, folderName);
 
     // Check for duplicate — skip upload if file with same name already exists in this folder
     const dupCheckUrl = `https://www.googleapis.com/drive/v3/files?q=name='${encodeURIComponent(filename).replace(/'/g, "\\'")}'  and '${clientFolderId}' in parents and trashed=false&fields=files(id,webViewLink)`;
@@ -658,13 +660,18 @@ export function startAutoSync(): void {
 
   const intervalMs = (config.syncIntervalMinutes || 60) * 60 * 1000;
 
-  // Sync on start
-  performSync('auto').catch(console.error);
+  // Sync on start, then run auto-filing scanner
+  performSync('auto').then(() => {
+    // Run auto-filing after sync completes
+    import('@/lib/autoFilingScanner').then(m => m.runAutoFiling()).catch(console.error);
+  }).catch(console.error);
 
-  // Set up recurring sync
+  // Set up recurring sync with auto-filing
   syncInterval = setInterval(() => {
     if (navigator.onLine) {
-      performSync('auto').catch(console.error);
+      performSync('auto').then(() => {
+        import('@/lib/autoFilingScanner').then(m => m.runAutoFiling()).catch(console.error);
+      }).catch(console.error);
     }
   }, intervalMs);
 }

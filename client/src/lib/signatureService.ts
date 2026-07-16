@@ -165,8 +165,11 @@ export async function sendAttendanceForSignature(
   record: AttendanceRecord,
   parentEmail: string
 ): Promise<{ request: SignatureRequest; pdfBlob: Blob; filename: string }> {
+  // Get profile number for filename
+  const profile = getProfile(profileId);
+  const profileNumber = profile?.profileNumber;
   // Generate the PDF
-  const { blob, filename } = await generateAttendancePdfBlob(record);
+  const { blob, filename } = await generateAttendancePdfBlob(record, profileNumber);
 
   // Create the signature request tracking record
   const request = createSignatureRequest(profileId, {
@@ -197,8 +200,11 @@ export async function sendAssessmentForSignature(
   },
   parentEmail: string
 ): Promise<{ request: SignatureRequest; pdfBlob: Blob; filename: string }> {
+  // Get profile number for filename
+  const profile = getProfile(profileId);
+  const profileNumber = profile?.profileNumber;
   // Generate the PDF
-  const { blob, filename } = await generateAssessmentPdfBlob(data);
+  const { blob, filename } = await generateAssessmentPdfBlob({ ...data, profileNumber });
 
   // Create the signature request tracking record
   const request = createSignatureRequest(profileId, {
