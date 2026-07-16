@@ -126,8 +126,6 @@ export async function generateAttendancePdfBlob(record: AttendanceRecord, profil
     doc.setFont('helvetica', 'normal');
     doc.text('Sign here', 15, yPos + 14);
     yPos += 18;
-    doc.text('Date: _______________', 15, yPos);
-    yPos += 10;
   }
 
   // Parent/Guardian Signature section
@@ -156,7 +154,6 @@ export async function generateAttendancePdfBlob(record: AttendanceRecord, profil
     doc.setFont('helvetica', 'normal');
     doc.text('Sign here', 15, yPos + 14);
     yPos += 18;
-    doc.text('Date: _______________', 15, yPos);
   }
 
   // Footer

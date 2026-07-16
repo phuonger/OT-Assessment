@@ -145,14 +145,12 @@ export async function generateAssessmentPdfBlob(data: AssessmentPdfData): Promis
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   doc.text('Therapist Signature', 20, y + 4);
-  doc.text('Date: _______________', 95, y + 4);
 
   y += 15;
 
   // Parent signature line
   doc.line(20, y, 90, y);
   doc.text('Parent/Guardian Signature', 20, y + 4);
-  doc.text('Date: _______________', 95, y + 4);
 
   y += 12;
   doc.setFontSize(7);
