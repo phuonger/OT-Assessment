@@ -96,16 +96,31 @@ function saveScanResult(result: ScanResult): void {
  * Expected formats:
  *   Attendance_Jim_Bob-100001-2026-07-15.pdf
  *   Assessment_Jim_Bob-100001-2026-07-15.pdf
+ *   Attendance_Ruby_Silivia_2026-07-16-100313 - signed.pdf  (Adobe Sign format)
+ *   Attendance_preston_Le_OT-1xwk-100324-2026-07-17 - signed.pdf
  * 
- * Pattern: looks for a 6-digit number between hyphens
+ * Pattern: looks for a 5-7 digit number >= 100001 that appears after a hyphen,
+ * followed by either another hyphen, a space, a dot, or end of string.
  */
 export function extractProfileNumber(filename: string): number | null {
-  // Match pattern: -NNNNNN- where N is a digit (5-7 digits to be flexible)
-  const match = filename.match(/-(\d{5,7})-/);
+  // Try multiple patterns to handle different filename formats:
+  // Pattern 1: -NNNNNN- (original format, number between hyphens)
+  // Pattern 2: -NNNNNN followed by space, dot, or end (Adobe Sign may add " - signed")
+  const match = filename.match(/-(\d{5,7})(?=[-\s.]|$)/);
   if (match) {
     const num = parseInt(match[1], 10);
     if (num >= 100001) return num;
   }
+  
+  // Fallback: look for any standalone 6+ digit number >= 100001 in the filename
+  const allNumbers = filename.match(/\d{5,7}/g);
+  if (allNumbers) {
+    for (const numStr of allNumbers) {
+      const num = parseInt(numStr, 10);
+      if (num >= 100001 && num < 9999999) return num;
+    }
+  }
+  
   return null;
 }
 
@@ -253,38 +268,92 @@ export async function scanGoogleDriveAdobeSigned(): Promise<ScanResult> {
 
       const clientName = `${profile.firstName} ${profile.lastName}`.trim();
       const sanitizedName = clientName.replace(/[^a-zA-Z0-9\s-]/g, '').trim();
-      const folderName = `${sanitizedName} ${profileNumber}`;
+      // New format uses underscores: FirstName_LastName_100324
+      const underscoreName = sanitizedName.replace(/\s+/g, '_');
+      const newFolderName = `${underscoreName}_${profileNumber}`;
+      // Also check old format with spaces: "FirstName LastName 100324" or just "firstname lastname"
+      const oldFolderNameWithNumber = `${sanitizedName} ${profileNumber}`;
+      const oldFolderNameOnly = sanitizedName;
+      // Track destination for error reporting
+      let destinationFolder = newFolderName;
 
       try {
-        // Find or create the client folder
-        const clientFolderSearch = await fetch(
-          `https://www.googleapis.com/drive/v3/files?q=name='${folderName}' and '${signedDocsFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        // Helper to search for a folder by exact name
+        const searchFolder = async (name: string) => {
+          const escapedName = name.replace(/'/g, "\\'");
+          const res = await fetch(
+            `https://www.googleapis.com/drive/v3/files?q=name='${escapedName}' and '${signedDocsFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (!res.ok) return null;
+          const data = await res.json();
+          return data.files?.length ? data.files[0] : null;
+        };
+
+        // Helper to search for folder containing a keyword
+        const searchFolderContaining = async (keyword: string) => {
+          const res = await fetch(
+            `https://www.googleapis.com/drive/v3/files?q=name contains '${keyword}' and '${signedDocsFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (!res.ok) return null;
+          const data = await res.json();
+          return data.files?.length ? data.files[0] : null;
+        };
+
         let clientFolderId: string;
-        if (clientFolderSearch.ok) {
-          const clientFolderData = await clientFolderSearch.json();
-          if (clientFolderData.files?.length) {
-            clientFolderId = clientFolderData.files[0].id;
-          } else {
-            // Create client folder
-            const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                name: folderName,
-                mimeType: 'application/vnd.google-apps.folder',
-                parents: [signedDocsFolderId],
-              }),
-            });
-            const createData = await createRes.json();
-            clientFolderId = createData.id;
+
+        // Strategy 1: New underscore format (FirstName_LastName_100324)
+        let found = await searchFolder(newFolderName);
+        
+        // Strategy 2: Old format with spaces and number ("FirstName LastName 100324")
+        if (!found) {
+          found = await searchFolder(oldFolderNameWithNumber);
+        }
+        if (!found) {
+          found = await searchFolder(oldFolderNameWithNumber.toLowerCase());
+        }
+
+        // Strategy 3: Search for any folder containing the profile number
+        if (!found) {
+          found = await searchFolderContaining(String(profileNumber));
+        }
+
+        // Strategy 4: Old format without number ("FirstName LastName" or "firstname lastname")
+        if (!found) {
+          found = await searchFolder(oldFolderNameOnly);
+          if (!found) {
+            found = await searchFolder(oldFolderNameOnly.toLowerCase());
           }
+        }
+
+        // Strategy 5: Last name first variations
+        if (!found && profile.lastName) {
+          const lastFirst = `${profile.lastName} ${profile.firstName}`.trim();
+          found = await searchFolder(lastFirst);
+          if (!found) found = await searchFolder(lastFirst.toLowerCase());
+        }
+
+        if (found) {
+          clientFolderId = found.id;
+          destinationFolder = found.name;
         } else {
-          throw new Error('Failed to search for client folder');
+          // Create new folder with underscore format
+          const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              name: newFolderName,
+              mimeType: 'application/vnd.google-apps.folder',
+              parents: [signedDocsFolderId],
+            }),
+          });
+          const createData = await createRes.json();
+          clientFolderId = createData.id;
+          destinationFolder = newFolderName;
         }
 
         // Move the file from Adobe-Signed to the client folder
@@ -292,7 +361,10 @@ export async function scanGoogleDriveAdobeSigned(): Promise<ScanResult> {
           `https://www.googleapis.com/drive/v3/files/${file.id}?addParents=${clientFolderId}&removeParents=${adobeSignedFolderId}`,
           {
             method: 'PATCH',
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { 
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
           }
         );
 
@@ -302,7 +374,7 @@ export async function scanGoogleDriveAdobeSigned(): Promise<ScanResult> {
             filename: file.name,
             profileNumber,
             clientName,
-            destination: folderName,
+            destination: destinationFolder,
             success: true,
           });
 
@@ -317,19 +389,21 @@ export async function scanGoogleDriveAdobeSigned(): Promise<ScanResult> {
               const toUpdate = pendingRequests[pendingRequests.length - 1];
               toUpdate.status = 'signed';
               toUpdate.signedAt = new Date().toISOString();
-              toUpdate.signedPdfPath = `Google Drive: ${folderName}/${file.name}`;
+              toUpdate.signedPdfPath = `Google Drive: ${destinationFolder}/${file.name}`;
               updateProfile(profile.id, { signatureRequests: profile.signatureRequests });
             }
           }
         } else {
-          throw new Error('Failed to move file');
+          const errBody = await moveRes.text();
+          console.error('[Auto-Filing] Move failed:', moveRes.status, errBody);
+          throw new Error(`Move failed (${moveRes.status}): ${errBody.slice(0, 200)}`);
         }
       } catch (err: any) {
         result.results.push({
           filename: file.name,
           profileNumber,
           clientName,
-          destination: folderName,
+          destination: destinationFolder,
           success: false,
           error: err.message,
         });
@@ -433,37 +507,59 @@ export async function scanLocalWatchedFolder(): Promise<ScanResult> {
 
       const clientName = `${profile.firstName} ${profile.lastName}`.trim();
       const sanitizedName = clientName.replace(/[^a-zA-Z0-9\s-]/g, '').trim();
-      const folderName = `${sanitizedName} ${profileNumber}`;
+      const underscoreName = sanitizedName.replace(/\s+/g, '_');
+      const newFolderName = `${underscoreName}_${profileNumber}`;
+      const oldFolderName = `${sanitizedName} ${profileNumber}`;
+      let folderName = newFolderName;
 
       try {
-        // Find or create client folder on Drive
-        const clientFolderSearch = await fetch(
-          `https://www.googleapis.com/drive/v3/files?q=name='${folderName}' and '${signedDocsFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        // Search for client folder with flexible matching (new underscore format, old space format, name-only)
+        const searchFolderLocal = async (name: string) => {
+          const escapedName = name.replace(/'/g, "\\'");
+          const res = await fetch(
+            `https://www.googleapis.com/drive/v3/files?q=name='${escapedName}' and '${signedDocsFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (!res.ok) return null;
+          const data = await res.json();
+          return data.files?.length ? data.files[0] : null;
+        };
+        const searchContainingLocal = async (keyword: string) => {
+          const res = await fetch(
+            `https://www.googleapis.com/drive/v3/files?q=name contains '${keyword}' and '${signedDocsFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (!res.ok) return null;
+          const data = await res.json();
+          return data.files?.length ? data.files[0] : null;
+        };
+
         let clientFolderId: string;
-        if (clientFolderSearch.ok) {
-          const clientFolderData = await clientFolderSearch.json();
-          if (clientFolderData.files?.length) {
-            clientFolderId = clientFolderData.files[0].id;
-          } else {
-            const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                name: folderName,
-                mimeType: 'application/vnd.google-apps.folder',
-                parents: [signedDocsFolderId],
-              }),
-            });
-            const createData = await createRes.json();
-            clientFolderId = createData.id;
-          }
+        let foundFolder = await searchFolderLocal(newFolderName)
+          || await searchFolderLocal(oldFolderName)
+          || await searchFolderLocal(oldFolderName.toLowerCase())
+          || await searchContainingLocal(String(profileNumber))
+          || await searchFolderLocal(sanitizedName)
+          || await searchFolderLocal(sanitizedName.toLowerCase());
+
+        if (foundFolder) {
+          clientFolderId = foundFolder.id;
+          folderName = foundFolder.name;
         } else {
-          throw new Error('Failed to search for client folder');
+          const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              name: newFolderName,
+              mimeType: 'application/vnd.google-apps.folder',
+              parents: [signedDocsFolderId],
+            }),
+          });
+          const createData = await createRes.json();
+          clientFolderId = createData.id;
         }
 
         // Check for duplicate

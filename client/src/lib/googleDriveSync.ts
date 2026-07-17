@@ -565,8 +565,10 @@ export async function uploadSignedDocument(
     const signedDocsFolderId = await getOrCreateSubfolder(token, rootFolderId, 'signed-documents');
 
     // Ensure client-specific subfolder exists (includes profile number for auto-filing)
+    // Use underscores instead of spaces for reliable Drive API queries
     const sanitizedName = clientName.replace(/[^a-zA-Z0-9\s-]/g, '').trim();
-    const folderName = profileNumber ? `${sanitizedName} ${profileNumber}` : sanitizedName;
+    const underscoreName = sanitizedName.replace(/\s+/g, '_');
+    const folderName = profileNumber ? `${underscoreName}_${profileNumber}` : underscoreName;
     const clientFolderId = await getOrCreateSubfolder(token, signedDocsFolderId, folderName);
 
     // Check for duplicate — skip upload if file with same name already exists in this folder
