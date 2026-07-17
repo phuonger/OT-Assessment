@@ -26,6 +26,7 @@ import { startAutoSync, syncOnClose, loadSyncConfig, loadConflict, markDirty } f
 import SyncConflictDialog from '@/components/SyncConflictDialog';
 import WhatsNewDialog from '@/components/WhatsNewDialog';
 import GlobalSyncButton from '@/components/GlobalSyncButton';
+import GlobalHomeButton from '@/components/GlobalHomeButton';
 
 function AssessmentFlow() {
   const { state, dispatch } = useMultiAssessment();
@@ -193,6 +194,7 @@ export default function Home() {
         />
       )}
       <WhatsNewDialog currentVersion={APP_VERSION} />
+      <GlobalHomeButton />
       <GlobalSyncButton />
     </MultiAssessmentProvider>
   );
