@@ -52,7 +52,7 @@ interface DriveFile {
 const STORAGE_KEY = 'bayley4-gdrive-sync-config';
 const FOLDER_NAME = 'otassess';
 const DATA_FILE_NAME = 'otassess_backup.json';
-const SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly';
+const SCOPES = 'https://www.googleapis.com/auth/drive';
 const REDIRECT_URI = 'http://localhost:8377/oauth/callback';
 
 // Pre-configured OAuth credentials (shared across all users)
