@@ -121,15 +121,22 @@ export function AutoFilingSettings() {
                 Found: {scan.filesFound} • Filed: {scan.filesFiled}
               </p>
               {scan.results.map((r, j) => (
-                <div key={j} className="flex items-center gap-1.5 pl-2">
-                  {r.success ? (
-                    <CheckCircle2 className="w-3 h-3 text-green-600 flex-shrink-0" />
-                  ) : (
-                    <AlertCircle className="w-3 h-3 text-red-500 flex-shrink-0" />
+                <div key={j} className="pl-2 space-y-0.5">
+                  <div className="flex items-center gap-1.5">
+                    {r.success ? (
+                      <CheckCircle2 className="w-3 h-3 text-green-600 flex-shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-3 h-3 text-red-500 flex-shrink-0" />
+                    )}
+                    <span className="truncate">
+                      {r.filename} → {r.destination}
+                    </span>
+                  </div>
+                  {!r.success && r.error && (
+                    <p className="text-[10px] text-red-500 pl-4 break-all">
+                      Error: {r.error}
+                    </p>
                   )}
-                  <span className="truncate">
-                    {r.filename} → {r.destination}
-                  </span>
                 </div>
               ))}
             </div>
