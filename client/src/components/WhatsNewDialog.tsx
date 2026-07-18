@@ -25,6 +25,16 @@ export interface ChangelogEntry {
 // Changelog data — add new entries at the top
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.19.0',
+    date: '2026-07-18',
+    highlights: [
+      { type: 'feature', text: 'Bulk folder rename — standardize all Google Drive client folders to FirstName_LastName_ProfileNumber format from Auto-Filing Settings' },
+      { type: 'feature', text: 'License & Copyright section added to Settings page' },
+      { type: 'improvement', text: 'Preview Changes button lets you see what will be renamed before committing' },
+      { type: 'improvement', text: 'LICENSE file added to repository (proprietary, all rights reserved)' },
+    ],
+  },
+  {
     version: '1.18.0',
     date: '2026-07-15',
     highlights: [
