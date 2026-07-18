@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { FolderOpen, RefreshCw, CheckCircle2, AlertCircle, Clock, FileText } from 'lucide-react';
+import { FolderOpen, RefreshCw, CheckCircle2, AlertCircle, Clock, FileText, PenLine, Eye } from 'lucide-react';
 import {
   getWatchedFolderPath,
   selectWatchedFolder,
@@ -16,12 +16,17 @@ import {
   getScanHistory,
   type ScanResult,
 } from '@/lib/autoFilingScanner';
+import { previewBulkRename, runBulkRename, type BulkRenameReport } from '@/lib/bulkFolderRename';
 
 export function AutoFilingSettings() {
   const [watchedPath, setWatchedPath] = useState(getWatchedFolderPath());
   const [scanning, setScanning] = useState(false);
   const [lastScanResult, setLastScanResult] = useState<ScanResult[] | null>(null);
   const [scanHistory, setScanHistory] = useState<ScanResult[]>([]);
+  const [renaming, setRenaming] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [renameReport, setRenameReport] = useState<BulkRenameReport | null>(null);
+  const [renameMode, setRenameMode] = useState<'preview' | 'done' | null>(null);
   const isElectron = !!(window as any).electronAPI?.selectFolder;
 
   useEffect(() => {
@@ -172,6 +177,149 @@ export function AutoFilingSettings() {
           </div>
         </div>
       )}
+
+      {/* Bulk Folder Rename Section */}
+      <div className="border-t border-[#E8E4DC] pt-4 mt-4">
+        <div className="flex items-center gap-2 mb-2">
+          <PenLine className="w-4 h-4 text-[#0D7377]" />
+          <h4 className="text-sm font-semibold text-[#2C2C2C]">Standardize Folder Names</h4>
+        </div>
+        <p className="text-xs text-[#6B6B6B] leading-relaxed mb-3">
+          Renames all client folders in <code>signed-documents/</code> to the standard format:
+          <code className="ml-1">FirstName_LastName_ProfileNumber</code>.
+          This ensures the auto-filing scanner can always match folders correctly, even for clients with similar names.
+        </p>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              setPreviewing(true);
+              setRenameReport(null);
+              try {
+                const report = await previewBulkRename();
+                setRenameReport(report);
+                setRenameMode('preview');
+              } catch (err: any) {
+                setRenameReport({
+                  totalFolders: 0, alreadyCorrect: 0, renamed: 0, unmatched: 0, errors: 1,
+                  results: [{ folderId: '', oldName: '', newName: '', profileNumber: 0, clientName: '', success: false, error: err.message }]
+                });
+                setRenameMode('preview');
+              } finally {
+                setPreviewing(false);
+              }
+            }}
+            disabled={previewing || renaming}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F5F3EE] text-[#2C2C2C] text-sm border border-[#E8E4DC] rounded-lg hover:bg-[#EDE9E0] transition-colors disabled:opacity-50"
+          >
+            <Eye className={`w-3.5 h-3.5 ${previewing ? 'animate-pulse' : ''}`} />
+            {previewing ? 'Scanning...' : 'Preview Changes'}
+          </button>
+
+          <button
+            onClick={async () => {
+              if (!confirm('This will rename all client folders on Google Drive to the standard format. Continue?')) return;
+              setRenaming(true);
+              setRenameReport(null);
+              try {
+                const report = await runBulkRename();
+                setRenameReport(report);
+                setRenameMode('done');
+              } catch (err: any) {
+                setRenameReport({
+                  totalFolders: 0, alreadyCorrect: 0, renamed: 0, unmatched: 0, errors: 1,
+                  results: [{ folderId: '', oldName: '', newName: '', profileNumber: 0, clientName: '', success: false, error: err.message }]
+                });
+                setRenameMode('done');
+              } finally {
+                setRenaming(false);
+              }
+            }}
+            disabled={previewing || renaming}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0D7377] text-white text-sm rounded-lg hover:bg-[#0A5C5F] transition-colors disabled:opacity-50"
+          >
+            <PenLine className={`w-3.5 h-3.5 ${renaming ? 'animate-spin' : ''}`} />
+            {renaming ? 'Renaming...' : 'Rename All Folders'}
+          </button>
+        </div>
+
+        {/* Rename Report */}
+        {renameReport && (
+          <div className="mt-3 border border-[#E8E4DC] rounded-lg p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-medium text-[#2C2C2C]">
+                {renameMode === 'preview' ? 'Preview' : 'Results'}
+              </p>
+              {renameMode === 'done' && renameReport.errors === 0 && renameReport.renamed > 0 && (
+                <CheckCircle2 className="w-4 h-4 text-green-600" />
+              )}
+            </div>
+
+            {/* Summary stats */}
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="bg-[#F5F3EE] rounded p-2">
+                <span className="text-[#6B6B6B]">Total folders:</span>
+                <span className="ml-1 font-medium text-[#2C2C2C]">{renameReport.totalFolders}</span>
+              </div>
+              <div className="bg-green-50 rounded p-2">
+                <span className="text-green-700">Already correct:</span>
+                <span className="ml-1 font-medium text-green-800">{renameReport.alreadyCorrect}</span>
+              </div>
+              <div className="bg-blue-50 rounded p-2">
+                <span className="text-blue-700">{renameMode === 'preview' ? 'Will rename:' : 'Renamed:'}</span>
+                <span className="ml-1 font-medium text-blue-800">{renameReport.renamed}</span>
+              </div>
+              {renameReport.unmatched > 0 && (
+                <div className="bg-amber-50 rounded p-2">
+                  <span className="text-amber-700">Unmatched:</span>
+                  <span className="ml-1 font-medium text-amber-800">{renameReport.unmatched}</span>
+                </div>
+              )}
+              {renameReport.errors > 0 && (
+                <div className="bg-red-50 rounded p-2">
+                  <span className="text-red-700">Errors:</span>
+                  <span className="ml-1 font-medium text-red-800">{renameReport.errors}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Individual results */}
+            {renameReport.results.filter(r => !r.skipped).length > 0 && (
+              <div className="max-h-48 overflow-y-auto space-y-1 mt-2">
+                {renameReport.results.filter(r => !r.skipped).map((r, i) => (
+                  <div key={i} className="text-xs pl-1 flex items-start gap-1.5">
+                    {r.success ? (
+                      <CheckCircle2 className="w-3 h-3 text-green-600 flex-shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="w-3 h-3 text-red-500 flex-shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      {r.success ? (
+                        <span>
+                          <span className="text-[#8B8B8B] line-through">{r.oldName}</span>
+                          <span className="mx-1">→</span>
+                          <span className="text-[#2C2C2C] font-medium">{r.newName}</span>
+                        </span>
+                      ) : (
+                        <span>
+                          <span className="text-[#2C2C2C]">{r.oldName}</span>
+                          {r.error && <span className="text-red-500 ml-1">({r.error})</span>}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {renameReport.results.filter(r => !r.skipped).length === 0 && renameReport.alreadyCorrect > 0 && (
+              <p className="text-xs text-green-700 italic mt-1">
+                All folders are already in the correct format!
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

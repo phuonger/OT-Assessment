@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   ArrowLeft, Settings, Building2, Stethoscope, FileText,
   Save, RotateCcw, ImagePlus, Trash2, Check, Plus, GripVertical,
-  BookmarkPlus, Pencil, Sparkles, Eye, EyeOff, ExternalLink, PenLine
+  BookmarkPlus, Pencil, Sparkles, Eye, EyeOff, ExternalLink, PenLine, Shield
 } from 'lucide-react';
 import {
   getApiKey, setApiKey as saveApiKey,
@@ -1003,6 +1003,28 @@ export default function SettingsPreferences({ onBack }: { onBack: () => void }) 
               <RotateCcw className="w-4 h-4" />
               Re-run Setup Wizard
             </Button>
+          </div>
+        </section>
+
+        {/* License & Copyright */}
+        <section>
+          <div className="flex items-center gap-2 mb-4">
+            <Shield className="w-5 h-5 text-[#0D7377]" />
+            <h2 className="text-lg font-semibold text-[#2C2C2C]">License & Copyright</h2>
+          </div>
+          <div className="bg-white rounded-lg border border-[#E5E1D8] p-6 space-y-3">
+            <div className="text-sm text-[#2C2C2C] font-medium">
+              Developmental Assessment Suite
+            </div>
+            <div className="text-xs text-[#6B6B6B] space-y-2">
+              <p>
+                © 2026 Meow IT. All rights reserved.
+              </p>
+              <p>
+                This software is proprietary and confidential. Unauthorized copying, distribution,
+                or use of this software, via any medium, is strictly prohibited.
+              </p>
+            </div>
           </div>
         </section>
 
