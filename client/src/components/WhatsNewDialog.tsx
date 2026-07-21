@@ -25,6 +25,14 @@ export interface ChangelogEntry {
 // Changelog data — add new entries at the top
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.19.2',
+    date: '2026-07-21',
+    highlights: [
+      { type: 'fix', text: 'Google Drive export — files now upload as DOCX (not converted) so tables render correctly when opened in Google Docs' },
+      { type: 'fix', text: 'Table column widths changed from percentage to absolute (DXA) for better cross-platform compatibility' },
+    ],
+  },
+  {
     version: '1.19.1',
     date: '2026-07-21',
     highlights: [

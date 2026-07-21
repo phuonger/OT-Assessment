@@ -435,8 +435,11 @@ function bulletItem(text: string): Paragraph {
 }
 
 function tableCell(text: string, options?: { bold?: boolean; shading?: string; alignment?: (typeof AlignmentType)[keyof typeof AlignmentType]; width?: number }): TableCell {
+  // Convert percentage to DXA (twips) for better Google Docs compatibility
+  // Standard letter page width minus margins = ~9360 twips
+  const widthDxa = options?.width ? Math.round((options.width / 100) * 9360) : undefined;
   return new TableCell({
-    width: options?.width ? { size: options.width, type: WidthType.PERCENTAGE } : undefined,
+    width: widthDxa ? { size: widthDxa, type: WidthType.DXA } : undefined,
     shading: options?.shading ? { type: ShadingType.SOLID, color: options.shading, fill: options.shading } : undefined,
     verticalAlign: VerticalAlign.CENTER,
     borders: TABLE_BORDERS,
@@ -472,7 +475,8 @@ function createInfoTable(data: DocxReportData): Table {
   rows.push({ label: 'REGIONAL CENTER:', value: data.regionalCenter || '' });
 
   return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: [3276, 6084],
     rows: rows.map(
       (r) =>
         new TableRow({

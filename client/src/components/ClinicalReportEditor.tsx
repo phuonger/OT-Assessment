@@ -2489,10 +2489,10 @@ export default function ClinicalReportEditor() {
       const clientFullName = childName || 'Unknown';
       const profileNumber = profile?.profileNumber;
 
-      const result = await uploadReportToGoogleDrive(blob, fileName, clientFullName, profileNumber, true);
+      const result = await uploadReportToGoogleDrive(blob, fileName, clientFullName, profileNumber, false);
 
       if (result.success) {
-        toast.success('Report uploaded to Google Drive as Google Doc!', {
+        toast.success('Report uploaded to Google Drive!', {
           action: result.fileUrl ? {
             label: 'Open',
             onClick: () => window.open(result.fileUrl, '_blank'),
