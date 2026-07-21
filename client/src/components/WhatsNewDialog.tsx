@@ -25,6 +25,17 @@ export interface ChangelogEntry {
 // Changelog data — add new entries at the top
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.19.1',
+    date: '2026-07-21',
+    highlights: [
+      { type: 'fix', text: 'Feeding template DOCX export — removed Sensory Profile/Processing sections that were incorrectly appearing' },
+      { type: 'fix', text: 'Feeding template — eliminated duplicate sections (I, II, III) and premature Summary & Recommendations' },
+      { type: 'fix', text: 'DAYC-2 results table moved from Drinking section to Testing Results where it belongs' },
+      { type: 'feature', text: 'Google Drive export — "Drive" button on report page uploads the report as a Google Doc directly to the client\'s folder' },
+      { type: 'improvement', text: 'Reports stored in otassess/reports/ClientName_ProfileNumber/ with automatic Google Docs conversion for easy editing' },
+    ],
+  },
+  {
     version: '1.19.0',
     date: '2026-07-18',
     highlights: [

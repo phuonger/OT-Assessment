@@ -615,6 +615,85 @@ export async function uploadSignedDocument(
   }
 }
 
+/**
+ * Upload a generated report (DOCX) to Google Drive under the client's folder.
+ * Stores in otassess/reports/ClientName_ProfileNumber/ with Google Docs conversion.
+ */
+export async function uploadReportToGoogleDrive(
+  docxBlob: Blob,
+  filename: string,
+  clientName: string,
+  profileNumber?: number,
+  convertToGoogleDocs: boolean = true
+): Promise<{ success: boolean; fileUrl?: string; error?: string }> {
+  const config = loadSyncConfig();
+  if (!config.connected || !config.refreshToken) {
+    return { success: false, error: 'Not connected to Google Drive' };
+  }
+
+  try {
+    const token = await refreshAccessToken(config);
+    const rootFolderId = await getOrCreateFolder(token, config.folderId);
+
+    // Ensure "reports" subfolder exists
+    const reportsFolderId = await getOrCreateSubfolder(token, rootFolderId, 'reports');
+
+    // Ensure client-specific subfolder exists
+    const sanitizedName = clientName.replace(/[^a-zA-Z0-9\s-]/g, '').trim();
+    const underscoreName = sanitizedName.replace(/\s+/g, '_');
+    const folderName = profileNumber ? `${underscoreName}_${profileNumber}` : underscoreName;
+    const clientFolderId = await getOrCreateSubfolder(token, reportsFolderId, folderName);
+
+    // Check for duplicate
+    const targetName = convertToGoogleDocs ? filename.replace(/\.docx$/, '') : filename;
+    const dupCheckUrl = `https://www.googleapis.com/drive/v3/files?q=name='${encodeURIComponent(targetName).replace(/'/g, "\\'")}'  and '${clientFolderId}' in parents and trashed=false&fields=files(id,webViewLink)`;
+    const dupRes = await fetch(dupCheckUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (dupRes.ok) {
+      const dupData = await dupRes.json();
+      if (dupData.files && dupData.files.length > 0) {
+        const existing = dupData.files[0];
+        return { success: true, fileUrl: existing.webViewLink || `https://drive.google.com/file/d/${existing.id}/view` };
+      }
+    }
+
+    // Upload the DOCX — optionally convert to Google Docs format
+    const metadata: Record<string, any> = {
+      name: convertToGoogleDocs ? filename.replace(/\.docx$/, '') : filename,
+      parents: [clientFolderId],
+    };
+    if (convertToGoogleDocs) {
+      metadata.mimeType = 'application/vnd.google-apps.document';
+    }
+
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', docxBlob);
+
+    const uploadUrl = convertToGoogleDocs
+      ? 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink&convert=true'
+      : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink';
+
+    const res = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error?.message || 'Upload failed');
+    }
+
+    const fileData = await res.json();
+    return { success: true, fileUrl: fileData.webViewLink || `https://drive.google.com/file/d/${fileData.id}/view` };
+  } catch (err: any) {
+    console.error('[Drive Report Upload Error]', err);
+    return { success: false, error: err.message || 'Upload failed' };
+  }
+}
+
 async function getOrCreateSubfolder(token: string, parentId: string, folderName: string): Promise<string> {
   // Search for existing subfolder
   const searchUrl = `https://www.googleapis.com/drive/v3/files?q=name='${folderName}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`;

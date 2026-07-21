@@ -1009,7 +1009,7 @@ function buildSensoryDocument(data: DocxReportData): Paragraph[] {
 // Main Export Function
 // ============================================================
 
-export async function generateDocxReport(data: DocxReportData): Promise<void> {
+export async function generateDocxReport(data: DocxReportData, options?: { skipDownload?: boolean }): Promise<{ blob: Blob; fileName: string } | void> {
   // Build the children array (mix of Paragraphs and Tables)
   const children: (Paragraph | Table)[] = [];
 
@@ -1157,7 +1157,7 @@ export async function generateDocxReport(data: DocxReportData): Promise<void> {
     children.push(heading('Recommendations'));
     children.push(bodyParagraph(data.recommendations));
 
-  } else {
+  } else if (data.template === 'sensory') {
     // ===== SENSORY INTEGRATION TEMPLATE =====
 
     children.push(heading('Background Information', 'I'));
@@ -1440,6 +1440,42 @@ export async function generateDocxReport(data: DocxReportData): Promise<void> {
       );
     }
 
+    // OT Feeding Scores table (if OT Feeding form was used — placed under Testing Results)
+    if (data.otFeedingScores && data.otFeedingScores.length > 0) {
+      children.push(
+        new Paragraph({
+          spacing: { before: 200, after: 60 },
+          children: [
+            new TextRun({ text: 'DAYC-2 (ADAPTIVE BEHAVIOR)', bold: true, font: FONT, size: SMALL_SIZE }),
+          ],
+        })
+      );
+      const otHeaders = ['Domain', 'Raw Score', 'Standard Score', 'Descriptive Term', 'Age Equivalency', '% Delay'];
+      const otHeaderRow = new TableRow({
+        children: otHeaders.map(h =>
+          tableCell(h, { bold: true, shading: 'E8E8E8', alignment: h === 'Domain' ? AlignmentType.LEFT : AlignmentType.CENTER })
+        ),
+      });
+      const otDataRows = data.otFeedingScores.map(row =>
+        new TableRow({
+          children: [
+            tableCell(row.domain),
+            tableCell(String(row.rawScore), { alignment: AlignmentType.CENTER }),
+            tableCell(row.standardScore, { alignment: AlignmentType.CENTER }),
+            tableCell(row.descriptiveTerm, { alignment: AlignmentType.CENTER }),
+            tableCell(row.ageEquivalent, { alignment: AlignmentType.CENTER }),
+            tableCell(row.percentDelay, { alignment: AlignmentType.CENTER }),
+          ],
+        })
+      );
+      children.push(
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [otHeaderRow, ...otDataRows],
+        })
+      );
+    }
+
     // Adaptive Behavior Skills
     children.push(
       new Paragraph({
@@ -1523,42 +1559,6 @@ export async function generateDocxReport(data: DocxReportData): Promise<void> {
     if (data.feedingDrinking) {
       children.push(heading('Drinking'));
       children.push(bodyParagraph(data.feedingDrinking));
-    }
-
-    // OT Feeding Scores table (if OT Feeding form was used)
-    if (data.otFeedingScores && data.otFeedingScores.length > 0) {
-      children.push(
-        new Paragraph({
-          spacing: { before: 200, after: 60 },
-          children: [
-            new TextRun({ text: 'DAYC-2 (ADAPTIVE BEHAVIOR)', bold: true, font: FONT, size: SMALL_SIZE }),
-          ],
-        })
-      );
-      const otHeaders = ['Domain', 'Raw Score', 'Standard Score', 'Descriptive Term', 'Age Equivalency', '% Delay'];
-      const otHeaderRow = new TableRow({
-        children: otHeaders.map(h =>
-          tableCell(h, { bold: true, shading: 'E8E8E8', alignment: h === 'Domain' ? AlignmentType.LEFT : AlignmentType.CENTER })
-        ),
-      });
-      const otDataRows = data.otFeedingScores.map(row =>
-        new TableRow({
-          children: [
-            tableCell(row.domain),
-            tableCell(String(row.rawScore), { alignment: AlignmentType.CENTER }),
-            tableCell(row.standardScore, { alignment: AlignmentType.CENTER }),
-            tableCell(row.descriptiveTerm, { alignment: AlignmentType.CENTER }),
-            tableCell(row.ageEquivalent, { alignment: AlignmentType.CENTER }),
-            tableCell(row.percentDelay, { alignment: AlignmentType.CENTER }),
-          ],
-        })
-      );
-      children.push(
-        new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          rows: [otHeaderRow, ...otDataRows],
-        })
-      );
     }
 
     // Discrete Oral Motor Skills
@@ -2059,9 +2059,22 @@ export async function generateDocxReport(data: DocxReportData): Promise<void> {
     ],
   });
 
-  // ===== GENERATE AND DOWNLOAD =====
+  // ===== GENERATE BLOB =====
   const blob = await Packer.toBlob(doc);
   const templateName = data.template === 'developmental' ? 'OT_Dev_Intake' : data.template === 'feeding' ? 'OT_Feeding_Eval' : 'OT_SI_Assessment';
   const fileName = `${data.childName.replace(/\s+/g, '_')}_${templateName}_${data.testDate.replace(/\//g, '-')}.docx`;
+  
+  if (options?.skipDownload) {
+    return { blob, fileName };
+  }
   saveAs(blob, fileName);
+}
+
+/**
+ * Generate a DOCX blob and filename without downloading.
+ * Used for Google Drive upload.
+ */
+export async function generateDocxBlob(data: DocxReportData): Promise<{ blob: Blob; fileName: string }> {
+  const result = await generateDocxReport(data, { skipDownload: true });
+  return result as { blob: Blob; fileName: string };
 }

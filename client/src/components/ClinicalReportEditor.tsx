@@ -21,8 +21,9 @@ import { lookupDAYC2WithBayley4AB, computeDAYC2BayleyComposites, getScaledScoreC
 import { lookupREEL3AgeEquivalent, lookupREEL3AbilityScore, lookupREEL3PercentileRank, lookupREEL3DescriptiveTerm, lookupREEL3LanguageAbility } from '@/lib/reel3ScoringTables';
 import { SP2_ENGLISH_CUTOFFS, SP2_BIRTH6MO_CUTOFFS, SP2_QUADRANT_MAP, getSP2Description } from '@/lib/sensoryProfileData';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Download, Printer, FileText, ChevronDown, ChevronUp, Pencil, Check, RotateCcw, Save, Eye, EyeOff, LayoutTemplate, FileDown, BookmarkPlus, FileOutput, WandSparkles, Loader2, Undo2, Target, Milestone as MilestoneIcon } from 'lucide-react';
-import { generateDocxReport, type DocxReportData, type DomainNarrativeData as DocxDomainNarrative } from '@/lib/generateDocx';
+import { ArrowLeft, Download, Printer, FileText, ChevronDown, ChevronUp, Pencil, Check, RotateCcw, Save, Eye, EyeOff, LayoutTemplate, FileDown, BookmarkPlus, FileOutput, WandSparkles, Loader2, Undo2, Target, Milestone as MilestoneIcon, CloudUpload } from 'lucide-react';
+import { generateDocxReport, generateDocxBlob, type DocxReportData, type DomainNarrativeData as DocxDomainNarrative } from '@/lib/generateDocx';
+import { uploadReportToGoogleDrive, loadSyncConfig } from '@/lib/googleDriveSync';
 import { generatePdfReport } from '@/lib/generateReportPdf';
 import { loadAppSettings, type RecommendationTemplate } from '@/components/SettingsPreferences';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
@@ -2361,6 +2362,163 @@ export default function ClinicalReportEditor() {
     feedingMuscleStrength, feedingMuscleTone, feedingPosturalStability, feedingSummary,
   ]);
 
+  // Google Drive Export
+  const handleDriveExport = useCallback(async () => {
+    const driveConfig = loadSyncConfig();
+    if (!driveConfig.connected) {
+      toast.error('Google Drive not connected. Please connect in Settings > Google Drive Sync.');
+      return;
+    }
+    try {
+      toast.info('Generating and uploading to Google Drive...');
+      // Build the same data payload as handleDocxExport
+      const appSettings = loadAppSettings();
+
+      const docxNarratives: DocxDomainNarrative[] = domainNarratives
+        .filter(d => d.formId !== 'sp2')
+        .map(({ formName, formId, domainLocalId, narrative }) => {
+          const key = `${formId}_${domainLocalId}`;
+          const overrideText = domainOverrides[key];
+          const autoText = generateNarrativeText(narrative, firstName, gender, formId);
+          return {
+            domainName: narrative.domainName,
+            formName,
+            scaledScore: narrative.scaledScore,
+            rawScore: narrative.rawScore,
+            ageEquivalent: narrative.ageEquivalent,
+            narrativeText: overrideText !== undefined ? overrideText : autoText,
+            notDemonstratedItems: narrative.allNotDemonstrated,
+          };
+        });
+
+      const data: DocxReportData = {
+        template,
+        practiceName,
+        practiceAddress: appSettings.practiceAddress,
+        practicePhone: appSettings.practicePhone,
+        practiceEmail: appSettings.practiceEmail,
+        reportTitle,
+        examinerName: examinerInfo.name,
+        examinerTitle: examinerInfo.title,
+        examinerAgency: examinerInfo.agency,
+        signatureName: appSettings.signatureName,
+        signatureTitle: appSettings.signatureTitle,
+        signatureLicense: appSettings.signatureLicense,
+        signatureEmail: appSettings.signatureEmail,
+        signatureImage: appSettings.signatureImage,
+        childName,
+        firstName,
+        testDate: formatDate(childInfo.testDate),
+        dob: formatDate(childInfo.dob),
+        chronAge,
+        adjAge,
+        uciNumber,
+        regionalCenter,
+        evalPeriodMode,
+        evalPeriodText,
+        evalPeriodStart,
+        evalPeriodEnd,
+        referralInfo,
+        medicalHistory,
+        parentConcerns,
+        assessmentTools,
+        clinicalObservation,
+        bayleyScores,
+        cogComposite: bayleyCogComposite ? {
+          label: 'Cognitive Composite',
+          scaledScore: scoreOverrides['bayley4_cogComposite_scaledScore'] != null ? Number(scoreOverrides['bayley4_cogComposite_scaledScore']) || bayleyCogComposite.scaledScore : bayleyCogComposite.scaledScore,
+          standardScore: scoreOverrides['bayley4_cogComposite_standardScore'] != null ? Number(scoreOverrides['bayley4_cogComposite_standardScore']) || bayleyCogComposite.standardScore : bayleyCogComposite.standardScore,
+          percentile: scoreOverrides['bayley4_cogComposite_percentile'] ?? String(bayleyCogComposite.percentile),
+        } : null,
+        motorComposite: bayleyMotorComposite ? {
+          label: 'Motor Composite',
+          scaledScore: scoreOverrides['bayley4_motorComposite_scaledScore'] != null ? Number(scoreOverrides['bayley4_motorComposite_scaledScore']) || bayleyMotorComposite.sumScaled : bayleyMotorComposite.sumScaled,
+          standardScore: scoreOverrides['bayley4_motorComposite_standardScore'] != null ? Number(scoreOverrides['bayley4_motorComposite_standardScore']) || bayleyMotorComposite.standardScore : bayleyMotorComposite.standardScore,
+          percentile: scoreOverrides['bayley4_motorComposite_percentile'] ?? String(bayleyMotorComposite.percentile),
+        } : null,
+        dayc2Scores,
+        dayc2BayleyComposites: dayc2BayleyComposites.map(c => ({
+          composite: c.composite,
+          fullName: c.fullName,
+          sumOfScaledScores: c.sumOfScaledScores,
+          standardScore: scoreOverrides[`bayley4ab_${c.composite}_standardScore`] != null
+            ? Number(scoreOverrides[`bayley4ab_${c.composite}_standardScore`]) || c.standardScore
+            : c.standardScore,
+          percentileRank: c.percentileRank,
+          confidence90: c.confidence90,
+          confidence95: c.confidence95,
+          available: c.available,
+          note: c.note,
+        })),
+        reel3Scores,
+        domainNarratives: docxNarratives,
+        feedingOralMotor,
+        sensoryNarrative,
+        summaryOfDevelopment,
+        closingNote,
+        recommendations,
+        testingConditions,
+        validityStatement,
+        sp2Quadrants: sp2Scores.quadrants,
+        sp2Sections: sp2Scores.sections,
+        quadrantNarratives,
+        sectionNarratives,
+        feedingTestingConditions,
+        feedingOralStructures,
+        feedingBehaviors,
+        feedingOralMotorCoord,
+        feedingFoodRepertoire,
+        feedingSelfFeeding,
+        feedingPreviousHistory,
+        feedingDrinking,
+        feedingVestibular,
+        feedingProprioceptive,
+        feedingTactile,
+        feedingROM,
+        feedingMuscleStrength,
+        feedingMuscleTone,
+        feedingPosturalStability,
+        feedingSummary,
+      };
+
+      const { blob, fileName } = await generateDocxBlob(data);
+
+      // Get profile info for folder naming
+      const profileId = state.activeProfileId;
+      const profile = profileId ? getProfile(profileId) : null;
+      const clientFullName = childName || 'Unknown';
+      const profileNumber = profile?.profileNumber;
+
+      const result = await uploadReportToGoogleDrive(blob, fileName, clientFullName, profileNumber, true);
+
+      if (result.success) {
+        toast.success('Report uploaded to Google Drive as Google Doc!', {
+          action: result.fileUrl ? {
+            label: 'Open',
+            onClick: () => window.open(result.fileUrl, '_blank'),
+          } : undefined,
+        });
+      } else {
+        toast.error(`Drive upload failed: ${result.error}`);
+      }
+    } catch (err: any) {
+      console.error('Drive export error:', err);
+      toast.error('Failed to upload to Google Drive');
+    }
+  }, [
+    template, practiceName, reportTitle, examinerInfo, childName, firstName, childInfo,
+    chronAge, adjAge, uciNumber, regionalCenter, referralInfo, medicalHistory, parentConcerns, assessmentTools,
+    closingNote, recommendations, clinicalObservation, bayleyScores, bayleyCogComposite,
+    bayleyMotorComposite, dayc2Scores, reel3Scores, domainNarratives, domainOverrides,
+    gender, feedingOralMotor, sensoryNarrative, summaryOfDevelopment, testingConditions,
+    validityStatement, sp2Scores, quadrantNarratives, sectionNarratives, scoreOverrides,
+    feedingTestingConditions, feedingOralStructures, feedingBehaviors, feedingOralMotorCoord,
+    feedingFoodRepertoire, feedingSelfFeeding, feedingPreviousHistory, feedingDrinking,
+    feedingVestibular, feedingProprioceptive, feedingTactile, feedingROM,
+    feedingMuscleStrength, feedingMuscleTone, feedingPosturalStability, feedingSummary,
+    state.activeProfileId, evalPeriodMode, evalPeriodText, evalPeriodStart, evalPeriodEnd,
+  ]);
+
   // Switch template
   const handleTemplateSwitch = (t: ReportTemplate) => {
     setTemplate(t);
@@ -2450,6 +2608,11 @@ export default function ClinicalReportEditor() {
             <Button variant="outline" size="sm" onClick={handleDocxExport} className="text-blue-700 border-blue-300 hover:bg-blue-50">
               <FileDown className="w-4 h-4 mr-1" /> Word
             </Button>
+            {loadSyncConfig().connected && (
+              <Button variant="outline" size="sm" onClick={handleDriveExport} className="text-green-700 border-green-300 hover:bg-green-50">
+                <CloudUpload className="w-4 h-4 mr-1" /> Drive
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={handlePdfExport} className="text-red-700 border-red-300 hover:bg-red-50">
               <FileOutput className="w-4 h-4 mr-1" /> PDF
             </Button>
