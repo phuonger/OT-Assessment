@@ -216,3 +216,143 @@ export const GOAL_BANK: GoalBankType[] = [
     ],
   },
 ];
+
+// --- Custom Goal Bank (user-created goals that persist across all clients) ---
+const CUSTOM_BANK_KEY = 'bayley4-custom-goal-bank';
+
+export interface CustomGoalBankData {
+  types: GoalBankType[];
+}
+
+export function loadCustomGoalBank(): GoalBankType[] {
+  try {
+    const data = JSON.parse(localStorage.getItem(CUSTOM_BANK_KEY) || '{"types":[]}') as CustomGoalBankData;
+    return data.types;
+  } catch { return []; }
+}
+
+function saveCustomGoalBank(types: GoalBankType[]) {
+  localStorage.setItem(CUSTOM_BANK_KEY, JSON.stringify({ types }));
+}
+
+/** Get the full goal bank including custom goals merged in */
+export function getFullGoalBank(): GoalBankType[] {
+  const custom = loadCustomGoalBank();
+  if (custom.length === 0) return GOAL_BANK;
+
+  // Merge: built-in types first, then custom types
+  // If a custom type has the same id as a built-in, merge their categories
+  const merged: GoalBankType[] = GOAL_BANK.map(builtIn => {
+    const customMatch = custom.find(c => c.id === builtIn.id);
+    if (!customMatch) return builtIn;
+    // Merge categories
+    const mergedCategories = [...builtIn.categories];
+    for (const customCat of customMatch.categories) {
+      const existingCat = mergedCategories.find(c => c.id === customCat.id);
+      if (existingCat) {
+        // Add custom goals to existing category
+        const existingIds = new Set(existingCat.goals.map(g => g.id));
+        const newGoals = customCat.goals.filter(g => !existingIds.has(g.id));
+        existingCat.goals = [...existingCat.goals, ...newGoals];
+      } else {
+        mergedCategories.push(customCat);
+      }
+    }
+    return { ...builtIn, categories: mergedCategories };
+  });
+
+  // Add custom types that don't match any built-in
+  for (const customType of custom) {
+    if (!GOAL_BANK.find(b => b.id === customType.id)) {
+      merged.push(customType);
+    }
+  }
+
+  return merged;
+}
+
+/** Add a custom goal to the bank (persists in localStorage) */
+export function addCustomGoalToBank(typeName: string, categoryName: string, goalText: string): GoalBankItem {
+  const custom = loadCustomGoalBank();
+  const typeId = `custom-${typeName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  const categoryId = `custom-${categoryName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  const goalId = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+  // Find or create type
+  let type = custom.find(t => t.id === typeId);
+  if (!type) {
+    type = { id: typeId, name: typeName, categories: [] };
+    custom.push(type);
+  }
+
+  // Find or create category
+  let category = type.categories.find(c => c.id === categoryId);
+  if (!category) {
+    category = { id: categoryId, name: categoryName, goals: [] };
+    type.categories.push(category);
+  }
+
+  // Add goal
+  const goal: GoalBankItem = { id: goalId, text: goalText };
+  category.goals.push(goal);
+
+  saveCustomGoalBank(custom);
+  return goal;
+}
+
+/** Remove a custom goal from the bank */
+export function removeCustomGoalFromBank(goalId: string): boolean {
+  const custom = loadCustomGoalBank();
+  let found = false;
+  for (const type of custom) {
+    for (const cat of type.categories) {
+      const idx = cat.goals.findIndex(g => g.id === goalId);
+      if (idx !== -1) {
+        cat.goals.splice(idx, 1);
+        found = true;
+        break;
+      }
+    }
+    if (found) break;
+  }
+  // Clean up empty categories and types
+  for (let i = custom.length - 1; i >= 0; i--) {
+    custom[i].categories = custom[i].categories.filter(c => c.goals.length > 0);
+    if (custom[i].categories.length === 0) custom.splice(i, 1);
+  }
+  saveCustomGoalBank(custom);
+  return found;
+}
+
+/** Add a custom goal to an existing built-in category */
+export function addCustomGoalToExistingCategory(typeId: string, categoryId: string, goalText: string): GoalBankItem {
+  const custom = loadCustomGoalBank();
+  const goalId = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+  // Find the built-in type/category names
+  const builtInType = GOAL_BANK.find(t => t.id === typeId);
+  const builtInCat = builtInType?.categories.find(c => c.id === categoryId);
+
+  const typeName = builtInType?.name || typeId;
+  const categoryName = builtInCat?.name || categoryId;
+
+  // Find or create matching custom type
+  let type = custom.find(t => t.id === typeId);
+  if (!type) {
+    type = { id: typeId, name: typeName, categories: [] };
+    custom.push(type);
+  }
+
+  // Find or create matching custom category
+  let category = type.categories.find(c => c.id === categoryId);
+  if (!category) {
+    category = { id: categoryId, name: categoryName, goals: [] };
+    type.categories.push(category);
+  }
+
+  const goal: GoalBankItem = { id: goalId, text: goalText };
+  category.goals.push(goal);
+
+  saveCustomGoalBank(custom);
+  return goal;
+}

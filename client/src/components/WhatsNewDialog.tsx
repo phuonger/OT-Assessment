@@ -25,6 +25,14 @@ export interface ChangelogEntry {
 // Changelog data — add new entries at the top
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.19.9',
+    date: '2026-07-23',
+    highlights: [
+      { type: 'feature', text: 'Custom Goal Bank — when writing a custom goal, check "Also save to Goal Bank" to permanently save it for reuse across all clients' },
+      { type: 'feature', text: 'Custom goals appear in the Goal Bank browser with a purple "Custom" badge and can be removed anytime' },
+    ],
+  },
+  {
     version: '1.19.8',
     date: '2026-07-23',
     highlights: [

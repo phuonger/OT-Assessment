@@ -22,7 +22,7 @@ import { Label } from '@/components/ui/label';
 import {
   ChevronRight, ChevronDown, Plus, BookOpen, PenLine, Check, X, Search, Pencil, Star, Globe
 } from 'lucide-react';
-import { GOAL_BANK, type GoalBankType, type GoalBankCategory, type GoalBankItem } from '@/lib/goalBank';
+import { GOAL_BANK, getFullGoalBank, addCustomGoalToBank, removeCustomGoalFromBank, type GoalBankType, type GoalBankCategory, type GoalBankItem } from '@/lib/goalBank';
 
 // --- Favorites / Recently Used persistence ---
 const FAVORITES_KEY = 'bayley4-goal-favorites';
@@ -51,8 +51,9 @@ function addToRecent(goalId: string) {
   localStorage.setItem(RECENT_KEY, JSON.stringify(recent.slice(0, MAX_RECENT)));
 }
 
-function findGoalById(id: string): { goal: GoalBankItem; typeName: string; categoryName: string } | null {
-  for (const type of GOAL_BANK) {
+function findGoalById(id: string, bank?: GoalBankType[]): { goal: GoalBankItem; typeName: string; categoryName: string } | null {
+  const source = bank || getFullGoalBank();
+  for (const type of source) {
     for (const cat of type.categories) {
       for (const goal of cat.goals) {
         if (goal.id === id) return { goal, typeName: type.name, categoryName: cat.name };
@@ -82,6 +83,16 @@ export default function GoalBankPicker({
   const [addedGoalIds, setAddedGoalIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [showSpanish, setShowSpanish] = useState(false);
+  const [bankRefreshKey, setBankRefreshKey] = useState(0);
+
+  // Save-to-bank state
+  const [saveToBankMode, setSaveToBankMode] = useState(false);
+  const [saveToBankText, setSaveToBankText] = useState('');
+  const [saveToBankType, setSaveToBankType] = useState('');
+  const [saveToBankCategory, setSaveToBankCategory] = useState('');
+
+  // Get the full bank (built-in + custom)
+  const fullBank = useMemo(() => getFullGoalBank(), [bankRefreshKey]);
 
   // Favorites state
   const [favorites, setFavorites] = useState<string[]>(loadFavorites);
@@ -97,22 +108,22 @@ export default function GoalBankPicker({
 
   // Resolve favorites and recent to goal objects
   const favoriteGoals = useMemo(() => {
-    return favorites.map(id => findGoalById(id)).filter(Boolean) as { goal: GoalBankItem; typeName: string; categoryName: string }[];
-  }, [favorites]);
+    return favorites.map(id => findGoalById(id, fullBank)).filter(Boolean) as { goal: GoalBankItem; typeName: string; categoryName: string }[];
+  }, [favorites, fullBank]);
 
   const recentGoals = useMemo(() => {
     return recentIds
       .filter(id => !favorites.includes(id))
-      .map(id => findGoalById(id))
+      .map(id => findGoalById(id, fullBank))
       .filter(Boolean) as { goal: GoalBankItem; typeName: string; categoryName: string }[];
-  }, [recentIds, favorites]);
+  }, [recentIds, favorites, fullBank]);
 
   // Search results
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return null;
     const query = searchQuery.toLowerCase();
     const results: { goal: GoalBankItem; typeName: string; categoryName: string }[] = [];
-    for (const type of GOAL_BANK) {
+    for (const type of fullBank) {
       for (const cat of type.categories) {
         for (const goal of cat.goals) {
           const searchText = showSpanish && goal.textEs ? goal.textEs : goal.text;
@@ -123,7 +134,7 @@ export default function GoalBankPicker({
       }
     }
     return results;
-  }, [searchQuery, showSpanish]);
+  }, [searchQuery, showSpanish, fullBank]);
 
   const toggleFavorite = (goalId: string) => {
     setFavorites(prev => {
@@ -185,8 +196,23 @@ export default function GoalBankPicker({
   const handleFreeformSubmit = () => {
     if (!freeformText.trim()) return;
     onAddGoal(freeformText.trim(), freeformDate || undefined);
+    // Also save to bank if requested
+    if (saveToBankMode && saveToBankType.trim() && saveToBankCategory.trim()) {
+      addCustomGoalToBank(saveToBankType.trim(), saveToBankCategory.trim(), freeformText.trim());
+      setBankRefreshKey(k => k + 1);
+    }
     setFreeformText('');
     setFreeformDate('');
+    setSaveToBankMode(false);
+    setSaveToBankType('');
+    setSaveToBankCategory('');
+  };
+
+  const handleSaveToBankFromEdit = (goalText: string) => {
+    // Quick save from edit mode - use existing category context
+    const typeName = expandedType ? (fullBank.find(t => t.id === expandedType)?.name || 'Custom') : 'Custom';
+    addCustomGoalToBank(typeName, categoryName, goalText);
+    setBankRefreshKey(k => k + 1);
   };
 
   // Render a goal row (used in multiple places)
@@ -342,12 +368,56 @@ export default function GoalBankPicker({
             className="mt-1 w-48 text-sm"
           />
         </div>
+
+        {/* Save to Goal Bank option */}
+        <div className="border border-[#E5E1D8] rounded-lg p-3 bg-white space-y-2">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={saveToBankMode}
+              onChange={e => {
+                setSaveToBankMode(e.target.checked);
+                if (e.target.checked && !saveToBankType) setSaveToBankType('OT / Early Intervention');
+                if (e.target.checked && !saveToBankCategory) setSaveToBankCategory(categoryName);
+              }}
+              className="rounded border-[#E5E1D8] text-[#0D7377] focus:ring-[#0D7377]"
+            />
+            <span className="text-xs font-medium text-[#2C2C2C]">Also save to Goal Bank</span>
+            <span className="text-[10px] text-[#8B8B8B]">(reusable for all clients)</span>
+          </label>
+          {saveToBankMode && (
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <div>
+                <Label className="text-[10px] text-[#8B8B8B]">Goal Type</Label>
+                <select
+                  value={saveToBankType}
+                  onChange={e => setSaveToBankType(e.target.value)}
+                  className="mt-0.5 w-full text-xs border border-[#E5E1D8] rounded px-2 py-1.5 bg-white focus:ring-1 focus:ring-[#0D7377] focus:border-[#0D7377]"
+                >
+                  <option value="OT / Early Intervention">OT / Early Intervention</option>
+                  <option value="Feeding Therapy">Feeding Therapy</option>
+                  <option value="Custom">Custom</option>
+                </select>
+              </div>
+              <div>
+                <Label className="text-[10px] text-[#8B8B8B]">Category</Label>
+                <Input
+                  value={saveToBankCategory}
+                  onChange={e => setSaveToBankCategory(e.target.value)}
+                  placeholder="e.g., Fine Motor"
+                  className="mt-0.5 text-xs h-7"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="flex items-center gap-2 justify-end">
           <Button variant="outline" size="sm" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="sm" onClick={handleFreeformSubmit} disabled={!freeformText.trim()} className="bg-[#0D7377] hover:bg-[#0a5c5f] text-white gap-1.5">
-            <Plus className="w-3.5 h-3.5" /> Add Goal
+          <Button size="sm" onClick={handleFreeformSubmit} disabled={!freeformText.trim() || (saveToBankMode && (!saveToBankType.trim() || !saveToBankCategory.trim()))} className="bg-[#0D7377] hover:bg-[#0a5c5f] text-white gap-1.5">
+            <Plus className="w-3.5 h-3.5" /> {saveToBankMode ? 'Add Goal & Save to Bank' : 'Add Goal'}
           </Button>
         </div>
       </div>
@@ -451,14 +521,19 @@ export default function GoalBankPicker({
           )}
 
           {/* Hierarchical browser */}
-          {GOAL_BANK.map((type: GoalBankType) => (
+          {fullBank.map((type: GoalBankType) => (
             <div key={type.id} className="border-b border-[#E5E1D8] last:border-b-0">
               {/* Type Header */}
               <button
                 onClick={() => setExpandedType(expandedType === type.id ? null : type.id)}
                 className="w-full px-3 py-2.5 flex items-center justify-between hover:bg-slate-50 transition-colors"
               >
-                <span className="text-xs font-bold text-[#0D7377] uppercase tracking-wide">{type.name}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-[#0D7377] uppercase tracking-wide">{type.name}</span>
+                  {type.id.startsWith('custom-') && (
+                    <span className="text-[9px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded font-medium">Custom</span>
+                  )}
+                </div>
                 {expandedType === type.id ? (
                   <ChevronDown className="w-3.5 h-3.5 text-[#8B8B8B]" />
                 ) : (
@@ -488,6 +563,9 @@ export default function GoalBankPicker({
                           {showSpanish && cat.nameEs && (
                             <span className="text-[9px] text-[#8B8B8B] italic">({cat.name})</span>
                           )}
+                          {cat.id.startsWith('custom-') && (
+                            <span className="text-[9px] bg-violet-100 text-violet-600 px-1 py-0.5 rounded">Custom</span>
+                          )}
                         </div>
                         <span className="text-[10px] text-[#8B8B8B]">{cat.goals.length} goals</span>
                       </button>
@@ -495,7 +573,28 @@ export default function GoalBankPicker({
                       {/* Goals within this category */}
                       {expandedCategory === cat.id && (
                         <div className="bg-[#FAF9F6] border-t border-[#E5E1D8]/50">
-                          {cat.goals.map(goal => renderGoalRow(goal, type.name, cat.name, false))}
+                          {cat.goals.map(goal => {
+                            const isCustomGoal = goal.id.startsWith('custom-');
+                            return (
+                              <div key={goal.id} className="relative group">
+                                {renderGoalRow(goal, type.name, cat.name, false)}
+                                {isCustomGoal && (
+                                  <button
+                                    onClick={() => {
+                                      if (confirm('Remove this goal from the Goal Bank? (This only removes it from the bank, not from any client profiles.)')) {
+                                        removeCustomGoalFromBank(goal.id);
+                                        setBankRefreshKey(k => k + 1);
+                                      }
+                                    }}
+                                    className="absolute top-2 right-2 p-1 rounded bg-red-50 text-red-400 hover:text-red-600 hover:bg-red-100 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="Remove from Goal Bank"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
