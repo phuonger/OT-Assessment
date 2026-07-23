@@ -25,6 +25,13 @@ export interface ChangelogEntry {
 // Changelog data — add new entries at the top
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.19.5',
+    date: '2026-07-22',
+    highlights: [
+      { type: 'fix', text: 'Fixed goals not appearing in DOCX export — the export function was using a stale (initial) value of the goals toggle instead of the current state' },
+    ],
+  },
+  {
     version: '1.19.4',
     date: '2026-07-22',
     highlights: [

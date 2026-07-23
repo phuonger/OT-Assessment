@@ -2379,10 +2379,10 @@ export default function ClinicalReportEditor() {
     validityStatement, sp2Scores, quadrantNarratives, sectionNarratives, scoreOverrides,
     feedingTestingConditions, feedingOralStructures, feedingBehaviors, feedingOralMotorCoord,
     feedingFoodRepertoire, feedingSelfFeeding, feedingPreviousHistory, feedingDrinking,
-    feedingVestibular, feedingProprioceptive, feedingTactile, feedingROM,
+        feedingVestibular, feedingProprioceptive, feedingTactile, feedingROM,
     feedingMuscleStrength, feedingMuscleTone, feedingPosturalStability, feedingSummary,
+    showGoalsInReport, showMilestonesInReport,
   ]);
-
   // Google Drive Export
   const handleDriveExport = useCallback(async () => {
     const driveConfig = loadSyncConfig();
@@ -2566,9 +2566,9 @@ export default function ClinicalReportEditor() {
     feedingFoodRepertoire, feedingSelfFeeding, feedingPreviousHistory, feedingDrinking,
     feedingVestibular, feedingProprioceptive, feedingTactile, feedingROM,
     feedingMuscleStrength, feedingMuscleTone, feedingPosturalStability, feedingSummary,
-    state.activeProfileId, evalPeriodMode, evalPeriodText, evalPeriodStart, evalPeriodEnd,
+        state.activeProfileId, evalPeriodMode, evalPeriodText, evalPeriodStart, evalPeriodEnd,
+    showGoalsInReport, showMilestonesInReport,
   ]);
-
   // Switch template
   const handleTemplateSwitch = (t: ReportTemplate) => {
     setTemplate(t);
