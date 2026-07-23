@@ -170,7 +170,7 @@ export interface DocxReportData {
   signatureImage?: string; // base64 data URI
 
   // Goals & Milestones (from client profile)
-  goalCategories?: { name: string; note?: string; goals: { text: string; status: string; goalDate?: string; dateMet?: string }[] }[];
+  goalCategories?: { name: string; note?: string; goals: { text: string; status: string; goalDate?: string; dateMet?: string; sessionNotes?: string }[] }[];
   milestones?: { name: string; ageAchieved: string }[];
   showGoals?: boolean;
   showMilestones?: boolean;
@@ -1895,6 +1895,13 @@ export async function generateDocxReport(data: DocxReportData, options?: { skipD
 
   // ===== GOALS (opt-in) =====
   if (data.showGoals && data.goalCategories && data.goalCategories.length > 0) {
+    // Clear separator before Goals section so it's easy to cut/move as a block
+    children.push(
+      new Paragraph({
+        spacing: { before: 240, after: 0 },
+        children: [],
+      })
+    );
     children.push(heading('Goals'));
     for (const cat of data.goalCategories) {
       if (cat.goals.length === 0) continue;
@@ -1923,7 +1930,7 @@ export async function generateDocxReport(data: DocxReportData, options?: { skipD
           })
         );
       }
-      // Numbered goals
+      // Numbered goals with status and session notes
       cat.goals.forEach((goal, idx) => {
         const statusLabel = goal.status === 'met' ? ' [MET]'
           : goal.status === 'in-progress' ? ' [IN PROGRESS]'
@@ -1932,7 +1939,7 @@ export async function generateDocxReport(data: DocxReportData, options?: { skipD
         const dateInfo = goal.status === 'met' && goal.dateMet ? ` (Met: ${goal.dateMet})` : '';
         children.push(
           new Paragraph({
-            spacing: { before: 40, after: 40 },
+            spacing: { before: 60, after: 20 },
             indent: { left: 720 },
             children: [
               new TextRun({ text: `${idx + 1}. ${goal.text}`, font: FONT, size: FONT_SIZE }),
@@ -1940,8 +1947,28 @@ export async function generateDocxReport(data: DocxReportData, options?: { skipD
             ],
           })
         );
+        // Session notes/progress comments (if any)
+        if (goal.sessionNotes && goal.sessionNotes.trim()) {
+          children.push(
+            new Paragraph({
+              spacing: { before: 20, after: 60 },
+              indent: { left: 1080 },
+              children: [
+                new TextRun({ text: 'Progress: ', bold: true, italics: true, font: FONT, size: FONT_SIZE }),
+                new TextRun({ text: goal.sessionNotes.trim(), italics: true, font: FONT, size: FONT_SIZE }),
+              ],
+            })
+          );
+        }
       });
     }
+    // Clear separator after Goals section
+    children.push(
+      new Paragraph({
+        spacing: { before: 120, after: 0 },
+        children: [],
+      })
+    );
   }
 
   // ===== CLOSING (all templates) =====

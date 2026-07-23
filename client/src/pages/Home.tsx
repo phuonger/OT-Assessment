@@ -139,7 +139,7 @@ function AssessmentFlow() {
   }
 }
 
-const APP_VERSION = '1.19.3';
+const APP_VERSION = '1.19.4';
 
 export default function Home() {
   const [setupComplete, setSetupComplete] = useState(() => {

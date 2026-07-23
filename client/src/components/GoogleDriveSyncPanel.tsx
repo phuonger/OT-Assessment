@@ -106,7 +106,7 @@ export default function GoogleDriveSyncPanel() {
         tokenExpiry: Date.now() + tokens.expiresIn * 1000,
         connected: true,
         autoSyncEnabled: true,
-        syncIntervalMinutes: 60,
+        syncIntervalMinutes: 30,
         reminderDays: 7,
       };
       saveSyncConfig(updated);
@@ -369,7 +369,7 @@ export default function GoogleDriveSyncPanel() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-[#2C2C2C]">Auto-sync enabled</p>
-                  <p className="text-xs text-slate-500">Automatically sync on open, close, and every hour</p>
+                  <p className="text-xs text-slate-500">Automatically sync on open, close, and every 30 minutes</p>
                 </div>
                 <Switch
                   checked={config.autoSyncEnabled}

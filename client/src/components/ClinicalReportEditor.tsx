@@ -119,6 +119,14 @@ function GoalsReportSection({ profileId, onEnabledChange }: { profileId: string;
     })));
   };
 
+  const handleNotesChange = (goalId: string, notes: string) => {
+    updateGoal(profileId, goalId, { sessionNotes: notes });
+    setCategories(prev => prev.map(cat => ({
+      ...cat,
+      goals: cat.goals.map(g => g.id === goalId ? { ...g, sessionNotes: notes } : g)
+    })));
+  };
+
   const statusLabel = (s: ClientGoal['status']) => {
     switch (s) {
       case 'met': return 'Met';
@@ -227,26 +235,38 @@ function GoalsReportSection({ profileId, onEnabledChange }: { profileId: string;
               )}
               <div className="space-y-1.5">
                 {cat.goals.map((goal, idx) => (
-                  <div key={goal.id} className="flex items-start gap-3">
-                    <span className="text-sm font-serif text-slate-600 mt-0.5 w-5 text-right flex-shrink-0">{idx + 1}.</span>
-                    <div className="flex-1">
-                      <p className="text-sm font-serif text-slate-800">{goal.text}</p>
-                      {goal.goalDate && (
-                        <p className="text-xs text-slate-500 mt-0.5">Target: {new Date(goal.goalDate).toLocaleDateString()}</p>
-                      )}
+                  <div key={goal.id} className="space-y-1">
+                    <div className="flex items-start gap-3">
+                      <span className="text-sm font-serif text-slate-600 mt-0.5 w-5 text-right flex-shrink-0">{idx + 1}.</span>
+                      <div className="flex-1">
+                        <p className="text-sm font-serif text-slate-800">{goal.text}</p>
+                        {goal.goalDate && (
+                          <p className="text-xs text-slate-500 mt-0.5">Target: {new Date(goal.goalDate).toLocaleDateString()}</p>
+                        )}
+                      </div>
+                      <div className="flex gap-1 flex-shrink-0">
+                        {(['in-progress', 'met', 'not-met'] as const).map(s => (
+                          <button
+                            key={s}
+                            onClick={() => handleStatusChange(goal.id, s, goal.status)}
+                            className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
+                              goal.status === s ? statusColor(s) : 'border-slate-200 text-slate-400 hover:border-slate-300'
+                            }`}
+                          >
+                            {statusLabel(s)}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex gap-1 flex-shrink-0">
-                      {(['in-progress', 'met', 'not-met'] as const).map(s => (
-                        <button
-                          key={s}
-                          onClick={() => handleStatusChange(goal.id, s, goal.status)}
-                          className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
-                            goal.status === s ? statusColor(s) : 'border-slate-200 text-slate-400 hover:border-slate-300'
-                          }`}
-                        >
-                          {statusLabel(s)}
-                        </button>
-                      ))}
+                    {/* Session notes/comments for this goal */}
+                    <div className="ml-8">
+                      <textarea
+                        placeholder="Session notes / progress comments..."
+                        value={goal.sessionNotes || ''}
+                        onChange={(e) => handleNotesChange(goal.id, e.target.value)}
+                        className="w-full text-xs font-serif text-slate-700 bg-white border border-slate-200 rounded px-2 py-1.5 resize-none focus:outline-none focus:border-[#0D7377]/40 focus:ring-1 focus:ring-[#0D7377]/20 placeholder:text-slate-400"
+                        rows={2}
+                      />
                     </div>
                   </div>
                 ))}
@@ -2134,6 +2154,7 @@ export default function ClinicalReportEditor() {
               status: g.status,
               goalDate: g.goalDate,
               dateMet: g.dateMet,
+              sessionNotes: g.sessionNotes,
             })),
           }));
         })(),
@@ -2479,6 +2500,35 @@ export default function ClinicalReportEditor() {
         feedingMuscleTone,
         feedingPosturalStability,
         feedingSummary,
+
+        // Goals & Milestones from profile
+        goalCategories: (() => {
+          const profileId = state.activeProfileId;
+          if (!profileId) return undefined;
+          const profile = getProfile(profileId);
+          return profile?.goalCategories?.filter((c: GoalCategory) => c.goals.length > 0).map((c: GoalCategory) => ({
+            name: c.name,
+            note: c.note,
+            goals: c.goals.map((g: ClientGoal) => ({
+              text: g.text,
+              status: g.status,
+              goalDate: g.goalDate,
+              dateMet: g.dateMet,
+              sessionNotes: g.sessionNotes,
+            })),
+          }));
+        })(),
+        milestones: (() => {
+          const profileId = state.activeProfileId;
+          if (!profileId) return undefined;
+          const profile = getProfile(profileId);
+          return profile?.milestones?.filter((m: Milestone) => m.ageAchieved).map((m: Milestone) => ({
+            name: m.label,
+            ageAchieved: m.ageAchieved,
+          }));
+        })(),
+        showGoals: showGoalsInReport,
+        showMilestones: showMilestonesInReport,
       };
 
       const { blob, fileName } = await generateDocxBlob(data);

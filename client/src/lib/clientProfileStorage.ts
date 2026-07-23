@@ -18,6 +18,7 @@ export interface ClientGoal {
   status: GoalStatus;
   goalDate?: string; // ISO date string (optional)
   dateMet?: string; // ISO date string (optional)
+  sessionNotes?: string; // Per-goal session progress notes/comments
   createdAt: string; // ISO date string
 }
 

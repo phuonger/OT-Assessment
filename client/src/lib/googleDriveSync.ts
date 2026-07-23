@@ -28,7 +28,7 @@ export interface SyncConfig {
   lastSyncDirection: 'push' | 'pull' | null;
   folderId: string | null; // Google Drive folder ID for "otassess"
   autoSyncEnabled: boolean;
-  syncIntervalMinutes: number; // default 60
+  syncIntervalMinutes: number; // default 30
   reminderDays: number; // default 7
 }
 
@@ -141,7 +141,7 @@ export function loadSyncConfig(): SyncConfig {
     lastSyncDirection: null,
     folderId: null,
     autoSyncEnabled: true,
-    syncIntervalMinutes: 60,
+    syncIntervalMinutes: 30,
     reminderDays: 7,
   };
 }
@@ -740,7 +740,7 @@ export function startAutoSync(): void {
 
   stopAutoSync(); // Clear any existing interval
 
-  const intervalMs = (config.syncIntervalMinutes || 60) * 60 * 1000;
+  const intervalMs = (config.syncIntervalMinutes || 30) * 60 * 1000;
 
   // Sync on start, then run auto-filing scanner
   performSync('auto').then(() => {
@@ -819,7 +819,7 @@ export async function connectToDrive(): Promise<{ success: boolean; error?: stri
       tokenExpiry: Date.now() + tokens.expiresIn * 1000,
       connected: true,
       autoSyncEnabled: true,
-      syncIntervalMinutes: 60,
+      syncIntervalMinutes: 30,
       reminderDays: 7,
     };
     saveSyncConfig(updated);

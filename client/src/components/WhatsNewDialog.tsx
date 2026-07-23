@@ -25,6 +25,16 @@ export interface ChangelogEntry {
 // Changelog data — add new entries at the top
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.19.4',
+    date: '2026-07-22',
+    highlights: [
+      { type: 'feature', text: 'Per-goal session notes — add progress comments under each goal in the report editor that export to the Word document' },
+      { type: 'fix', text: 'Goals now appear in DOCX export (both Word download and Google Drive upload) when enabled in the report' },
+      { type: 'improvement', text: 'Goals section in DOCX is self-contained with clear separators for easy cut/paste to another location in the report' },
+      { type: 'improvement', text: 'Auto-sync interval changed from 60 minutes to 30 minutes for more frequent backups' },
+    ],
+  },
+  {
     version: '1.19.3',
     date: '2026-07-22',
     highlights: [
