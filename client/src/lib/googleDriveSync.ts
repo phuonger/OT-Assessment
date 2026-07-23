@@ -113,6 +113,7 @@ const SYNC_KEYS = [
   'bayley4-client-profiles',
   'bayley4-multi-sessions',
   'bayley4-attendance-records',
+  'ot_attendance_records',
   'bayley4-app-settings',
   'bayley4-saved-reports',
   'bayley4-oral-motor-answers',

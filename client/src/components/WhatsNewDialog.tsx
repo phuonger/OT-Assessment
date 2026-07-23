@@ -25,6 +25,13 @@ export interface ChangelogEntry {
 // Changelog data — add new entries at the top
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.19.3',
+    date: '2026-07-22',
+    highlights: [
+      { type: 'fix', text: 'Attendance records now sync correctly between devices — fixed storage key mismatch that prevented attendance data from being backed up/restored via Google Drive' },
+    ],
+  },
+  {
     version: '1.19.2',
     date: '2026-07-21',
     highlights: [
