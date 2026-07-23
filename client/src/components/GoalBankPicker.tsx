@@ -10,17 +10,57 @@
  * - Search/filter across all goals
  * - Edit goal text before adding (customize wording)
  * - Smart category auto-creation when bank goal category differs from current
+ * - Favorites / recently used goals surfaced at the top
+ * - Spanish language toggle for Feeding Therapy goals
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  ChevronRight, ChevronDown, Plus, BookOpen, PenLine, Check, X, Search, Pencil
+  ChevronRight, ChevronDown, Plus, BookOpen, PenLine, Check, X, Search, Pencil, Star, Globe
 } from 'lucide-react';
 import { GOAL_BANK, type GoalBankType, type GoalBankCategory, type GoalBankItem } from '@/lib/goalBank';
+
+// --- Favorites / Recently Used persistence ---
+const FAVORITES_KEY = 'bayley4-goal-favorites';
+const RECENT_KEY = 'bayley4-goal-recent';
+const MAX_RECENT = 10;
+
+function loadFavorites(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
+  } catch { return []; }
+}
+
+function saveFavorites(ids: string[]) {
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify(ids));
+}
+
+function loadRecent(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+  } catch { return []; }
+}
+
+function addToRecent(goalId: string) {
+  const recent = loadRecent().filter(id => id !== goalId);
+  recent.unshift(goalId);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(recent.slice(0, MAX_RECENT)));
+}
+
+function findGoalById(id: string): { goal: GoalBankItem; typeName: string; categoryName: string } | null {
+  for (const type of GOAL_BANK) {
+    for (const cat of type.categories) {
+      for (const goal of cat.goals) {
+        if (goal.id === id) return { goal, typeName: type.name, categoryName: cat.name };
+      }
+    }
+  }
+  return null;
+}
 
 interface GoalBankPickerProps {
   categoryId: string;
@@ -41,6 +81,11 @@ export default function GoalBankPicker({
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [addedGoalIds, setAddedGoalIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
+  const [showSpanish, setShowSpanish] = useState(false);
+
+  // Favorites state
+  const [favorites, setFavorites] = useState<string[]>(loadFavorites);
+  const [recentIds] = useState<string[]>(loadRecent);
 
   // Edit-before-add state
   const [editingGoal, setEditingGoal] = useState<{ id: string; text: string; bankCategory: string } | null>(null);
@@ -50,6 +95,18 @@ export default function GoalBankPicker({
   const [freeformText, setFreeformText] = useState('');
   const [freeformDate, setFreeformDate] = useState('');
 
+  // Resolve favorites and recent to goal objects
+  const favoriteGoals = useMemo(() => {
+    return favorites.map(id => findGoalById(id)).filter(Boolean) as { goal: GoalBankItem; typeName: string; categoryName: string }[];
+  }, [favorites]);
+
+  const recentGoals = useMemo(() => {
+    return recentIds
+      .filter(id => !favorites.includes(id))
+      .map(id => findGoalById(id))
+      .filter(Boolean) as { goal: GoalBankItem; typeName: string; categoryName: string }[];
+  }, [recentIds, favorites]);
+
   // Search results
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return null;
@@ -58,16 +115,32 @@ export default function GoalBankPicker({
     for (const type of GOAL_BANK) {
       for (const cat of type.categories) {
         for (const goal of cat.goals) {
-          if (goal.text.toLowerCase().includes(query)) {
+          const searchText = showSpanish && goal.textEs ? goal.textEs : goal.text;
+          if (searchText.toLowerCase().includes(query) || goal.text.toLowerCase().includes(query)) {
             results.push({ goal, typeName: type.name, categoryName: cat.name });
           }
         }
       }
     }
     return results;
-  }, [searchQuery]);
+  }, [searchQuery, showSpanish]);
+
+  const toggleFavorite = (goalId: string) => {
+    setFavorites(prev => {
+      const updated = prev.includes(goalId) ? prev.filter(id => id !== goalId) : [...prev, goalId];
+      saveFavorites(updated);
+      return updated;
+    });
+  };
+
+  const getDisplayText = (goal: GoalBankItem) => {
+    return showSpanish && goal.textEs ? goal.textEs : goal.text;
+  };
 
   const handleSelectGoal = (goalId: string, goalText: string, bankCategoryName: string) => {
+    // Track as recently used
+    addToRecent(goalId);
+
     // Check if the bank category matches the current category
     const currentCatLower = categoryName.toLowerCase();
     const bankCatLower = bankCategoryName.toLowerCase();
@@ -80,7 +153,6 @@ export default function GoalBankPicker({
         n.toLowerCase().includes(bankCatLower) || bankCatLower.includes(n.toLowerCase())
       );
       if (!existingMatch) {
-        // Offer to create the category or add to current
         const createNew = confirm(
           `This goal is from "${bankCategoryName}" but you're adding to "${categoryName}".\n\n` +
           `Click OK to create a new "${bankCategoryName}" category and add the goal there.\n` +
@@ -115,6 +187,62 @@ export default function GoalBankPicker({
     onAddGoal(freeformText.trim(), freeformDate || undefined);
     setFreeformText('');
     setFreeformDate('');
+  };
+
+  // Render a goal row (used in multiple places)
+  const renderGoalRow = (goal: GoalBankItem, typeName: string, bankCatName: string, showBreadcrumb: boolean = false) => {
+    const isAdded = addedGoalIds.has(goal.id);
+    const isFav = favorites.includes(goal.id);
+    const displayText = getDisplayText(goal);
+
+    return (
+      <div
+        key={goal.id}
+        className={`px-3 py-2 border-b border-[#E5E1D8]/30 last:border-b-0 ${
+          isAdded ? 'bg-emerald-50/50' : 'hover:bg-[#0D7377]/[0.03]'
+        }`}
+      >
+        {showBreadcrumb && (
+          <div className="flex items-center gap-1 mb-1">
+            <span className="text-[9px] text-[#0D7377] font-medium uppercase">{typeName}</span>
+            <span className="text-[9px] text-[#8B8B8B]">›</span>
+            <span className="text-[9px] text-[#8B8B8B]">{bankCatName}</span>
+          </div>
+        )}
+        <div className="flex items-start gap-2">
+          <button
+            onClick={() => toggleFavorite(goal.id)}
+            className={`p-0.5 mt-0.5 flex-shrink-0 rounded transition-colors ${isFav ? 'text-amber-500' : 'text-[#D4D0C8] hover:text-amber-400'}`}
+            title={isFav ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Star className={`w-3 h-3 ${isFav ? 'fill-current' : ''}`} />
+          </button>
+          <span className={`text-[11px] leading-relaxed flex-1 ${isAdded ? 'text-emerald-700' : 'text-[#4A4A4A]'}`}>
+            {displayText}
+          </span>
+          {isAdded ? (
+            <Check className="w-3.5 h-3.5 text-emerald-600 mt-0.5 flex-shrink-0" />
+          ) : (
+            <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
+              <button
+                onClick={() => handleEditGoal(goal.id, displayText, bankCatName)}
+                className="p-0.5 rounded hover:bg-[#0D7377]/10 text-[#8B8B8B] hover:text-[#0D7377]"
+                title="Edit before adding"
+              >
+                <Pencil className="w-3 h-3" />
+              </button>
+              <button
+                onClick={() => handleSelectGoal(goal.id, displayText, bankCatName)}
+                className="p-0.5 rounded hover:bg-[#0D7377]/10 text-[#0D7377]"
+                title="Add goal"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   // Edit overlay
@@ -236,9 +364,24 @@ export default function GoalBankPicker({
           </button>
           <p className="text-xs font-medium text-[#2C2C2C]">Goal Bank</p>
         </div>
-        <button onClick={onClose} className="text-[#8B8B8B] hover:text-[#2C2C2C]">
-          <X className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Spanish toggle */}
+          <button
+            onClick={() => setShowSpanish(!showSpanish)}
+            className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+              showSpanish
+                ? 'bg-[#0D7377] text-white'
+                : 'bg-[#E5E1D8]/50 text-[#8B8B8B] hover:text-[#0D7377] hover:bg-[#0D7377]/10'
+            }`}
+            title="Toggle Spanish for Feeding goals"
+          >
+            <Globe className="w-3 h-3" />
+            ES
+          </button>
+          <button onClick={onClose} className="text-[#8B8B8B] hover:text-[#2C2C2C]">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -247,7 +390,7 @@ export default function GoalBankPicker({
         <Input
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
-          placeholder="Search goals (e.g., spoon, chewing, tripod)..."
+          placeholder={showSpanish ? "Buscar metas (ej: cuchara, masticación)..." : "Search goals (e.g., spoon, chewing, tripod)..."}
           className="pl-8 text-xs h-8"
         />
         {searchQuery && (
@@ -264,60 +407,50 @@ export default function GoalBankPicker({
       {searchResults !== null ? (
         <div className="max-h-[350px] overflow-y-auto border border-[#E5E1D8] rounded-lg bg-white">
           {searchResults.length === 0 ? (
-            <p className="px-4 py-6 text-xs text-[#8B8B8B] text-center italic">No goals match "{searchQuery}"</p>
+            <p className="px-4 py-6 text-xs text-[#8B8B8B] text-center italic">
+              {showSpanish ? `No se encontraron metas para "${searchQuery}"` : `No goals match "${searchQuery}"`}
+            </p>
           ) : (
             <div>
               <p className="px-3 py-1.5 text-[10px] text-[#8B8B8B] bg-slate-50 border-b border-[#E5E1D8] sticky top-0">
                 {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
               </p>
-              {searchResults.map(({ goal, typeName, categoryName: bankCatName }) => {
-                const isAdded = addedGoalIds.has(goal.id);
-                return (
-                  <div
-                    key={goal.id}
-                    className={`px-3 py-2 border-b border-[#E5E1D8]/30 last:border-b-0 ${
-                      isAdded ? 'bg-emerald-50/50' : 'hover:bg-[#0D7377]/[0.03]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1 mb-1">
-                      <span className="text-[9px] text-[#0D7377] font-medium uppercase">{typeName}</span>
-                      <span className="text-[9px] text-[#8B8B8B]">›</span>
-                      <span className="text-[9px] text-[#8B8B8B]">{bankCatName}</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className={`text-[11px] leading-relaxed flex-1 ${isAdded ? 'text-emerald-700' : 'text-[#4A4A4A]'}`}>
-                        {goal.text}
-                      </span>
-                      {isAdded ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-600 mt-0.5 flex-shrink-0" />
-                      ) : (
-                        <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
-                          <button
-                            onClick={() => handleEditGoal(goal.id, goal.text, bankCatName)}
-                            className="p-0.5 rounded hover:bg-[#0D7377]/10 text-[#8B8B8B] hover:text-[#0D7377]"
-                            title="Edit before adding"
-                          >
-                            <Pencil className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={() => handleSelectGoal(goal.id, goal.text, bankCatName)}
-                            className="p-0.5 rounded hover:bg-[#0D7377]/10 text-[#0D7377]"
-                            title="Add goal"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+              {searchResults.map(({ goal, typeName, categoryName: bankCatName }) =>
+                renderGoalRow(goal, typeName, bankCatName, true)
+              )}
             </div>
           )}
         </div>
       ) : (
-        /* Hierarchical browser */
-        <div className="max-h-[350px] overflow-y-auto border border-[#E5E1D8] rounded-lg bg-white">
+        <div className="max-h-[400px] overflow-y-auto border border-[#E5E1D8] rounded-lg bg-white">
+          {/* Favorites section */}
+          {favoriteGoals.length > 0 && (
+            <div className="border-b border-[#E5E1D8]">
+              <div className="px-3 py-2 bg-amber-50/50 border-b border-amber-100 flex items-center gap-1.5">
+                <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wide">Favorites</span>
+                <span className="text-[10px] text-amber-500 ml-auto">{favoriteGoals.length}</span>
+              </div>
+              {favoriteGoals.map(({ goal, typeName, categoryName: bankCatName }) =>
+                renderGoalRow(goal, typeName, bankCatName, true)
+              )}
+            </div>
+          )}
+
+          {/* Recently Used section */}
+          {recentGoals.length > 0 && (
+            <div className="border-b border-[#E5E1D8]">
+              <div className="px-3 py-2 bg-blue-50/50 border-b border-blue-100 flex items-center gap-1.5">
+                <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wide">Recently Used</span>
+                <span className="text-[10px] text-blue-400 ml-auto">{recentGoals.length}</span>
+              </div>
+              {recentGoals.map(({ goal, typeName, categoryName: bankCatName }) =>
+                renderGoalRow(goal, typeName, bankCatName, true)
+              )}
+            </div>
+          )}
+
+          {/* Hierarchical browser */}
           {GOAL_BANK.map((type: GoalBankType) => (
             <div key={type.id} className="border-b border-[#E5E1D8] last:border-b-0">
               {/* Type Header */}
@@ -349,7 +482,12 @@ export default function GoalBankPicker({
                           ) : (
                             <ChevronRight className="w-3 h-3 text-[#8B8B8B]" />
                           )}
-                          <span className="text-xs font-semibold text-[#2C2C2C]">{cat.name}</span>
+                          <span className="text-xs font-semibold text-[#2C2C2C]">
+                            {showSpanish && cat.nameEs ? cat.nameEs : cat.name}
+                          </span>
+                          {showSpanish && cat.nameEs && (
+                            <span className="text-[9px] text-[#8B8B8B] italic">({cat.name})</span>
+                          )}
                         </div>
                         <span className="text-[10px] text-[#8B8B8B]">{cat.goals.length} goals</span>
                       </button>
@@ -357,43 +495,7 @@ export default function GoalBankPicker({
                       {/* Goals within this category */}
                       {expandedCategory === cat.id && (
                         <div className="bg-[#FAF9F6] border-t border-[#E5E1D8]/50">
-                          {cat.goals.map(goal => {
-                            const isAdded = addedGoalIds.has(goal.id);
-                            return (
-                              <div
-                                key={goal.id}
-                                className={`w-full text-left px-5 py-2 border-b border-[#E5E1D8]/30 last:border-b-0 transition-colors flex items-start gap-2 ${
-                                  isAdded
-                                    ? 'bg-emerald-50/50'
-                                    : 'hover:bg-[#0D7377]/5'
-                                }`}
-                              >
-                                <span className={`text-[11px] leading-relaxed flex-1 ${isAdded ? 'text-emerald-700' : 'text-[#4A4A4A]'}`}>
-                                  {goal.text}
-                                </span>
-                                {isAdded ? (
-                                  <Check className="w-3.5 h-3.5 text-emerald-600 mt-0.5 flex-shrink-0" />
-                                ) : (
-                                  <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
-                                    <button
-                                      onClick={() => handleEditGoal(goal.id, goal.text, cat.name)}
-                                      className="p-0.5 rounded hover:bg-[#0D7377]/10 text-[#8B8B8B] hover:text-[#0D7377]"
-                                      title="Edit before adding"
-                                    >
-                                      <Pencil className="w-3 h-3" />
-                                    </button>
-                                    <button
-                                      onClick={() => handleSelectGoal(goal.id, goal.text, cat.name)}
-                                      className="p-0.5 rounded hover:bg-[#0D7377]/10 text-[#0D7377]"
-                                      title="Add goal"
-                                    >
-                                      <Plus className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
+                          {cat.goals.map(goal => renderGoalRow(goal, type.name, cat.name, false))}
                         </div>
                       )}
                     </div>

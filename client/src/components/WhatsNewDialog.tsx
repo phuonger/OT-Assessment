@@ -25,6 +25,14 @@ export interface ChangelogEntry {
 // Changelog data — add new entries at the top
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.19.8',
+    date: '2026-07-23',
+    highlights: [
+      { type: 'feature', text: 'Favorites & Recently Used — star your most-used goals and they appear at the top of the Goal Bank; recently added goals also surface for quick re-use' },
+      { type: 'feature', text: 'Spanish toggle for Feeding goals — click the "ES" button in the Goal Bank to view all Feeding Therapy goals in Spanish for bilingual families' },
+    ],
+  },
+  {
     version: '1.19.7',
     date: '2026-07-23',
     highlights: [
