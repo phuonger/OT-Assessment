@@ -25,6 +25,15 @@ export interface ChangelogEntry {
 // Changelog data — add new entries at the top
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.19.7',
+    date: '2026-07-23',
+    highlights: [
+      { type: 'feature', text: 'Goal Bank search — type keywords (e.g., "spoon", "chewing", "tripod") to instantly filter across all goal bank entries' },
+      { type: 'feature', text: 'Edit goal before adding — click the pencil icon to customize wording (e.g., replace "client" with the child\'s name) before adding' },
+      { type: 'feature', text: 'Smart category auto-creation — if a bank goal belongs to a different category than the current one, offers to create the matching category automatically' },
+    ],
+  },
+  {
     version: '1.19.6',
     date: '2026-07-23',
     highlights: [

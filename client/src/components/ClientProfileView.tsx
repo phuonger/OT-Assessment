@@ -948,10 +948,20 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
                       <GoalBankPicker
                         categoryId={category.id}
                         categoryName={category.name}
+                        profileId={profileId}
+                        existingCategoryNames={existingCategoryNames}
                         onAddGoal={(text, goalDate) => {
                           addGoal(profileId, category.id, text, goalDate);
                           refreshProfile();
                           toast.success('Goal added');
+                        }}
+                        onAddGoalToNewCategory={(catName, goalText) => {
+                          const newCat = addGoalCategory(profileId, catName);
+                          if (newCat) {
+                            addGoal(profileId, newCat.id, goalText);
+                            refreshProfile();
+                            toast.success(`Created "${catName}" category and added goal`);
+                          }
                         }}
                         onClose={() => setAddingGoalToCategoryId(null)}
                       />
