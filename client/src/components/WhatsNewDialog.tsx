@@ -25,6 +25,13 @@ export interface ChangelogEntry {
 // Changelog data — add new entries at the top
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.19.6',
+    date: '2026-07-23',
+    highlights: [
+      { type: 'feature', text: 'Goal Bank — browse and select from pre-set OT/Early Intervention and Feeding Therapy goals organized by category, or write custom goals' },
+    ],
+  },
+  {
     version: '1.19.5',
     date: '2026-07-22',
     highlights: [

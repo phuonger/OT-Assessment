@@ -33,6 +33,7 @@ import { generateProfileDocx } from '@/lib/generateProfileDocx';
 import { getAttendanceCount, type AttendanceRecord } from '@/lib/attendanceStorage';
 import AttendanceForm from '@/components/AttendanceForm';
 import AttendanceHistory from '@/components/AttendanceHistory';
+import GoalBankPicker from '@/components/GoalBankPicker';
 import AttendanceCalendar from '@/components/AttendanceCalendar';
 import { generateAttendanceDocx } from '@/lib/generateAttendanceDocx';
 import SendForSignatureDialog from '@/components/SendForSignatureDialog';
@@ -944,36 +945,16 @@ export default function ClientProfileView({ profileId, onBack, onStartAssessment
 
                     {/* Add Goal to this category */}
                     {addingGoalToCategoryId === category.id ? (
-                      <div className="px-4 py-3 border-t border-[#E5E1D8] bg-[#0D7377]/[0.02] space-y-3">
-                        <div>
-                          <Label className="text-xs">Goal Description *</Label>
-                          <Textarea
-                            value={goalText}
-                            onChange={e => setGoalText(e.target.value)}
-                            placeholder={`e.g., ${profile.firstName} will exhibit improved ${category.name.toLowerCase()} skills...`}
-                            rows={2}
-                            className="mt-1 text-sm"
-                            autoFocus
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Target Date (optional)</Label>
-                          <Input
-                            type="date"
-                            value={goalDate}
-                            onChange={e => setGoalDate(e.target.value)}
-                            className="mt-1 w-48 text-sm"
-                          />
-                        </div>
-                        <div className="flex items-center gap-2 justify-end">
-                          <Button variant="outline" size="sm" onClick={() => { setAddingGoalToCategoryId(null); setGoalText(''); setGoalDate(''); }}>
-                            Cancel
-                          </Button>
-                          <Button size="sm" onClick={() => handleAddGoal(category.id)} className="bg-[#0D7377] hover:bg-[#0a5c5f] text-white gap-1.5">
-                            <Plus className="w-3.5 h-3.5" /> Add Goal
-                          </Button>
-                        </div>
-                      </div>
+                      <GoalBankPicker
+                        categoryId={category.id}
+                        categoryName={category.name}
+                        onAddGoal={(text, goalDate) => {
+                          addGoal(profileId, category.id, text, goalDate);
+                          refreshProfile();
+                          toast.success('Goal added');
+                        }}
+                        onClose={() => setAddingGoalToCategoryId(null)}
+                      />
                     ) : (
                       <button
                         onClick={() => { setAddingGoalToCategoryId(category.id); setGoalText(''); setGoalDate(''); }}
